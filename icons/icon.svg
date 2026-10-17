@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#101315"/>
+  <!-- donut: green / amber / light-green / muted arcs -->
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#46d98a" stroke-width="66"
+    stroke-dasharray="264 792" transform="rotate(-90 256 256)"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#e8b34b" stroke-width="66"
+    stroke-dasharray="158 898" stroke-dashoffset="-264" transform="rotate(-90 256 256)"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#7fd6a8" stroke-width="66"
+    stroke-dasharray="158 898" stroke-dashoffset="-422" transform="rotate(-90 256 256)"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#3d4d45" stroke-width="66"
+    stroke-dasharray="53 1003" stroke-dashoffset="-580" transform="rotate(-90 256 256)"/>
+  <text x="256" y="342" font-family="Arial, Helvetica, sans-serif" font-size="190"
+    font-weight="bold" fill="#f2f5f3" text-anchor="middle">$</text>
+</svg>

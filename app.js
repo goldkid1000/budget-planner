@@ -1,7 +1,7 @@
-/* Budget Planner v1.1.1 — all data stays in localStorage on this device. */
+/* Budget Planner v1.2.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.1.1';
+var APP_VERSION = '1.2.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -156,32 +156,48 @@ function parseStatementCSV(text){
   if(!txns.length) return { ok: false, error: "Found the columns but no transactions with a date and amount. Try the CSV download from your bank." };
   return { ok: true, transactions: txns, balance: balance, statementDate: latestDate, count: txns.length };
 }
-/* paycheck: hours per week, rate, ded = {fica, federal, ny} percents,
-   freq, calibration = {gross, net} from a real pay stub or null.
-   Lines are computed from the rates; if calibrated, an adjustment line
-   makes the total taken off match the pay stub's overall rate. */
-function calcPaycheck(hours, rate, ded, freq, calibration){
+/* paycheck: hours per week, rate, ded profile, freq.
+   ded: { ss, medicare, federal, ny, fli, k401 } are % of gross;
+        { membership, stockContrib, stockPurch } are flat $ per pay period.
+   Each line is rounded to cents first (like a real pay stub), then summed,
+   so the totals match the lines exactly. */
+function calcPaycheck(hours, rate, ded, freq){
   var weeklyGross = hours * rate;
   var mult = freq === 'biweekly' ? 2 : (freq === 'monthly' ? 52 / 12 : 1);
   var periodGross = weeklyGross * mult;
-  var ficaAmt = periodGross * num0(ded && ded.fica) / 100;
-  var fedAmt = periodGross * num0(ded && ded.federal) / 100;
-  var nyAmt = periodGross * num0(ded && ded.ny) / 100;
-  var lineTotal = ficaAmt + fedAmt + nyAmt;
-  var calibPct = null, adjustment = 0, totalDed = lineTotal;
-  if(calibration && num0(calibration.gross) > 0 && num0(calibration.net) >= 0 && num0(calibration.net) <= num0(calibration.gross)){
-    calibPct = (num0(calibration.gross) - num0(calibration.net)) / num0(calibration.gross);
-    totalDed = periodGross * calibPct;
-    adjustment = totalDed - lineTotal;
-  }
-  var net = periodGross - totalDed;
+  var d = ded || {};
+  var ssAmt = round2(periodGross * num0(d.ss) / 100);
+  var medicareAmt = round2(periodGross * num0(d.medicare) / 100);
+  var fedAmt = round2(periodGross * num0(d.federal) / 100);
+  var nyAmt = round2(periodGross * num0(d.ny) / 100);
+  var fliAmt = round2(periodGross * num0(d.fli) / 100);
+  var k401Amt = round2(periodGross * num0(d.k401) / 100);
+  var memberAmt = round2(num0(d.membership) * mult);
+  var stockContribAmt = round2(num0(d.stockContrib) * mult);
+  var stockPurchAmt = round2(num0(d.stockPurch) * mult);
+  var taxesTotal = round2(ssAmt + medicareAmt + fedAmt + nyAmt + fliAmt);
+  var dedTotal = round2(k401Amt + memberAmt + stockContribAmt + stockPurchAmt);
+  var totalDed = round2(taxesTotal + dedTotal);
+  var net = round2(periodGross - totalDed);
   var effRate = periodGross > 0 ? totalDed / periodGross : 0;
   var monthlyNet = weeklyGross * (1 - effRate) * (52 / 12);
   return { weeklyGross: weeklyGross, periodGross: periodGross,
-           ficaAmt: ficaAmt, fedAmt: fedAmt, nyAmt: nyAmt, lineTotal: lineTotal,
-           adjustment: adjustment, calibPct: calibPct, totalDed: totalDed,
+           ssAmt: ssAmt, medicareAmt: medicareAmt, fedAmt: fedAmt, nyAmt: nyAmt,
+           fliAmt: fliAmt, k401Amt: k401Amt, memberAmt: memberAmt,
+           stockContribAmt: stockContribAmt, stockPurchAmt: stockPurchAmt,
+           taxesTotal: taxesTotal, dedTotal: dedTotal, totalDed: totalDed,
            net: net, effRate: effRate, monthlyNet: monthlyNet,
            periodLabel: freq === 'biweekly' ? 'per 2 weeks' : (freq === 'monthly' ? 'per month' : 'per week') };
+}
+/* derive a ded profile from one real pay stub: % lines from (line / gross),
+   flat lines kept as $ per check. Rates rounded to 4 decimals — the
+   per-line cent rounding in calcPaycheck then reproduces the stub exactly. */
+function deriveDedFromStub(gross, lines){
+  function pct(amt){ return gross > 0 ? Math.round((num0(amt) / gross * 100) * 10000) / 10000 : 0; }
+  return { ss: pct(lines.ss), medicare: pct(lines.medicare), federal: pct(lines.federal),
+           ny: pct(lines.ny), fli: pct(lines.fli), k401: pct(lines.k401),
+           membership: round2(lines.membership), stockContrib: round2(lines.stockContrib),
+           stockPurch: round2(lines.stockPurch) };
 }
 /* discount stack: sequential % discounts, then cashback on the discounted price */
 function calcDiscount(price, d1, d2, cashbackPct){
@@ -201,6 +217,7 @@ function calcTip(bill, pct){ var tip = bill * (pct / 100); return { tip: tip, to
 
 if (typeof module !== 'undefined' && module.exports){
   module.exports = { round2: round2, money: money, money0: money0, calcPaycheck: calcPaycheck,
+    deriveDedFromStub: deriveDedFromStub,
     calcShiftHours: calcShiftHours, calcShiftPaidHours: calcShiftPaidHours, defaultMeal: defaultMeal,
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
     calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip };
@@ -216,11 +233,11 @@ var DEFAULTS = {
   hours: 0, rate: 0, freq: 'weekly',
   hoursMode: 'total',
   mealTotal: 0,
-  shifts: [
-    { day: 'Mon', start: '09:00', end: '13:00', meal: 0 }
-  ],
-  ded: { fica: 7.65, federal: 0, ny: 0 },
-  calibration: null,
+  shifts: [],
+  ded: { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0,
+         membership: 0, stockContrib: 0, stockPurch: 0 },
+  startingMoney: null,
+  stubSaved: null,
   checking: 0, balanceDate: '',
   categories: [
     { name: 'Food', amount: 0 },
@@ -231,9 +248,7 @@ var DEFAULTS = {
     { name: 'Other', amount: 0 }
   ],
   goal: 0, saved: 0,
-  bills: [
-    { name: 'Example bill', amount: 0, due: '', auto: false, paid: false, note: 'Edit this or add your own bills.' }
-  ]
+  bills: []
 };
 
 var STUDENT = [
@@ -262,11 +277,30 @@ function loadState(){
 }
 var S = loadState();
 /* fill in fields added in later versions so old saved data keeps working */
-if(!S.ded) S.ded = { fica: 7.65, federal: 0, ny: 0 };
+if(!S.ded) S.ded = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
+/* v1.2.0: the old single FICA % splits into Social Security + Medicare at the
+   statutory 6.2 / 1.45 ratio, so old saved rates keep working. The old
+   gross/net "calibration" is gone — the per-line pay-stub profile replaces it. */
+if(S.ded.fica !== undefined){
+  var oldFica = num(S.ded.fica);
+  var ssPart = oldFica > 0 ? oldFica * (6.2 / 7.65) : 6.2;
+  var medPart = oldFica > 0 ? oldFica * (1.45 / 7.65) : 1.45;
+  S.ded = { ss: Math.round(ssPart * 10000) / 10000, medicare: Math.round(medPart * 10000) / 10000,
+            federal: num(S.ded.federal), ny: num(S.ded.ny),
+            fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
+} else {
+  var dedKeys = ['ss', 'medicare', 'federal', 'ny', 'fli', 'k401', 'membership', 'stockContrib', 'stockPurch'];
+  var dedDefaults = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
+  dedKeys.forEach(function(k){ if(S.ded[k] === undefined || S.ded[k] === null) S.ded[k] = dedDefaults[k]; });
+}
+if(S.calibration !== undefined) delete S.calibration;
+if(S.startingMoney === undefined) S.startingMoney = null;
+if(S.stubSaved === undefined) S.stubSaved = null;
 if(!S.shifts) S.shifts = JSON.parse(JSON.stringify(DEFAULTS.shifts));
 if(!S.hoursMode) S.hoursMode = 'total';
 if(S.mealTotal === undefined) S.mealTotal = 0;
-if(S.calibration === undefined) S.calibration = null;
+if(S.startingMoney === undefined) S.startingMoney = null;
+if(S.stubSaved === undefined) S.stubSaved = null;
 if(S.checking === undefined) S.checking = 0;
 /* no made-up default date: balances show "Set the date…" until the user picks one */
 /* v1.1.0: shifts saved before meal breaks get the default rule (30 min over 6 hrs) */
@@ -287,7 +321,15 @@ function effectiveHours(){
   return paid > 0 ? paid : 0;
 }
 function currentPaycheck(){
-  return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq, S.calibration);
+  return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq);
+}
+
+/* Money the user HAS right now. If they typed a number in the Budget tab,
+   that wins. Otherwise it follows the My Money balances (typed or imported).
+   Blank (null) until anything is entered — fresh visitors start at $0. */
+function effectiveStartingMoney(){
+  if(S.startingMoney !== null && S.startingMoney !== undefined && S.startingMoney !== '' && isFinite(Number(S.startingMoney))) return num(S.startingMoney);
+  return num(S.saved) + num(S.checking);
 }
 
 function monthlyIncome(){
@@ -302,25 +344,41 @@ function renderAll(){
 }
 
 function renderBudget(){
+  /* don't clobber the starting-money field the user is currently typing in */
+  var startEl = document.getElementById('startingMoneyInput');
+  if(startEl && document.activeElement !== startEl){
+    startEl.value = (S.startingMoney !== null && S.startingMoney !== undefined && S.startingMoney !== '') ? S.startingMoney : '';
+    startEl.placeholder = (num(S.saved) + num(S.checking)) > 0 ? 'Using balances: ' + money(num(S.saved) + num(S.checking)) : '0.00';
+  }
   renderBudgetSummary();
   renderCategoryList();
   renderGoal();
 }
 
 function renderBudgetSummary(){
+  /* Budget anchors on the money the user HAS:
+     money I have + money coming in − bills due − planned spending = left */
+  var starting = effectiveStartingMoney();
   var income = monthlyIncome();
+  var bills = unpaidBillsTotal();
   var spend = plannedSpend();
-  var left = income - spend;
+  var left = starting + income - bills - spend;
+  document.getElementById('startingLine').textContent = money(starting);
   document.getElementById('incomeLine').textContent = money(income);
+  document.getElementById('billsLine').textContent = money(bills);
   document.getElementById('spendLine').textContent = money(spend);
   document.getElementById('leftLine').textContent = money(left);
   document.getElementById('donutLeft').textContent = money0(left);
   document.getElementById('donutSub').textContent = left >= 0 ? 'left this month' : 'over budget';
   document.getElementById('overBudgetWarn').hidden = left >= 0;
+  var haveEl = document.getElementById('budgetHaveLine');
+  if(haveEl) haveEl.textContent = 'You have ' + money(starting) + ' right now.';
+  var promptEl = document.getElementById('startingMoneyPrompt');
+  if(promptEl) promptEl.hidden = !(starting <= 0 && !S.balanceDate && !(S.statementInfo && S.statementInfo.date));
 
-  /* donut: slices = categories, plus a "left" slice when positive */
+  /* donut: slices = categories + bills, plus a "left" slice when positive */
   var svg = document.getElementById('donutSvg');
-  var total = Math.max(spend + Math.max(left, 0), 1);
+  var total = Math.max(spend + bills + Math.max(left, 0), 1);
   var C = 2 * Math.PI * 80;
   var acc = 0, html = '';
   function slice(value, color){
@@ -333,6 +391,7 @@ function renderBudgetSummary(){
     return out;
   }
   S.categories.forEach(function(c, i){ html += slice(num(c.amount), COLORS[i % COLORS.length]); });
+  if(bills > 0) html += slice(bills, '#e8b34b');
   if(left > 0) html += slice(left, '#3d4d45');
   svg.innerHTML = html;
 }
@@ -390,9 +449,15 @@ function renderPaycheck(){
   if(document.activeElement !== hoursInputEl) hoursInputEl.value = S.hours;
   if(document.activeElement !== rateInputEl) rateInputEl.value = S.rate;
   document.getElementById('freqSelect').value = S.freq;
-  document.getElementById('ficaInput').value = S.ded.fica;
+  document.getElementById('ssInput').value = S.ded.ss;
+  document.getElementById('medicareInput').value = S.ded.medicare;
   document.getElementById('federalInput').value = S.ded.federal;
   document.getElementById('nyInput').value = S.ded.ny;
+  document.getElementById('fliInput').value = S.ded.fli;
+  document.getElementById('k401Input').value = S.ded.k401;
+  document.getElementById('memberInput').value = S.ded.membership;
+  document.getElementById('stockContribInput').value = S.ded.stockContrib;
+  document.getElementById('stockPurchInput').value = S.ded.stockPurch;
 
   var shiftList = document.getElementById('shiftList');
   shiftList.innerHTML = '';
@@ -423,26 +488,46 @@ function renderPaycheck(){
   var p = currentPaycheck();
   document.getElementById('grossOut').textContent = money(p.periodGross);
   document.getElementById('grossPer').textContent = p.periodLabel;
-  document.getElementById('ficaOut').textContent = '−' + money(p.ficaAmt);
+  document.getElementById('ssOut').textContent = '−' + money(p.ssAmt);
+  document.getElementById('medicareOut').textContent = '−' + money(p.medicareAmt);
   document.getElementById('federalOut').textContent = '−' + money(p.fedAmt);
   document.getElementById('nyOut').textContent = '−' + money(p.nyAmt);
-  document.getElementById('calibRow').hidden = !S.calibration;
-  document.getElementById('calibOut').textContent = (p.adjustment < 0 ? '+' : '−') + money(Math.abs(p.adjustment));
+  document.getElementById('fliOut').textContent = '−' + money(p.fliAmt);
+  document.getElementById('taxesTotalOut').textContent = money(p.taxesTotal);
+  document.getElementById('k401Out').textContent = '−' + money(p.k401Amt);
+  document.getElementById('memberOut').textContent = '−' + money(p.memberAmt);
+  document.getElementById('stockContribOut').textContent = '−' + money(p.stockContribAmt);
+  document.getElementById('stockPurchOut').textContent = '−' + money(p.stockPurchAmt);
+  document.getElementById('dedTotalOut').textContent = money(p.dedTotal);
   document.getElementById('takenOffOut').textContent = money(p.totalDed);
   document.getElementById('takenOffPct').textContent = (p.effRate * 100).toFixed(2).replace(/\.?0+$/, '') + '%';
   document.getElementById('takeHomeOut').textContent = money(p.net);
   document.getElementById('takeHomePer').textContent = p.periodLabel;
   document.getElementById('monthlyOut').textContent = money(p.monthlyNet);
 
-  var calibStatus = document.getElementById('calibStatus');
-  if(S.calibration){
-    calibStatus.textContent = 'Using your pay stub: gross ' + money(S.calibration.gross) + ' → net ' +
-      money(S.calibration.net) + ' = ' + (p.calibPct * 100).toFixed(2).replace(/\.?0+$/, '') +
-      '% taken off. The breakdown above uses your rates, and the adjustment line makes the total match your stub.';
-    document.getElementById('stubGross').value = S.calibration.gross;
-    document.getElementById('stubNet').value = S.calibration.net;
+  /* pay-stub form: show what the current profile means in dollars at the
+     stub gross (or the current period gross), without clobbering typing */
+  var stubGrossEl = document.getElementById('stubGross');
+  var stubGrossVal = S.stubSaved ? num(S.stubSaved.gross) : p.periodGross;
+  if(document.activeElement !== stubGrossEl) stubGrossEl.value = S.stubSaved ? S.stubSaved.gross : '';
+  var stubFields = [
+    ['stubFederal', S.ded.federal], ['stubNY', S.ded.ny], ['stubFLI', S.ded.fli],
+    ['stubSS', S.ded.ss], ['stubMedicare', S.ded.medicare], ['stubK401', S.ded.k401]
+  ];
+  stubFields.forEach(function(pair){
+    var el = document.getElementById(pair[0]);
+    if(el && document.activeElement !== el) el.value = stubGrossVal > 0 ? (stubGrossVal * pair[1] / 100).toFixed(2) : '';
+  });
+  [['stubMember', S.ded.membership], ['stubStockContrib', S.ded.stockContrib], ['stubStockPurch', S.ded.stockPurch]].forEach(function(pair){
+    var el = document.getElementById(pair[0]);
+    if(el && document.activeElement !== el) el.value = pair[1] > 0 ? pair[1].toFixed(2) : '';
+  });
+  var stubStatus = document.getElementById('stubStatus');
+  if(S.stubSaved){
+    stubStatus.textContent = 'Using your pay stub: gross ' + money(S.stubSaved.gross) + ' → net ' +
+      money(S.stubSaved.net) + '. Change any line above and tap "Use this stub" again to update.';
   } else {
-    calibStatus.textContent = 'No pay stub calibration — the breakdown uses the rates above.';
+    stubStatus.textContent = 'No pay stub saved — the breakdown uses the rates above (Social Security 6.2% + Medicare 1.45%, everything else $0).';
   }
 
   var extraH = num(document.getElementById('extraHours').value, 0);
@@ -451,8 +536,8 @@ function renderPaycheck(){
     ' more take-home per week (' + money(extraNet * 52 / 12) + ' / month).';
   var newRate = num(document.getElementById('newRate').value, 0);
   if(newRate > 0){
-    var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly', S.calibration);
-    var oldP = calcPaycheck(effectiveHours(), S.rate, S.ded, 'weekly', S.calibration);
+    var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly');
+    var oldP = calcPaycheck(effectiveHours(), S.rate, S.ded, 'weekly');
     document.getElementById('newRateOut').textContent = 'At $' + newRate.toFixed(2) + '/hr with the same hours: ' +
       money(newP.net) + ' take-home / week — that is ' + money(newP.net - oldP.net) +
       ' more per week (' + money((newP.net - oldP.net) * 52 / 12) + ' / month).';
@@ -578,6 +663,13 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '1.2.0', notes: [
+    'Paycheck now shows every line from a real pay stub — federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase — each with a plain-words explanation.',
+    'Use my real pay stub — enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.',
+    'Your budget starts from the money you actually have — "Money I have right now" at the top of the Budget tab, filled in from your balances, editable in place.',
+    'Installable — tap "Install app" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.',
+    'Everyone starts blank — your numbers stay on your own device only. Nobody else sees them.'
+  ] },
   { version: '1.1.1', notes: [
     "What's New actually shows the notes now — the box used to open empty.",
     'Typing a category amount no longer kicks you out of the box after each number.',
@@ -833,23 +925,44 @@ function bind(){
   });
   document.getElementById('rateInput').addEventListener('input', function(e){ S.rate = num(e.target.value); save(); renderAll(); });
   document.getElementById('freqSelect').addEventListener('change', function(e){ S.freq = e.target.value; save(); renderAll(); });
-  document.getElementById('ficaInput').addEventListener('input', function(e){ S.ded.fica = num(e.target.value); save(); renderAll(); });
-  document.getElementById('federalInput').addEventListener('input', function(e){ S.ded.federal = num(e.target.value); save(); renderAll(); });
-  document.getElementById('nyInput').addEventListener('input', function(e){ S.ded.ny = num(e.target.value); save(); renderAll(); });
+  /* deduction profile inputs: % lines computed from gross, flat lines are $ per check */
+  var dedInputMap = { ssInput: 'ss', medicareInput: 'medicare', federalInput: 'federal', nyInput: 'ny',
+    fliInput: 'fli', k401Input: 'k401', memberInput: 'membership', stockContribInput: 'stockContrib', stockPurchInput: 'stockPurch' };
+  Object.keys(dedInputMap).forEach(function(id){
+    document.getElementById(id).addEventListener('input', function(e){
+      var v = num(e.target.value);
+      if(v < 0) v = 0;
+      S.ded[dedInputMap[id]] = v;
+      save(); renderAll();
+    });
+  });
   document.getElementById('extraHours').addEventListener('input', renderPaycheck);
   document.getElementById('newRate').addEventListener('input', renderPaycheck);
-  document.getElementById('calibrateBtn').addEventListener('click', function(){
+  /* "Use my real pay stub": read gross + every line, derive the profile, save it */
+  document.getElementById('useStubBtn').addEventListener('click', function(){
     var g = num(document.getElementById('stubGross').value);
-    var n = num(document.getElementById('stubNet').value);
+    var lines = {
+      federal: num(document.getElementById('stubFederal').value),
+      ny: num(document.getElementById('stubNY').value),
+      fli: num(document.getElementById('stubFLI').value),
+      ss: num(document.getElementById('stubSS').value),
+      medicare: num(document.getElementById('stubMedicare').value),
+      k401: num(document.getElementById('stubK401').value),
+      membership: num(document.getElementById('stubMember').value),
+      stockContrib: num(document.getElementById('stubStockContrib').value),
+      stockPurch: num(document.getElementById('stubStockPurch').value)
+    };
     if(g <= 0){ alert('Enter the gross pay from your pay stub first.'); return; }
-    if(n < 0 || n > g){ alert('Net pay should be between $0 and the gross pay.'); return; }
-    S.calibration = { gross: g, net: n };
+    var lineTotal = 0;
+    Object.keys(lines).forEach(function(k){ if(lines[k] < 0){ lines[k] = 0; } lineTotal += lines[k]; });
+    if(lineTotal > g){ alert('The lines add up to more than the gross pay — check the numbers and try again.'); return; }
+    S.ded = deriveDedFromStub(g, lines);
+    S.stubSaved = { gross: round2(g), net: round2(g - lineTotal) };
     save(); renderAll();
   });
-  document.getElementById('clearCalibBtn').addEventListener('click', function(){
-    S.calibration = null;
-    document.getElementById('stubGross').value = '';
-    document.getElementById('stubNet').value = '';
+  document.getElementById('resetStubBtn').addEventListener('click', function(){
+    S.ded = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
+    S.stubSaved = null;
     save(); renderAll();
   });
 
@@ -924,6 +1037,14 @@ function bind(){
   document.getElementById('checkingBalInput').addEventListener('input', function(e){ S.checking = num(e.target.value); save(); renderMyMoney(); });
   document.getElementById('balanceDateInput').addEventListener('change', function(e){ S.balanceDate = e.target.value; save(); renderMyMoney(); });
 
+  /* starting money (Budget tab anchor) — blank follows the My Money balances */
+  document.getElementById('startingMoneyInput').addEventListener('input', function(e){
+    var raw = e.target.value;
+    if(raw === '' || raw === null){ S.startingMoney = null; }
+    else { S.startingMoney = Math.max(0, num(raw)); }
+    save(); renderBudgetSummary();
+  });
+
   /* bills inputs */
   document.getElementById('addBillBtn').addEventListener('click', function(){
     var name = document.getElementById('billName').value.trim();
@@ -935,7 +1056,7 @@ function bind(){
     document.getElementById('billAmount').value = '';
     document.getElementById('billDue').value = '';
     document.getElementById('billAuto').checked = false;
-    save(); renderBills(); renderMyMoney();
+    save(); renderBills(); renderMyMoney(); renderBudgetSummary();
   });
   document.getElementById('billList').addEventListener('change', function(e){
     var t = e.target;
@@ -945,11 +1066,11 @@ function bind(){
     else if(t.dataset.billDue !== undefined){ S.bills[+t.dataset.billDue].due = t.value; }
     else if(t.dataset.billAuto !== undefined){ S.bills[+t.dataset.billAuto].auto = t.checked; }
     else return;
-    save(); renderBills(); renderMyMoney();
+    save(); renderBills(); renderMyMoney(); renderBudgetSummary();
   });
   document.getElementById('billList').addEventListener('click', function(e){
     var t = e.target;
-    if(t.dataset.billDel !== undefined){ S.bills.splice(+t.dataset.billDel, 1); save(); renderBills(); renderMyMoney(); }
+    if(t.dataset.billDel !== undefined){ S.bills.splice(+t.dataset.billDel, 1); save(); renderBills(); renderMyMoney(); renderBudgetSummary(); }
   });
 
   /* discounts */
@@ -991,11 +1112,65 @@ function bind(){
       renderCalculators();
     });
   });
+  /* install button — one button at the top of the Budget tab */
+  document.getElementById('installBtn').addEventListener('click', function(){
+    if(deferredPrompt){
+      var p = deferredPrompt;
+      deferredPrompt = null;
+      p.prompt();
+      if(p.userChoice) p.userChoice.then(function(){ updateInstallBtn(); }).catch(function(){});
+      updateInstallBtn();
+    } else {
+      var help = document.getElementById('installHelp');
+      help.hidden = !help.hidden;
+    }
+  });
+  document.getElementById('installHelpClose').addEventListener('click', function(){
+    document.getElementById('installHelp').hidden = true;
+  });
 }
 
 bind();
 renderAll();
 /* pre-fill What's New so the box is never empty, even before any fetch runs */
 renderWhatsNewNotes(CHANGELOG_FALLBACK);
+
+/* PWA install: capture the browser's install prompt so the Install button can
+   show it. If the browser never fires it (e.g. iPhone Safari), the button shows
+   plain instructions instead. If already installed, the button says so. */
+var deferredPrompt = null;
+function isStandalone(){
+  try{ return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!window.navigator.standalone; }
+  catch(e){ return false; }
+}
+function updateInstallBtn(){
+  var btn = document.getElementById('installBtn');
+  if(!btn) return;
+  if(isStandalone()){
+    btn.textContent = 'Installed \u2713';
+    btn.disabled = true;
+    var help = document.getElementById('installHelp');
+    if(help) help.hidden = true;
+  } else {
+    btn.textContent = 'Install app';
+    btn.disabled = false;
+  }
+}
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  deferredPrompt = e;
+  updateInstallBtn();
+});
+window.addEventListener('appinstalled', function(){
+  deferredPrompt = null;
+  updateInstallBtn();
+});
+updateInstallBtn();
+
+/* service worker: cache the app shell so it loads offline once installed.
+   Registration is best-effort — if it fails, the app still works fully online. */
+if('serviceWorker' in navigator && window.location.protocol !== 'file:'){
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
 checkForUpdate(false);
 }

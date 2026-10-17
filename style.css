@@ -104,7 +104,11 @@ input[type=time]{color-scheme:dark}
 .tip-presets{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .bottomnav{display:none}
 .footer{text-align:center;color:var(--muted);font-size:.85rem;padding:10px 16px 20px}
-/* collapsible advanced sections */
+/* install button + help card (Budget tab top) */
+.install-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+.install-hint{margin:0}
+.install-help{border-color:var(--green-dark)}
+.install-help p{margin:6px 0}
 .details{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 0}
 .details summary{cursor:pointer;font-weight:700;font-size:1rem;list-style-position:outside}
 .details summary::-webkit-details-marker{color:var(--green)}
