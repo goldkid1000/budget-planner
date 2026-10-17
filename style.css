@@ -1,4 +1,4 @@
-/* Budget Planner v1.1.0 — dark theme. High-contrast light text on dark backgrounds. */
+/* Budget Planner v1.1.1 — dark theme. High-contrast light text on dark backgrounds. */
 :root{
   --green:#46d98a; --green-dark:#178048; --green-soft:#1d2f26;
   --ink:#f2f5f3; --muted:#b6bfba; --line:#333c43; --card:#1c2126;
@@ -14,7 +14,7 @@ a{color:var(--link)}
 .topbar{background:#0d3b23;color:#fff;padding:18px 16px 16px}
 .topbar-inner{max-width:1160px;margin:0 auto}
 .topbar h1{margin:0;font-size:1.6rem}
-.tagline{margin:4px 0 0;opacity:.92;font-size:.95rem;color:#d7e8dd}
+.tagline{margin:4px 0 0;opacity:.92;font-size:.95rem;color:#d7e8dd;overflow-wrap:break-word}
 .layout{max-width:1160px;margin:0 auto;display:flex;gap:20px;padding:18px 16px 90px}
 .sidebar{width:230px;flex-shrink:0}
 .nav{display:flex;flex-direction:column;gap:8px}
@@ -85,6 +85,10 @@ input[type=time]{color-scheme:dark}
 .bill-row:last-child{border-bottom:none}
 .bill-row.paid{opacity:.55}
 .bill-row.paid .bill-name{text-decoration:line-through}
+.bill-row input[type=text]{flex:1;min-width:110px;padding:8px 10px;font-size:1rem;border:1px solid var(--input-line);border-radius:9px;background:var(--input-bg);color:var(--ink)}
+.bill-row input[type=number]{width:105px;padding:8px 10px;font-size:1rem;border:1px solid var(--input-line);border-radius:9px;background:var(--input-bg);color:var(--ink)}
+.bill-row input[type=date]{width:150px;padding:8px 10px;font-size:1rem;border:1px solid var(--input-line);border-radius:9px;background:var(--input-bg);color:var(--ink);color-scheme:dark}
+.bill-row.paid input{opacity:.8}
 .bill-name{flex:1;min-width:130px;font-weight:600}
 .bill-note{width:100%;font-size:.88rem;color:var(--muted);margin:-4px 0 0}
 .bill-due{color:var(--muted);font-size:.92rem}
@@ -112,6 +116,10 @@ input[type=time]{color-scheme:dark}
 .update-banner ul{margin:6px 0 10px 18px}
 .update-banner-actions{display:flex;gap:10px;flex-wrap:wrap}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;z-index:50;overflow-y:auto}
+/* REQUIRED: the author's display:flex above would otherwise cancel the HTML
+   hidden attribute (author CSS beats the browser's built-in [hidden] rule),
+   so the modal was visible on every page load with an empty body. */
+.modal[hidden]{display:none !important}
 .modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:640px;width:100%}
 .modal-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .modal-head h3{margin:0}

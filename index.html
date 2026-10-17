@@ -256,7 +256,7 @@
     <section class="view" id="view-bills">
       <h2>Bills</h2>
       <div class="card">
-        <p class="hint"><strong>Starting points — update or delete them.</strong> These are not live bank data. Put in your real amounts and dates.</p>
+        <p class="hint"><strong>Starting points — update or delete them.</strong> These are not live bank data. Tap a bill's name, amount, due date, or auto-pay box to change it.</p>
         <div class="add-row bill-add">
           <input id="billName" type="text" placeholder="Bill name" maxlength="60" aria-label="Bill name">
           <input id="billAmount" type="number" min="0" step="0.01" placeholder="$ amount" aria-label="Bill amount">
@@ -407,7 +407,7 @@
 </nav>
 
 <footer class="footer">
-  <p>Budget Planner <strong>v1.1.0</strong> · Your numbers stay on this device — nothing is sent anywhere. · <button class="btn-mini" id="whatsNewBtn" type="button">What's New</button></p>
+  <p>Budget Planner <strong>v1.1.1</strong> · Your numbers stay on this device — nothing is sent anywhere. · <button class="btn-mini" id="whatsNewBtn" type="button">What's New</button> <button class="btn-mini" id="checkUpdateBtn" type="button">Check for updates</button> <span id="updateCheckStatus"></span></p>
 </footer>
 
 <div class="modal" id="whatsNewModal" hidden>

@@ -1,4 +1,4 @@
-# Budget Planner — v1.1.0
+# Budget Planner — v1.1.1
 
 A simple budget planner that works on iPhone and PC from one link. Dark
 background. No build step — just `index.html` + `app.js` + `style.css` +
@@ -57,6 +57,13 @@ seen in localStorage, so it never shows again for that version, only for a newer
 one. "What's New" in the footer opens the full history from `changelog.json`
 anytime without re-triggering the banner. If the version check fails (offline,
 local file), it fails quietly.
+
+v1.1.1 fixes: the What's New box used to open empty (the modal's `display:flex`
+was cancelling the HTML `hidden` attribute, so it showed on load with no notes —
+now `hidden` wins and the notes render instantly from a built-in copy, then the
+fetched history swaps in); typing a category amount no longer steals focus;
+bills are editable in place; switching hours mode no longer wipes the tip %;
+footer gains a "Check for updates" button.
 
 ## Privacy
 

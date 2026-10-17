@@ -1,7 +1,7 @@
-/* Budget Planner v1.1.0 — all data stays in localStorage on this device. */
+/* Budget Planner v1.1.1 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.1.0';
+var APP_VERSION = '1.1.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -268,7 +268,7 @@ if(!S.hoursMode) S.hoursMode = 'total';
 if(S.mealTotal === undefined) S.mealTotal = 0;
 if(S.calibration === undefined) S.calibration = null;
 if(S.checking === undefined) S.checking = 0;
-if(!S.balanceDate) S.balanceDate = '2026-10-14';
+/* no made-up default date: balances show "Set the date…" until the user picks one */
 /* v1.1.0: shifts saved before meal breaks get the default rule (30 min over 6 hrs) */
 S.shifts.forEach(function(sh){
   if(sh.meal === undefined || sh.meal === null) sh.meal = defaultMeal(sh.start, sh.end);
@@ -302,6 +302,12 @@ function renderAll(){
 }
 
 function renderBudget(){
+  renderBudgetSummary();
+  renderCategoryList();
+  renderGoal();
+}
+
+function renderBudgetSummary(){
   var income = monthlyIncome();
   var spend = plannedSpend();
   var left = income - spend;
@@ -329,7 +335,10 @@ function renderBudget(){
   S.categories.forEach(function(c, i){ html += slice(num(c.amount), COLORS[i % COLORS.length]); });
   if(left > 0) html += slice(left, '#3d4d45');
   svg.innerHTML = html;
+}
 
+function renderCategoryList(){
+  var income = monthlyIncome();
   /* categories list */
   var list = document.getElementById('categoryList');
   list.innerHTML = '';
@@ -343,16 +352,20 @@ function renderBudget(){
       '<button class="btn-mini danger" data-cat-del="' + i + '" type="button">Delete</button>';
     list.appendChild(row);
   });
+}
 
-  /* savings goal */
-  document.getElementById('goalAmount').value = S.goal;
-  document.getElementById('savedAmount').value = S.saved;
+function renderGoal(){
+  /* savings goal — don't clobber the field the user is currently typing in */
+  var goalEl = document.getElementById('goalAmount');
+  var savedEl = document.getElementById('savedAmount');
+  if(document.activeElement !== goalEl) goalEl.value = S.goal;
+  if(document.activeElement !== savedEl) savedEl.value = S.saved;
   var toGo = Math.max(S.goal - S.saved, 0);
   var pct = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
   document.getElementById('goalFill').style.width = pct + '%';
   document.getElementById('goalPct').textContent = pct + '%';
   document.getElementById('goalToGo').textContent = money(toGo) + ' to go';
-  var weeklySave = (monthlyIncome() - spend) * 12 / 52;
+  var weeklySave = (monthlyIncome() - plannedSpend()) * 12 / 52;
   var pace = document.getElementById('paceLine');
   if(S.saved >= S.goal){ pace.textContent = '🎉 Goal reached — nice work.'; }
   else if(weeklySave <= 0){ pace.textContent = 'At this pace you are not saving — planned spending is at or above your income, so there is no date to show yet.'; }
@@ -369,9 +382,13 @@ function renderPaycheck(){
   document.getElementById('hoursModeShifts').classList.toggle('active', S.hoursMode === 'shifts');
   document.getElementById('hoursTotalBox').hidden = S.hoursMode === 'shifts';
   document.getElementById('hoursShiftsBox').hidden = S.hoursMode !== 'shifts';
+  /* don't clobber the field the user is currently typing in */
+  var hoursInputEl = document.getElementById('hoursInput');
+  var rateInputEl = document.getElementById('rateInput');
+  var mealTotalEl = document.getElementById('mealTotalInput');
   document.getElementById('hoursSlider').value = S.hours;
-  document.getElementById('hoursInput').value = S.hours;
-  document.getElementById('rateInput').value = S.rate;
+  if(document.activeElement !== hoursInputEl) hoursInputEl.value = S.hours;
+  if(document.activeElement !== rateInputEl) rateInputEl.value = S.rate;
   document.getElementById('freqSelect').value = S.freq;
   document.getElementById('ficaInput').value = S.ded.fica;
   document.getElementById('federalInput').value = S.ded.federal;
@@ -398,7 +415,7 @@ function renderPaycheck(){
   document.getElementById('shiftMathOut').textContent = S.shifts.length
     ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total → paid ' + fmtHrs(totalPaid) + ' hrs.'
     : '';
-  document.getElementById('mealTotalInput').value = S.mealTotal || 0;
+  if(document.activeElement !== mealTotalEl) mealTotalEl.value = S.mealTotal || 0;
   document.getElementById('totalMealMath').textContent = num(S.mealTotal) > 0
     ? fmtHrs(num(S.hours)) + ' hrs − ' + fmtHrs(num(S.mealTotal)) + ' min meal → paid ' + fmtHrs(effectiveHours()) + ' hrs.'
     : 'Paid hours: ' + fmtHrs(effectiveHours()) + ' hrs / week.';
@@ -433,11 +450,15 @@ function renderPaycheck(){
   document.getElementById('extraHoursOut').textContent = '+' + extraH + ' hrs/week → about ' + money(extraNet) +
     ' more take-home per week (' + money(extraNet * 52 / 12) + ' / month).';
   var newRate = num(document.getElementById('newRate').value, 0);
-  var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly', S.calibration);
-  var oldP = calcPaycheck(effectiveHours(), S.rate, S.ded, 'weekly', S.calibration);
-  document.getElementById('newRateOut').textContent = 'At $' + newRate.toFixed(2) + '/hr with the same hours: ' +
-    money(newP.net) + ' take-home / week — that is ' + money(newP.net - oldP.net) +
-    ' more per week (' + money((newP.net - oldP.net) * 52 / 12) + ' / month).';
+  if(newRate > 0){
+    var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly', S.calibration);
+    var oldP = calcPaycheck(effectiveHours(), S.rate, S.ded, 'weekly', S.calibration);
+    document.getElementById('newRateOut').textContent = 'At $' + newRate.toFixed(2) + '/hr with the same hours: ' +
+      money(newP.net) + ' take-home / week — that is ' + money(newP.net - oldP.net) +
+      ' more per week (' + money((newP.net - oldP.net) * 52 / 12) + ' / month).';
+  } else {
+    document.getElementById('newRateOut').textContent = 'Type a new hourly rate above to see the difference.';
+  }
 }
 
 function fmtTime(t){
@@ -454,8 +475,10 @@ function unpaidBillsTotal(){
 }
 
 function renderMyMoney(){
-  document.getElementById('savingsBalInput').value = S.saved;
-  document.getElementById('checkingBalInput').value = S.checking;
+  var savingsBalEl = document.getElementById('savingsBalInput');
+  var checkingBalEl = document.getElementById('checkingBalInput');
+  if(document.activeElement !== savingsBalEl) savingsBalEl.value = S.saved;
+  if(document.activeElement !== checkingBalEl) checkingBalEl.value = S.checking;
   document.getElementById('balanceDateInput').value = S.balanceDate || '';
   var total = num(S.saved) + num(S.checking);
   var bills = unpaidBillsTotal();
@@ -555,6 +578,15 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '1.1.1', notes: [
+    "What's New actually shows the notes now — the box used to open empty.",
+    'Typing a category amount no longer kicks you out of the box after each number.',
+    'Bills can now be edited in place — name, amount, due date, and auto-pay — instead of delete-and-retype.',
+    "Switching between Total hours and My shifts no longer wipes the tip calculator's %.",
+    'New rate box says plainly to type a rate instead of showing $0.00.',
+    'New: Check for updates button in the footer.',
+    'Balances no longer start with a made-up date — empty until you set it.'
+  ] },
   { version: '1.1.0', notes: [
     'Dark background — easier on the eyes, day and night.',
     'Bank statement import — drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.',
@@ -584,34 +616,56 @@ function markUpdateSeen(version){
   try{ localStorage.setItem(UPDATE_SEEN_PREFIX + version, '1'); }catch(e){}
 }
 
-function checkForUpdate(){
+function checkForUpdate(manual){
   try{
     fetch('version.json', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(remote){
-      if(!remote || !remote.version) return;
-      if(compareVersions(remote.version, APP_VERSION) <= 0) return;
-      try{ if(localStorage.getItem(UPDATE_SEEN_PREFIX + remote.version)) return; }catch(e){}
+      if(!remote || !remote.version){
+        if(manual) setUpdateCheckStatus('Couldn\u2019t check — try again in a bit.');
+        return;
+      }
+      if(compareVersions(remote.version, APP_VERSION) <= 0){
+        if(manual) setUpdateCheckStatus('You\u2019re on the latest version (v' + APP_VERSION + ').');
+        return;
+      }
+      /* a manual check always shows the banner, even if this version was seen before */
+      if(!manual){
+        try{ if(localStorage.getItem(UPDATE_SEEN_PREFIX + remote.version)) return; }catch(e){}
+      }
       showUpdateBanner(remote.version, remote.notes || []);
-    }).catch(function(){ /* no network / local file — fail quietly */ });
+      if(manual) setUpdateCheckStatus('');
+    }).catch(function(){
+      if(manual) setUpdateCheckStatus('Couldn\u2019t check — you may be offline.');
+      /* auto check: no network / local file — fail quietly */
+    });
   }catch(e){}
 }
 
-function openWhatsNew(){
+function setUpdateCheckStatus(msg){
+  var el = document.getElementById('updateCheckStatus');
+  if(el) el.textContent = msg || '';
+}
+
+function renderWhatsNewNotes(versions){
   var body = document.getElementById('whatsNewBody');
-  function render(versions){
-    body.innerHTML = '';
-    versions.forEach(function(v){
-      var div = document.createElement('div'); div.className = 'whatsnew-version';
-      var h = document.createElement('h4'); h.textContent = 'v' + v.version + (v.version === APP_VERSION ? ' — you have this one' : '');
-      div.appendChild(h);
-      var ul = document.createElement('ul');
-      (v.notes || []).forEach(function(n){ var li = document.createElement('li'); li.textContent = n; ul.appendChild(li); });
-      div.appendChild(ul);
-      body.appendChild(div);
-    });
-  }
+  body.innerHTML = '';
+  versions.forEach(function(v){
+    var div = document.createElement('div'); div.className = 'whatsnew-version';
+    var h = document.createElement('h4'); h.textContent = 'v' + v.version + (v.version === APP_VERSION ? ' — you have this one' : '');
+    div.appendChild(h);
+    var ul = document.createElement('ul');
+    (v.notes || []).forEach(function(n){ var li = document.createElement('li'); li.textContent = n; ul.appendChild(li); });
+    div.appendChild(ul);
+    body.appendChild(div);
+  });
+}
+
+function openWhatsNew(){
+  /* show the built-in notes IMMEDIATELY so the box is never empty, then
+     swap in the full history from changelog.json when it arrives */
+  renderWhatsNewNotes(CHANGELOG_FALLBACK);
   fetch('changelog.json', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(data){
-    render((data && data.versions) ? data.versions : CHANGELOG_FALLBACK);
-  }).catch(function(){ render(CHANGELOG_FALLBACK); });
+    renderWhatsNewNotes((data && data.versions) ? data.versions : CHANGELOG_FALLBACK);
+  }).catch(function(){ /* keep the built-in notes */ });
   document.getElementById('whatsNewModal').hidden = false;
 }
 
@@ -630,12 +684,11 @@ function renderBills(){
     if(!b.paid) total += num(b.amount);
     var row = document.createElement('div');
     row.className = 'bill-row' + (b.paid ? ' paid' : '');
-    var dueTxt = b.due ? new Date(b.due + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No due date';
     row.innerHTML = '<label class="check"><input type="checkbox" data-bill-paid="' + idx + '"' + (b.paid ? ' checked' : '') + '> Paid</label>' +
-      '<span class="bill-name">' + esc(b.name) + '</span>' +
-      '<span>' + money(num(b.amount)) + '</span>' +
-      '<span class="bill-due">' + dueTxt + '</span>' +
-      (b.auto ? '<span class="bill-auto">Auto-pay</span>' : '') +
+      '<input type="text" value="' + esc(b.name) + '" data-bill-name="' + idx + '" aria-label="Bill name">' +
+      '<input type="number" min="0" step="0.01" value="' + num(b.amount) + '" data-bill-amt="' + idx + '" aria-label="Bill amount">' +
+      '<input type="date" value="' + esc(b.due || '') + '" data-bill-due="' + idx + '" aria-label="Bill due date">' +
+      '<label class="check"><input type="checkbox" data-bill-auto="' + idx + '"' + (b.auto ? ' checked' : '') + '> Auto-pay</label>' +
       '<button class="btn-mini danger" data-bill-del="' + idx + '" type="button">Delete</button>' +
       (b.note ? '<span class="bill-note">' + esc(b.note) + '</span>' : '');
     list.appendChild(row);
@@ -720,11 +773,13 @@ function bind(){
   });
 
   /* budget inputs */
+  /* typing in a category updates the totals, but does NOT rebuild the list —
+     rebuilding would destroy the field being typed in and steal focus */
   document.getElementById('categoryList').addEventListener('input', function(e){
     var t = e.target;
     if(t.dataset.catName !== undefined){ S.categories[+t.dataset.catName].name = t.value; }
     if(t.dataset.catAmt !== undefined){ S.categories[+t.dataset.catAmt].amount = num(t.value); }
-    save(); renderBudget(); renderMyMoney();
+    save(); renderBudgetSummary(); renderMyMoney();
   });
   document.getElementById('categoryList').addEventListener('click', function(e){
     var t = e.target;
@@ -741,8 +796,8 @@ function bind(){
     document.getElementById('newCatAmount').value = '';
     save(); renderBudget(); renderMyMoney();
   });
-  document.getElementById('goalAmount').addEventListener('input', function(e){ S.goal = num(e.target.value); save(); renderBudget(); });
-  document.getElementById('savedAmount').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderBudget(); renderMyMoney(); });
+  document.getElementById('goalAmount').addEventListener('input', function(e){ S.goal = num(e.target.value); save(); renderGoal(); });
+  document.getElementById('savedAmount').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderGoal(); renderMyMoney(); });
 
   /* paycheck inputs */
   function setHours(v){ S.hours = num(v); save(); renderAll(); }
@@ -853,11 +908,17 @@ function bind(){
     document.getElementById('updateBanner').hidden = true;
   });
   document.getElementById('whatsNewBtn').addEventListener('click', openWhatsNew);
+  document.getElementById('checkUpdateBtn').addEventListener('click', function(){ checkForUpdate(true); });
   document.getElementById('whatsNewClose').addEventListener('click', function(){
     document.getElementById('whatsNewModal').hidden = true;
   });
   document.getElementById('whatsNewModal').addEventListener('click', function(e){
     if(e.target === document.getElementById('whatsNewModal')) document.getElementById('whatsNewModal').hidden = true;
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && !document.getElementById('whatsNewModal').hidden){
+      document.getElementById('whatsNewModal').hidden = true;
+    }
   });
   document.getElementById('savingsBalInput').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderBudget(); renderMyMoney(); });
   document.getElementById('checkingBalInput').addEventListener('input', function(e){ S.checking = num(e.target.value); save(); renderMyMoney(); });
@@ -878,7 +939,13 @@ function bind(){
   });
   document.getElementById('billList').addEventListener('change', function(e){
     var t = e.target;
-    if(t.dataset.billPaid !== undefined){ S.bills[+t.dataset.billPaid].paid = t.checked; save(); renderBills(); renderMyMoney(); }
+    if(t.dataset.billPaid !== undefined){ S.bills[+t.dataset.billPaid].paid = t.checked; }
+    else if(t.dataset.billName !== undefined){ S.bills[+t.dataset.billName].name = t.value.trim() || 'Bill'; }
+    else if(t.dataset.billAmt !== undefined){ S.bills[+t.dataset.billAmt].amount = Math.max(0, num(t.value)); }
+    else if(t.dataset.billDue !== undefined){ S.bills[+t.dataset.billDue].due = t.value; }
+    else if(t.dataset.billAuto !== undefined){ S.bills[+t.dataset.billAuto].auto = t.checked; }
+    else return;
+    save(); renderBills(); renderMyMoney();
   });
   document.getElementById('billList').addEventListener('click', function(e){
     var t = e.target;
@@ -915,10 +982,12 @@ function bind(){
   });
   document.getElementById('tipBill').addEventListener('input', renderCalculators);
   document.getElementById('tipPct').addEventListener('input', renderCalculators);
-  document.querySelectorAll('.btn-chip').forEach(function(b){
+  /* tip % chips only — hours-mode chips have their own handlers above, and the
+     old unscoped selector used to wipe the tip % with "undefined" on mode switch */
+  document.querySelectorAll('.btn-chip[data-tip]').forEach(function(b){
     b.addEventListener('click', function(){
       document.getElementById('tipPct').value = b.dataset.tip;
-      document.querySelectorAll('.btn-chip').forEach(function(x){ x.classList.toggle('active', x === b); });
+      document.querySelectorAll('.btn-chip[data-tip]').forEach(function(x){ x.classList.toggle('active', x === b); });
       renderCalculators();
     });
   });
@@ -926,5 +995,7 @@ function bind(){
 
 bind();
 renderAll();
-checkForUpdate();
+/* pre-fill What's New so the box is never empty, even before any fetch runs */
+renderWhatsNewNotes(CHANGELOG_FALLBACK);
+checkForUpdate(false);
 }
