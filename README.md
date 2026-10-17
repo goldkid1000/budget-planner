@@ -1,7 +1,8 @@
-# Budget Planner — v1.0.0
+# Budget Planner — v1.1.0
 
-A simple budget planner that works on iPhone and PC from one link. No build step —
-just `index.html` + `app.js` + `style.css` (+ this README).
+A simple budget planner that works on iPhone and PC from one link. Dark
+background. No build step — just `index.html` + `app.js` + `style.css` +
+`version.json` + `changelog.json` (+ this README).
 
 ## What it does
 
@@ -15,10 +16,21 @@ just `index.html` + `app.js` + `style.css` (+ this README).
   calibration: enter one real stub's gross + net and the app uses your real overall
   deduction %, with an adjustment line so the breakdown still matches.
   What-if: extra hours per week, and a raise (try a higher rate to see the difference).
+  **Meal breaks count:** each shift has an unpaid meal break (30 minutes by default
+  when a shift is over 6 hours, 0 otherwise, editable per shift). Paid hours =
+  shift length − meal break, shown plainly per shift ("8 hrs, meal 30 min → paid
+  7.5 hrs"). Total-hours mode has an "Unpaid meal break (minutes)" field too.
 - **My Money** — Type your savings + checking balances and the date you last
   updated them. The app shows total balances, what's already spoken for (unpaid bills
   + this month's planned spending), and what you can spend. **This app does NOT
-  connect to your bank** — never put a bank login into a web page.
+  log into your bank** — never put a bank login into a web page.
+  **Bank statement import:** download a CSV from your bank's app/website and drop
+  it in (or paste the text). The app reads it right here on your device — nothing
+  leaves the device — and fills in your balance (pick Savings or Checking) plus your
+  recent transactions, with an Undo. The parser handles common bank CSV shapes:
+  Date / Description / Amount / Balance columns in any order, separate Debit/Credit
+  columns, quoted fields, `$` and commas, and `(parentheses)` negatives. If it
+  can't read the file, it says so plainly and manual entry still works.
 - **Bills** — Editable list (name, amount, due date, auto-pay, paid). Sorted by due
   date. Starter entries are starting points, not live bank data.
 - **Discounts** — Deal search (opens real searches you check yourself — the app never
@@ -35,6 +47,16 @@ The paycheck math is a per-line estimate: FICA at 7.65%, federal and NY at whate
 rates you set (defaults 0% — at part-time student income these are often $0, but check
 your pay stub). Your actual paycheck is the real number. Nothing here is tax advice
 or a tax return.
+
+## Update system
+
+`version.json` holds the current version + its What's New notes. On load the app
+fetches it; if a newer version exists, a banner shows that version's notes once,
+with "Update now" (reloads) / "Later" — tapping either records that version as
+seen in localStorage, so it never shows again for that version, only for a newer
+one. "What's New" in the footer opens the full history from `changelog.json`
+anytime without re-triggering the banner. If the version check fails (offline,
+local file), it fails quietly.
 
 ## Privacy
 

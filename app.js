@@ -1,5 +1,7 @@
-/* Budget Planner v1.0.0 — all data stays in localStorage on this device. */
+/* Budget Planner v1.1.0 — all data stays in localStorage on this device. */
 'use strict';
+
+var APP_VERSION = '1.1.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -23,6 +25,136 @@ function calcShiftHours(startStr, endStr){
   var s = toMinutes(startStr), e = toMinutes(endStr);
   if(e <= s) e += 1440;
   return (e - s) / 60;
+}
+/* paid hours for one shift: shift length minus unpaid meal break, never below 0 */
+function calcShiftPaidHours(startStr, endStr, mealMinutes){
+  var paid = calcShiftHours(startStr, endStr) - num0(mealMinutes) / 60;
+  return paid > 0 ? paid : 0;
+}
+/* default meal break for a shift: 30 min when the shift is over 6 hours, else 0 */
+function defaultMeal(startStr, endStr){
+  return calcShiftHours(startStr, endStr) > 6 ? 30 : 0;
+}
+function fmtHrs(h){
+  var v = Number(h); if(!isFinite(v)) v = 0;
+  return (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+}
+/* compare dotted version strings: -1 if a<b, 0 if equal, 1 if a>b */
+function compareVersions(a, b){
+  var pa = String(a || '').split('.').map(function(x){ return parseInt(x, 10) || 0; });
+  var pb = String(b || '').split('.').map(function(x){ return parseInt(x, 10) || 0; });
+  for(var i = 0; i < Math.max(pa.length, pb.length); i++){
+    var d = (pa[i] || 0) - (pb[i] || 0);
+    if(d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+/* ---------- bank statement CSV parser (pure; runs on-device only) ---------- */
+function parseCSVText(text){
+  var rows = [], row = [], field = '', inQuotes = false;
+  for(var i = 0; i < text.length; i++){
+    var c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i + 1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if(c === '"'){ inQuotes = true; }
+    else if(c === ','){ row.push(field); field = ''; }
+    else if(c === '\n'){ row.push(field); field = ''; rows.push(row); row = []; }
+    else if(c === '\r'){ /* \n handles the line break */ }
+    else field += c;
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(function(r){ return r.length > 1 || (r.length === 1 && String(r[0]).trim() !== ''); });
+}
+function normHeader(h){ return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function parseAmount(raw){
+  var s = String(raw == null ? '' : raw).trim();
+  if(!s) return null;
+  var neg = false;
+  if(/^\(.*\)$/.test(s)){ neg = true; s = s.slice(1, -1); }
+  if(/-$/.test(s)){ neg = true; s = s.slice(0, -1); }
+  s = s.replace(/[$,\s]/g, '');
+  if(s === '' || s === '-' || s === '.') return null;
+  var n = parseFloat(s);
+  if(!isFinite(n)) return null;
+  return neg ? -Math.abs(n) : n;
+}
+function parseDateLoose(raw){
+  var s = String(raw == null ? '' : raw).trim();
+  if(!s) return null;
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return m[1] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[3]).padStart(2, '0');
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){
+    var y = m[3].length === 2 ? '20' + m[3] : m[3];
+    return y + '-' + String(m[1]).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
+  }
+  var d = new Date(s);
+  if(!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return null;
+}
+function findCol(headers, tests, skip){
+  for(var i = 0; i < headers.length; i++){
+    if(skip && skip.indexOf(i) !== -1) continue;
+    var h = normHeader(headers[i]);
+    for(var j = 0; j < tests.length; j++){ if(h.indexOf(tests[j]) !== -1) return i; }
+  }
+  return -1;
+}
+/* Parse a bank statement CSV. Returns {ok, transactions, balance, statementDate, count}
+   or {ok:false, error}. Tolerant of column order/casing, quoted fields, $ and commas,
+   (parentheses) negatives, trailing-minus negatives, and separate debit/credit columns. */
+function parseStatementCSV(text){
+  var rows = parseCSVText(String(text || ''));
+  if(!rows.length) return { ok: false, error: "Couldn't read that — the file looks empty. Try downloading the CSV again from your bank." };
+  var headerIdx = -1, headers = null;
+  for(var r = 0; r < Math.min(rows.length, 10); r++){
+    var cells = rows[r];
+    var hasDate = false, hasOther = false;
+    for(var c = 0; c < cells.length; c++){
+      var h = normHeader(cells[c]);
+      if(h.indexOf('date') !== -1) hasDate = true;
+      if(h.indexOf('description') !== -1 || h.indexOf('memo') !== -1 || h.indexOf('payee') !== -1 ||
+         h.indexOf('amount') !== -1 || h.indexOf('balance') !== -1 ||
+         h.indexOf('debit') !== -1 || h.indexOf('credit') !== -1 ||
+         h.indexOf('withdrawal') !== -1 || h.indexOf('deposit') !== -1) hasOther = true;
+    }
+    if(hasDate && hasOther){ headerIdx = r; headers = cells; break; }
+  }
+  if(headerIdx === -1) return { ok: false, error: "Couldn't find a header row with Date, Description, Amount and Balance. Your bank's CSV download usually has one — try that file." };
+  var dateCol = findCol(headers, ['date'], []);
+  var descCol = findCol(headers, ['description', 'memo', 'payee', 'details'], [dateCol]);
+  var balCol = findCol(headers, ['runningbalance', 'endingbalance', 'balance'], [dateCol, descCol]);
+  var debitCol = findCol(headers, ['debit', 'withdrawal', 'moneyout', 'amountdebit'], [dateCol, descCol, balCol]);
+  var creditCol = findCol(headers, ['credit', 'deposit', 'moneyin', 'amountcredit'], [dateCol, descCol, balCol, debitCol]);
+  var amtCol = -1;
+  if(!(debitCol !== -1 && creditCol !== -1)){
+    amtCol = findCol(headers, ['amount', 'charge', 'total'], [dateCol, descCol, balCol, debitCol, creditCol]);
+  }
+  if(dateCol === -1) return { ok: false, error: "Couldn't find a Date column in your statement." };
+  if(amtCol === -1 && (debitCol === -1 || creditCol === -1)) return { ok: false, error: "Couldn't find an Amount column (or Debit/Credit columns) in your statement." };
+  var txns = [], balance = null, latestDate = null;
+  for(var i = headerIdx + 1; i < rows.length; i++){
+    var row = rows[i];
+    var date = parseDateLoose(row[dateCol]);
+    if(!date) continue;
+    var amt = null;
+    if(amtCol !== -1) amt = parseAmount(row[amtCol]);
+    else {
+      var d = parseAmount(row[debitCol]), cr = parseAmount(row[creditCol]);
+      if(d != null || cr != null) amt = (cr || 0) - (d || 0);
+    }
+    if(amt == null) continue;
+    var desc = descCol !== -1 ? String(row[descCol] == null ? '' : row[descCol]).trim() : '';
+    var bal = balCol !== -1 ? parseAmount(row[balCol]) : null;
+    if(bal != null) balance = bal;
+    if(!latestDate || date > latestDate) latestDate = date;
+    txns.push({ date: date, description: desc, amount: amt, balance: bal });
+  }
+  if(!txns.length) return { ok: false, error: "Found the columns but no transactions with a date and amount. Try the CSV download from your bank." };
+  return { ok: true, transactions: txns, balance: balance, statementDate: latestDate, count: txns.length };
 }
 /* paycheck: hours per week, rate, ded = {fica, federal, ny} percents,
    freq, calibration = {gross, net} from a real pay stub or null.
@@ -69,7 +201,8 @@ function calcTip(bill, pct){ var tip = bill * (pct / 100); return { tip: tip, to
 
 if (typeof module !== 'undefined' && module.exports){
   module.exports = { round2: round2, money: money, money0: money0, calcPaycheck: calcPaycheck,
-    calcShiftHours: calcShiftHours, toMinutes: toMinutes,
+    calcShiftHours: calcShiftHours, calcShiftPaidHours: calcShiftPaidHours, defaultMeal: defaultMeal,
+    toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
     calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip };
 }
 
@@ -77,13 +210,14 @@ if (typeof module !== 'undefined' && module.exports){
 if (typeof document !== 'undefined'){
 
 var KEY = 'budgetPlanner.v1';
-var COLORS = ['#1a7f4b','#2b9cd8','#f2a93b','#8e5ecf','#e05252','#17a398','#d94f9a','#6b7a72','#3b5bdb','#e07b39'];
+var COLORS = ['#46d98a','#4db2ff','#f2c14e','#b48cff','#ff7a70','#2dd4bf','#f472b6','#9aa8a0','#6ea8ff','#f2994a'];
 
 var DEFAULTS = {
   hours: 0, rate: 0, freq: 'weekly',
   hoursMode: 'total',
+  mealTotal: 0,
   shifts: [
-    { day: 'Mon', start: '09:00', end: '13:00' }
+    { day: 'Mon', start: '09:00', end: '13:00', meal: 0 }
   ],
   ded: { fica: 7.65, federal: 0, ny: 0 },
   calibration: null,
@@ -131,17 +265,26 @@ var S = loadState();
 if(!S.ded) S.ded = { fica: 7.65, federal: 0, ny: 0 };
 if(!S.shifts) S.shifts = JSON.parse(JSON.stringify(DEFAULTS.shifts));
 if(!S.hoursMode) S.hoursMode = 'total';
+if(S.mealTotal === undefined) S.mealTotal = 0;
 if(S.calibration === undefined) S.calibration = null;
 if(S.checking === undefined) S.checking = 0;
 if(!S.balanceDate) S.balanceDate = '2026-10-14';
+/* v1.1.0: shifts saved before meal breaks get the default rule (30 min over 6 hrs) */
+S.shifts.forEach(function(sh){
+  if(sh.meal === undefined || sh.meal === null) sh.meal = defaultMeal(sh.start, sh.end);
+});
+if(!S.statementTxns) S.statementTxns = [];
+if(S.statementInfo === undefined) S.statementInfo = null;
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function num(v, d){ var n = parseFloat(v); return isFinite(n) ? n : (d || 0); }
 
 function effectiveHours(){
   if(S.hoursMode === 'shifts'){
-    return S.shifts.reduce(function(a, sh){ return a + calcShiftHours(sh.start, sh.end); }, 0);
+    return S.shifts.reduce(function(a, sh){ return a + calcShiftPaidHours(sh.start, sh.end, sh.meal); }, 0);
   }
-  return num(S.hours);
+  /* total-hours mode: unpaid meal break comes off the total */
+  var paid = num(S.hours) - num(S.mealTotal) / 60;
+  return paid > 0 ? paid : 0;
 }
 function currentPaycheck(){
   return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq, S.calibration);
@@ -184,7 +327,7 @@ function renderBudget(){
     return out;
   }
   S.categories.forEach(function(c, i){ html += slice(num(c.amount), COLORS[i % COLORS.length]); });
-  if(left > 0) html += slice(left, '#d9e8de');
+  if(left > 0) html += slice(left, '#3d4d45');
   svg.innerHTML = html;
 
   /* categories list */
@@ -236,18 +379,29 @@ function renderPaycheck(){
 
   var shiftList = document.getElementById('shiftList');
   shiftList.innerHTML = '';
+  var totalLen = 0, totalMeal = 0, totalPaid = 0;
   S.shifts.forEach(function(sh, i){
-    var hrs = calcShiftHours(sh.start, sh.end);
+    var len = calcShiftHours(sh.start, sh.end);
+    var meal = (sh.meal === undefined || sh.meal === null) ? defaultMeal(sh.start, sh.end) : num(sh.meal);
+    var paid = calcShiftPaidHours(sh.start, sh.end, meal);
+    totalLen += len; totalMeal += meal; totalPaid += paid;
     var row = document.createElement('div'); row.className = 'bill-row';
     row.innerHTML = '<span class="bill-name">' + esc(sh.day) + '</span>' +
       '<span>' + esc(fmtTime(sh.start)) + ' – ' + esc(fmtTime(sh.end)) + '</span>' +
-      '<span>' + hrs.toFixed(2).replace(/\.?0+$/, '') + ' hrs</span>' +
-      '<button class="btn-mini danger" data-shift-del="' + i + '" type="button">Delete</button>';
+      '<label class="field small">Meal (min) <input type="number" min="0" step="5" value="' + meal + '" data-shift-meal="' + i + '" aria-label="Meal break in minutes"></label>' +
+      '<button class="btn-mini danger" data-shift-del="' + i + '" type="button">Delete</button>' +
+      '<span class="shift-math">' + fmtHrs(len) + ' hrs, meal ' + fmtHrs(meal) + ' min → paid ' + fmtHrs(paid) + ' hrs</span>';
     shiftList.appendChild(row);
   });
   if(!S.shifts.length) shiftList.innerHTML = '<p class="hint">No shifts yet — add one below.</p>';
-  var totalShiftHrs = S.shifts.reduce(function(a, sh){ return a + calcShiftHours(sh.start, sh.end); }, 0);
-  document.getElementById('shiftTotalOut').textContent = totalShiftHrs.toFixed(2).replace(/\.?0+$/, '') + ' hrs / week';
+  document.getElementById('shiftTotalOut').textContent = fmtHrs(totalPaid) + ' hrs / week';
+  document.getElementById('shiftMathOut').textContent = S.shifts.length
+    ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total → paid ' + fmtHrs(totalPaid) + ' hrs.'
+    : '';
+  document.getElementById('mealTotalInput').value = S.mealTotal || 0;
+  document.getElementById('totalMealMath').textContent = num(S.mealTotal) > 0
+    ? fmtHrs(num(S.hours)) + ' hrs − ' + fmtHrs(num(S.mealTotal)) + ' min meal → paid ' + fmtHrs(effectiveHours()) + ' hrs.'
+    : 'Paid hours: ' + fmtHrs(effectiveHours()) + ' hrs / week.';
 
   var p = currentPaycheck();
   document.getElementById('grossOut').textContent = money(p.periodGross);
@@ -315,6 +469,150 @@ function renderMyMoney(){
   document.getElementById('moneyUpdatedLine').textContent = S.balanceDate
     ? 'Balances as of ' + new Date(S.balanceDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '. Update them when your balance changes.'
     : 'Set the date you last checked your balances.';
+
+  /* statement transactions from the last import, newest first (up to 10) */
+  var txnList = document.getElementById('txnList');
+  txnList.innerHTML = '';
+  if(S.statementTxns && S.statementTxns.length){
+    var head = document.createElement('p');
+    head.className = 'result-line';
+    head.textContent = 'Recent transactions from your statement' +
+      (S.statementInfo && S.statementInfo.date ? ' (latest ' + new Date(S.statementInfo.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ')' : '') + ':';
+    txnList.appendChild(head);
+    S.statementTxns.slice().sort(function(a, b){ return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); }).slice(0, 10).forEach(function(t){
+      var r = document.createElement('div'); r.className = 'txn-row';
+      var d = new Date(t.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      r.innerHTML = '<span class="txn-desc">' + esc(d) + ' · ' + esc(t.description || 'Transaction') + '</span>' +
+        '<span class="txn-amt ' + (t.amount >= 0 ? 'txn-pos' : 'txn-neg') + '">' + (t.amount >= 0 ? '+' : '−') + money(Math.abs(t.amount)) + '</span>';
+      txnList.appendChild(r);
+    });
+  }
+}
+
+function fmtISODate(iso){
+  if(!iso) return '';
+  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/* ---------- bank statement import (all local, nothing leaves the device) ---------- */
+var pendingImport = null, preImportSnapshot = null;
+
+function handleStatementText(text){
+  var res = parseStatementCSV(text);
+  var status = document.getElementById('csvStatus');
+  pendingImport = null;
+  document.getElementById('csvConfirm').hidden = true;
+  document.getElementById('csvUndoBtn').hidden = true;
+  if(!res.ok){ status.textContent = res.error; return; }
+  pendingImport = res;
+  status.textContent = 'Read ' + res.count + ' transaction' + (res.count === 1 ? '' : 's') + ' from your statement.';
+  var found = document.getElementById('csvFound');
+  if(res.balance != null){
+    found.textContent = 'Found balance ' + money(res.balance) +
+      (res.statementDate ? ' (latest transaction ' + fmtISODate(res.statementDate) + ')' : '') +
+      ' and ' + res.count + ' transactions. Pick which account this statement is for, then use it.';
+  } else {
+    found.textContent = 'Found ' + res.count + ' transactions, but no balance column, so your balance still needs typing. Pick an account and use it to save the transactions.';
+  }
+  document.getElementById('csvConfirm').hidden = false;
+}
+
+function applyStatement(){
+  if(!pendingImport) return;
+  preImportSnapshot = { saved: S.saved, checking: S.checking, balanceDate: S.balanceDate,
+    statementTxns: S.statementTxns, statementInfo: S.statementInfo };
+  var account = 'savings';
+  document.querySelectorAll('input[name="stmtAccount"]').forEach(function(r){ if(r.checked) account = r.value; });
+  if(pendingImport.balance != null){
+    if(account === 'checking') S.checking = pendingImport.balance;
+    else S.saved = pendingImport.balance;
+  }
+  if(pendingImport.statementDate) S.balanceDate = pendingImport.statementDate;
+  S.statementTxns = pendingImport.transactions.slice(-100);
+  S.statementInfo = { balance: pendingImport.balance, date: pendingImport.statementDate, count: pendingImport.count, account: account };
+  save(); renderAll();
+  document.getElementById('csvStatus').textContent = 'Done — ' +
+    (pendingImport.balance != null ? 'balance updated from your statement.' : 'transactions saved. Balance still needs typing since the statement had no balance column.') +
+    ' You can undo below.';
+  document.getElementById('csvUndoBtn').hidden = false;
+  pendingImport = null;
+}
+
+function undoStatement(){
+  if(!preImportSnapshot) return;
+  S.saved = preImportSnapshot.saved;
+  S.checking = preImportSnapshot.checking;
+  S.balanceDate = preImportSnapshot.balanceDate;
+  S.statementTxns = preImportSnapshot.statementTxns;
+  S.statementInfo = preImportSnapshot.statementInfo;
+  preImportSnapshot = null;
+  save(); renderAll();
+  document.getElementById('csvStatus').textContent = 'Undone — your balances are back to what they were before the import.';
+  document.getElementById('csvUndoBtn').hidden = true;
+  document.getElementById('csvConfirm').hidden = true;
+}
+
+/* ---------- update system: banner once per version, manual What's New ---------- */
+var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
+var CHANGELOG_FALLBACK = [
+  { version: '1.1.0', notes: [
+    'Dark background — easier on the eyes, day and night.',
+    'Bank statement import — drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.',
+    'Meal breaks count — shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.',
+    'Simpler to read — plain words, one main action per tab, extra details tucked behind “Show details”.',
+    'Update notices — the app tells you when a new version is out, once per version.',
+    'Polished on PC and phone.'
+  ] },
+  { version: '1.0.0', notes: [
+    'First version — budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators.'
+  ] }
+];
+
+function showUpdateBanner(version, notes){
+  var banner = document.getElementById('updateBanner');
+  document.getElementById('updateBannerTitle').textContent = 'Budget Planner was updated to v' + version + ' — here\u2019s what changed';
+  var list = document.getElementById('updateBannerNotes');
+  list.innerHTML = '';
+  notes.forEach(function(n){
+    var li = document.createElement('li'); li.textContent = n; list.appendChild(li);
+  });
+  banner.hidden = false;
+  banner.dataset.version = version;
+}
+
+function markUpdateSeen(version){
+  try{ localStorage.setItem(UPDATE_SEEN_PREFIX + version, '1'); }catch(e){}
+}
+
+function checkForUpdate(){
+  try{
+    fetch('version.json', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(remote){
+      if(!remote || !remote.version) return;
+      if(compareVersions(remote.version, APP_VERSION) <= 0) return;
+      try{ if(localStorage.getItem(UPDATE_SEEN_PREFIX + remote.version)) return; }catch(e){}
+      showUpdateBanner(remote.version, remote.notes || []);
+    }).catch(function(){ /* no network / local file — fail quietly */ });
+  }catch(e){}
+}
+
+function openWhatsNew(){
+  var body = document.getElementById('whatsNewBody');
+  function render(versions){
+    body.innerHTML = '';
+    versions.forEach(function(v){
+      var div = document.createElement('div'); div.className = 'whatsnew-version';
+      var h = document.createElement('h4'); h.textContent = 'v' + v.version + (v.version === APP_VERSION ? ' — you have this one' : '');
+      div.appendChild(h);
+      var ul = document.createElement('ul');
+      (v.notes || []).forEach(function(n){ var li = document.createElement('li'); li.textContent = n; ul.appendChild(li); });
+      div.appendChild(ul);
+      body.appendChild(div);
+    });
+  }
+  fetch('changelog.json', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(data){
+    render((data && data.versions) ? data.versions : CHANGELOG_FALLBACK);
+  }).catch(function(){ render(CHANGELOG_FALLBACK); });
+  document.getElementById('whatsNewModal').hidden = false;
 }
 
 function renderBills(){
@@ -453,9 +751,25 @@ function bind(){
   document.getElementById('hoursModeTotal').addEventListener('click', function(){ S.hoursMode = 'total'; save(); renderAll(); });
   document.getElementById('hoursModeShifts').addEventListener('click', function(){ S.hoursMode = 'shifts'; save(); renderAll(); });
   document.getElementById('addShiftBtn').addEventListener('click', function(){
+    var start = document.getElementById('shiftStart').value || '09:00';
+    var end = document.getElementById('shiftEnd').value || '14:00';
     S.shifts.push({ day: document.getElementById('shiftDay').value,
-      start: document.getElementById('shiftStart').value || '09:00',
-      end: document.getElementById('shiftEnd').value || '14:00' });
+      start: start, end: end, meal: defaultMeal(start, end) });
+    save(); renderAll();
+  });
+  document.getElementById('shiftList').addEventListener('change', function(e){
+    var t = e.target;
+    if(t.dataset.shiftMeal !== undefined){
+      var m = num(t.value);
+      if(m < 0) m = 0;
+      S.shifts[+t.dataset.shiftMeal].meal = m;
+      save(); renderAll();
+    }
+  });
+  document.getElementById('mealTotalInput').addEventListener('change', function(e){
+    var m = num(e.target.value);
+    if(m < 0) m = 0;
+    S.mealTotal = m;
     save(); renderAll();
   });
   document.getElementById('shiftList').addEventListener('click', function(e){
@@ -484,7 +798,67 @@ function bind(){
     save(); renderAll();
   });
 
-  /* my money inputs */
+  /* statement import */
+  document.getElementById('importToggleBtn').addEventListener('click', function(){
+    var panel = document.getElementById('importPanel');
+    panel.hidden = !panel.hidden;
+    document.getElementById('importToggleBtn').textContent = panel.hidden ? 'Import a bank statement (CSV)' : 'Hide statement import';
+  });
+  document.getElementById('dropZone').addEventListener('click', function(){
+    document.getElementById('csvFile').click();
+  });
+  document.getElementById('dropZone').addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); document.getElementById('csvFile').click(); }
+  });
+  document.getElementById('dropZone').addEventListener('dragover', function(e){
+    e.preventDefault(); document.getElementById('dropZone').classList.add('drag');
+  });
+  document.getElementById('dropZone').addEventListener('dragleave', function(){
+    document.getElementById('dropZone').classList.remove('drag');
+  });
+  document.getElementById('dropZone').addEventListener('drop', function(e){
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('drag');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(!f){ return; }
+    var reader = new FileReader();
+    reader.onload = function(){ handleStatementText(reader.result); };
+    reader.readAsText(f);
+  });
+  document.getElementById('csvFile').addEventListener('change', function(e){
+    var f = e.target.files && e.target.files[0];
+    if(!f){ return; }
+    var reader = new FileReader();
+    reader.onload = function(){ handleStatementText(reader.result); };
+    reader.readAsText(f);
+    e.target.value = '';
+  });
+  document.getElementById('csvPasteBtn').addEventListener('click', function(){
+    var text = document.getElementById('csvPaste').value;
+    if(!text.trim()){ document.getElementById('csvStatus').textContent = 'Paste your statement text first.'; return; }
+    handleStatementText(text);
+  });
+  document.getElementById('csvApplyBtn').addEventListener('click', applyStatement);
+  document.getElementById('csvUndoBtn').addEventListener('click', undoStatement);
+
+  /* update system */
+  document.getElementById('updateNowBtn').addEventListener('click', function(){
+    var v = document.getElementById('updateBanner').dataset.version || '';
+    markUpdateSeen(v);
+    location.reload();
+  });
+  document.getElementById('updateLaterBtn').addEventListener('click', function(){
+    var v = document.getElementById('updateBanner').dataset.version || '';
+    markUpdateSeen(v);
+    document.getElementById('updateBanner').hidden = true;
+  });
+  document.getElementById('whatsNewBtn').addEventListener('click', openWhatsNew);
+  document.getElementById('whatsNewClose').addEventListener('click', function(){
+    document.getElementById('whatsNewModal').hidden = true;
+  });
+  document.getElementById('whatsNewModal').addEventListener('click', function(e){
+    if(e.target === document.getElementById('whatsNewModal')) document.getElementById('whatsNewModal').hidden = true;
+  });
   document.getElementById('savingsBalInput').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderBudget(); renderMyMoney(); });
   document.getElementById('checkingBalInput').addEventListener('input', function(e){ S.checking = num(e.target.value); save(); renderMyMoney(); });
   document.getElementById('balanceDateInput').addEventListener('change', function(e){ S.balanceDate = e.target.value; save(); renderMyMoney(); });
@@ -552,4 +926,5 @@ function bind(){
 
 bind();
 renderAll();
+checkForUpdate();
 }

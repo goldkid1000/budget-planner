@@ -8,6 +8,16 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="update-banner" id="updateBanner" hidden>
+  <div class="update-banner-inner">
+    <p><strong id="updateBannerTitle">A new version is available</strong></p>
+    <ul id="updateBannerNotes"></ul>
+    <div class="update-banner-actions">
+      <button class="btn-primary" id="updateNowBtn" type="button">Update now</button>
+      <button class="btn-mini" id="updateLaterBtn" type="button">Later</button>
+    </div>
+  </div>
+</div>
 <header class="topbar">
   <div class="topbar-inner">
     <h1>💰 Budget Planner</h1>
@@ -48,6 +58,7 @@
           <p><strong>Money in (take-home):</strong> <span id="incomeLine">$0</span> / month</p>
           <p><strong>You'll spend:</strong> <span id="spendLine">$0</span> / month</p>
           <p><strong>You'll have left:</strong> <span id="leftLine">$0</span> / month</p>
+        <p class="explain">This is what's left over after your planned spending.</p>
         </div>
         <p class="warning" id="overBudgetWarn" hidden>⚠️ You're planning to spend more than you'll make. Trim a category below or pick up a few more hours.</p>
         <p class="hint">Income comes from your Paycheck tab. Change your hours or rate there and this updates.</p>
@@ -95,9 +106,13 @@
               <input id="hoursInput" type="number" min="0" max="80" step="0.5" aria-label="Hours per week">
             </span>
           </label>
+          <label class="field">Unpaid meal break (minutes)
+            <input id="mealTotalInput" type="number" min="0" step="5" aria-label="Unpaid meal break in minutes">
+          </label>
+          <p class="explain" id="totalMealMath"></p>
         </div>
         <div id="hoursShiftsBox" hidden>
-          <p class="hint">Add each shift with its start and end time. Overnight shifts work too — e.g. 10:00 PM to 2:00 AM counts as 4 hours.</p>
+          <p class="hint">Add each shift with its start and end time. Overnight shifts work too — e.g. 10:00 PM to 2:00 AM counts as 4 hours. Meal breaks are unpaid — they come off your paid hours. A shift over 6 hours starts with a 30-minute meal break; change it on the shift if yours is different.</p>
           <div id="shiftList"></div>
           <div class="add-row">
             <select id="shiftDay" aria-label="Shift day">
@@ -110,7 +125,8 @@
             <label class="field" style="margin:0">End <input id="shiftEnd" type="time" value="14:00" aria-label="Shift end time"></label>
             <button class="btn-primary" id="addShiftBtn" type="button">Add shift</button>
           </div>
-          <p class="result-line">Total from shifts: <strong id="shiftTotalOut">0 hrs / week</strong></p>
+          <p class="result-line">Total paid: <strong id="shiftTotalOut">0 hrs / week</strong></p>
+          <p class="explain" id="shiftMathOut"></p>
         </div>
         <label class="field">Hourly rate ($)
           <input id="rateInput" type="number" min="0" step="0.25">
@@ -126,16 +142,19 @@
 
       <div class="card">
         <h3>What's taken off — full breakdown</h3>
-        <p class="hint">Estimate — your actual paycheck is the real number. FICA is the real statutory rate (Social Security + Medicare). Federal and NY income tax start at 0% — at part-time student income these are often $0. Check your pay stub and set them to what yours actually shows.</p>
-        <label class="field">FICA — Social Security + Medicare (%)
-          <input id="ficaInput" type="number" min="0" max="20" step="0.01">
-        </label>
-        <label class="field">Federal income tax (%)
-          <input id="federalInput" type="number" min="0" max="50" step="0.1">
-        </label>
-        <label class="field">NY state income tax (%)
-          <input id="nyInput" type="number" min="0" max="20" step="0.1">
-        </label>
+        <details class="details">
+          <summary>Change tax rates</summary>
+          <p class="hint">Estimate — your actual paycheck is the real number. FICA is the real statutory rate (Social Security + Medicare). Federal and NY income tax start at 0% — at part-time student income these are often $0. Check your pay stub and set them to what yours actually shows.</p>
+          <label class="field">FICA — Social Security + Medicare (%)
+            <input id="ficaInput" type="number" min="0" max="20" step="0.01">
+          </label>
+          <label class="field">Federal income tax (%)
+            <input id="federalInput" type="number" min="0" max="50" step="0.1">
+          </label>
+          <label class="field">NY state income tax (%)
+            <input id="nyInput" type="number" min="0" max="20" step="0.1">
+          </label>
+        </details>
         <div class="result-box">
           <p><strong>Gross pay:</strong> <span id="grossOut">$0</span> <span id="grossPer">per week</span></p>
           <p>FICA (Social Security + Medicare): <span id="ficaOut">−$0</span></p>
@@ -145,11 +164,13 @@
           <p><strong>Taken off:</strong> <span id="takenOffOut">$0</span> (<span id="takenOffPct">0%</span>)</p>
           <p><strong>Net (take-home) pay:</strong> <span id="takeHomeOut">$0</span> <span id="takeHomePer">per week</span></p>
           <p><strong>Net per month:</strong> <span id="monthlyOut">$0</span></p>
+          <p class="explain">This is what lands in your account.</p>
         </div>
       </div>
 
       <div class="card">
-        <h3>Match my pay stub</h3>
+        <details class="details">
+          <summary>Match my pay stub</summary>
         <p>Enter one real pay stub's gross and net. The app works out your real overall deduction % from it and uses that going forward. The line breakdown above still shows — the adjustment line makes the total match your stub.</p>
         <label class="field">Pay stub gross pay ($)
           <input id="stubGross" type="number" min="0" step="0.01" placeholder="e.g. 224.00">
@@ -162,6 +183,7 @@
           <button class="btn-mini" id="clearCalibBtn" type="button">Clear calibration</button>
         </div>
         <p class="result-line" id="calibStatus"></p>
+        </details>
       </div>
 
       <div class="card">
@@ -181,7 +203,33 @@
     <section class="view" id="view-mymoney">
       <h2>My money</h2>
       <div class="card">
-        <p class="hint"><strong>This app doesn't connect to your bank.</strong> Type your balances when they change and everything updates. Never put a bank login into a web page like this one — it would expose your account.</p>
+        <p class="hint"><strong>This app doesn't log into your bank.</strong> No bank login, no passwords, nothing that could expose your account. Instead, bring in a bank statement — the app reads it right here on your device.</p>
+        <button class="btn-primary" id="importToggleBtn" type="button">Import a bank statement (CSV)</button>
+        <div class="import-panel" id="importPanel" hidden>
+          <p><strong>How it works:</strong> in your bank's app or website, download your statement as a CSV file (or copy its text). Drop it here — the app reads it on this device and fills in your balance. <strong>Your statement never leaves this device.</strong></p>
+          <div class="dropzone" id="dropZone" tabindex="0" role="button" aria-label="Drop a CSV file here or tap to choose one">
+            <p><strong>Drop your CSV file here</strong></p>
+            <p>or tap to choose a file</p>
+            <input id="csvFile" type="file" accept=".csv,text/csv,text/plain" hidden>
+          </div>
+          <p class="hint">No file? Paste the statement text below instead.</p>
+          <textarea id="csvPaste" placeholder="Paste your statement's CSV text here…" aria-label="Paste statement CSV text"></textarea>
+          <button class="btn-primary" id="csvPasteBtn" type="button">Read pasted statement</button>
+          <p class="result-line" id="csvStatus"></p>
+          <div id="csvConfirm" hidden>
+            <p class="result-line" id="csvFound"></p>
+            <div class="radio-row">
+              <span>This statement is for my:</span>
+              <label><input type="radio" name="stmtAccount" value="savings" checked> Savings</label>
+              <label><input type="radio" name="stmtAccount" value="checking"> Checking</label>
+            </div>
+            <div class="add-row">
+              <button class="btn-primary" id="csvApplyBtn" type="button">Use this balance</button>
+              <button class="btn-mini" id="csvUndoBtn" type="button" hidden>Undo</button>
+            </div>
+          </div>
+          <div class="txn-list" id="txnList"></div>
+        </div>
         <label class="field">Savings balance ($)
           <input id="savingsBalInput" type="number" min="0" step="0.01">
         </label>
@@ -197,6 +245,7 @@
           <p>Already spoken for — unpaid bills: <span id="moneyBills">$0</span></p>
           <p>Already spoken for — this month's planned spending: <span id="moneyBudget">$0</span></p>
           <p><strong>So you can spend:</strong> <span id="moneyCanSpend">$0</span></p>
+          <p class="explain">This is what's left after bills and your planned spending.</p>
         </div>
         <p class="warning" id="moneyWarn" hidden>⚠️ Your bills + planned spending add up to more than your balances. Trim spending or hold off on extras until the next paycheck.</p>
         <p class="hint" id="moneyUpdatedLine"></p>
@@ -270,7 +319,7 @@
           <input id="discCashback" type="number" min="0" max="100" step="0.5" value="0">
         </label>
         <div class="result-box">
-          <p id="discSteps"></p>
+          <details class="details"><summary>Show how this was worked out</summary><p id="discSteps"></p></details>
           <p><strong>You pay:</strong> <span id="discFinal">$0</span></p>
           <p><strong>Total saved:</strong> <span id="discSaved">$0</span></p>
         </div>
@@ -358,8 +407,15 @@
 </nav>
 
 <footer class="footer">
-  <p>Budget Planner <strong>v1.0.0</strong> · Your numbers stay on this device — nothing is sent anywhere.</p>
+  <p>Budget Planner <strong>v1.1.0</strong> · Your numbers stay on this device — nothing is sent anywhere. · <button class="btn-mini" id="whatsNewBtn" type="button">What's New</button></p>
 </footer>
+
+<div class="modal" id="whatsNewModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><h3>What's New</h3><button class="btn-mini" id="whatsNewClose" type="button">Close</button></div>
+    <div id="whatsNewBody"></div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
