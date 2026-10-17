@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Budget Planner</title>
+<meta name="description" content="A simple budget planner: see what you'll spend, what you'll have left, what your paycheck works out to, and find student discounts.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>💰 Budget Planner</h1>
+    <p class="tagline">See what you'll spend, what you'll have left, and what your paycheck works out to.</p>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" aria-label="Sections">
+    <nav class="nav">
+      <button class="nav-btn active" data-view="budget" type="button">📊 Budget</button>
+      <button class="nav-btn" data-view="paycheck" type="button">🧾 Paycheck</button>
+      <button class="nav-btn" data-view="mymoney" type="button">🏦 My Money</button>
+      <button class="nav-btn" data-view="bills" type="button">🧾 Bills</button>
+      <button class="nav-btn" data-view="discounts" type="button">🎓 Discounts</button>
+      <button class="nav-btn" data-view="calculators" type="button">🧮 Calculators</button>
+    </nav>
+    <p class="privacy-note">Your numbers stay on this device — nothing is sent anywhere.</p>
+    <button class="btn-danger small" id="clearAllBtn" type="button">Clear all my numbers</button>
+  </aside>
+
+  <main class="content">
+
+    <!-- ================= BUDGET ================= -->
+    <section class="view active" id="view-budget">
+      <h2>Your budget this month</h2>
+
+      <div class="card donut-card">
+        <div class="donut-wrap">
+          <svg class="donut" id="donutSvg" viewBox="0 0 200 200" role="img" aria-label="Budget donut chart"></svg>
+          <div class="donut-center">
+            <div class="donut-label">You'll have left</div>
+            <div class="donut-value" id="donutLeft">$0</div>
+            <div class="donut-sub" id="donutSub"></div>
+          </div>
+        </div>
+        <div class="donut-summary">
+          <p><strong>Money in (take-home):</strong> <span id="incomeLine">$0</span> / month</p>
+          <p><strong>You'll spend:</strong> <span id="spendLine">$0</span> / month</p>
+          <p><strong>You'll have left:</strong> <span id="leftLine">$0</span> / month</p>
+        </div>
+        <p class="warning" id="overBudgetWarn" hidden>⚠️ You're planning to spend more than you'll make. Trim a category below or pick up a few more hours.</p>
+        <p class="hint">Income comes from your Paycheck tab. Change your hours or rate there and this updates.</p>
+      </div>
+
+      <div class="card">
+        <h3>Planned spending by category <span class="per">per month</span></h3>
+        <div id="categoryList"></div>
+        <div class="add-row">
+          <input id="newCatName" type="text" placeholder="New category name" maxlength="30" aria-label="New category name">
+          <input id="newCatAmount" type="number" min="0" step="1" placeholder="$ / month" aria-label="New category amount">
+          <button class="btn-primary" id="addCatBtn" type="button">Add category</button>
+        </div>
+        <p class="hint">Tap a name or amount to change it. Categories are monthly amounts.</p>
+      </div>
+
+      <div class="card">
+        <h3>🎯 Savings goal</h3>
+        <label class="field">Goal amount
+          <input id="goalAmount" type="number" min="0" step="1">
+        </label>
+        <label class="field">Saved so far
+          <input id="savedAmount" type="number" min="0" step="0.01">
+        </label>
+        <p class="hint">Type your current saved balance — it stays on this device.</p>
+        <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="goalFill"></div></div>
+        <p class="goal-line"><span id="goalPct">0%</span> of your goal &nbsp;·&nbsp; <strong id="goalToGo">$0 to go</strong></p>
+        <p class="pace" id="paceLine"></p>
+      </div>
+    </section>
+
+    <!-- ================= PAYCHECK ================= -->
+    <section class="view" id="view-paycheck">
+      <h2>Paycheck calculator</h2>
+      <div class="card">
+        <h3>Hours</h3>
+        <div class="tip-presets" role="group" aria-label="Hours entry method">
+          <button class="btn-chip active" id="hoursModeTotal" type="button">Total hours</button>
+          <button class="btn-chip" id="hoursModeShifts" type="button">My shifts</button>
+        </div>
+        <div id="hoursTotalBox">
+          <label class="field">Hours per week
+            <span class="inline-inputs">
+              <input id="hoursSlider" type="range" min="0" max="60" step="0.5" aria-label="Hours per week slider">
+              <input id="hoursInput" type="number" min="0" max="80" step="0.5" aria-label="Hours per week">
+            </span>
+          </label>
+        </div>
+        <div id="hoursShiftsBox" hidden>
+          <p class="hint">Add each shift with its start and end time. Overnight shifts work too — e.g. 10:00 PM to 2:00 AM counts as 4 hours.</p>
+          <div id="shiftList"></div>
+          <div class="add-row">
+            <select id="shiftDay" aria-label="Shift day">
+              <option value="Mon">Monday</option><option value="Tue">Tuesday</option>
+              <option value="Wed">Wednesday</option><option value="Thu">Thursday</option>
+              <option value="Fri">Friday</option><option value="Sat">Saturday</option>
+              <option value="Sun">Sunday</option>
+            </select>
+            <label class="field" style="margin:0">Start <input id="shiftStart" type="time" value="09:00" aria-label="Shift start time"></label>
+            <label class="field" style="margin:0">End <input id="shiftEnd" type="time" value="14:00" aria-label="Shift end time"></label>
+            <button class="btn-primary" id="addShiftBtn" type="button">Add shift</button>
+          </div>
+          <p class="result-line">Total from shifts: <strong id="shiftTotalOut">0 hrs / week</strong></p>
+        </div>
+        <label class="field">Hourly rate ($)
+          <input id="rateInput" type="number" min="0" step="0.25">
+        </label>
+        <label class="field">Pay frequency
+          <select id="freqSelect">
+            <option value="weekly" selected>Weekly</option>
+            <option value="biweekly">Every 2 weeks</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>What's taken off — full breakdown</h3>
+        <p class="hint">Estimate — your actual paycheck is the real number. FICA is the real statutory rate (Social Security + Medicare). Federal and NY income tax start at 0% — at part-time student income these are often $0. Check your pay stub and set them to what yours actually shows.</p>
+        <label class="field">FICA — Social Security + Medicare (%)
+          <input id="ficaInput" type="number" min="0" max="20" step="0.01">
+        </label>
+        <label class="field">Federal income tax (%)
+          <input id="federalInput" type="number" min="0" max="50" step="0.1">
+        </label>
+        <label class="field">NY state income tax (%)
+          <input id="nyInput" type="number" min="0" max="20" step="0.1">
+        </label>
+        <div class="result-box">
+          <p><strong>Gross pay:</strong> <span id="grossOut">$0</span> <span id="grossPer">per week</span></p>
+          <p>FICA (Social Security + Medicare): <span id="ficaOut">−$0</span></p>
+          <p>Federal income tax: <span id="federalOut">−$0</span></p>
+          <p>NY state income tax: <span id="nyOut">−$0</span></p>
+          <p id="calibRow" hidden>Adjustment to match your pay stub: <span id="calibOut">−$0</span></p>
+          <p><strong>Taken off:</strong> <span id="takenOffOut">$0</span> (<span id="takenOffPct">0%</span>)</p>
+          <p><strong>Net (take-home) pay:</strong> <span id="takeHomeOut">$0</span> <span id="takeHomePer">per week</span></p>
+          <p><strong>Net per month:</strong> <span id="monthlyOut">$0</span></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Match my pay stub</h3>
+        <p>Enter one real pay stub's gross and net. The app works out your real overall deduction % from it and uses that going forward. The line breakdown above still shows — the adjustment line makes the total match your stub.</p>
+        <label class="field">Pay stub gross pay ($)
+          <input id="stubGross" type="number" min="0" step="0.01" placeholder="e.g. 224.00">
+        </label>
+        <label class="field">Pay stub net (take-home) pay ($)
+          <input id="stubNet" type="number" min="0" step="0.01" placeholder="e.g. 206.86">
+        </label>
+        <div class="add-row">
+          <button class="btn-primary" id="calibrateBtn" type="button">Use this pay stub</button>
+          <button class="btn-mini" id="clearCalibBtn" type="button">Clear calibration</button>
+        </div>
+        <p class="result-line" id="calibStatus"></p>
+      </div>
+
+      <div class="card">
+        <h3>What if…</h3>
+        <label class="field">Extra hours per week
+          <input id="extraHours" type="number" min="0" step="0.5" value="4">
+        </label>
+        <p class="result-line" id="extraHoursOut"></p>
+        <label class="field">New hourly rate ($) — try a raise to see the difference
+          <input id="newRate" type="number" min="0" step="0.25">
+        </label>
+        <p class="result-line" id="newRateOut"></p>
+      </div>
+    </section>
+
+    <!-- ================= MY MONEY ================= -->
+    <section class="view" id="view-mymoney">
+      <h2>My money</h2>
+      <div class="card">
+        <p class="hint"><strong>This app doesn't connect to your bank.</strong> Type your balances when they change and everything updates. Never put a bank login into a web page like this one — it would expose your account.</p>
+        <label class="field">Savings balance ($)
+          <input id="savingsBalInput" type="number" min="0" step="0.01">
+        </label>
+        <p class="hint">Same number as “Saved so far” in your savings goal — change it in either place.</p>
+        <label class="field">Checking balance ($) — optional
+          <input id="checkingBalInput" type="number" min="0" step="0.01">
+        </label>
+        <label class="field">Balances last updated
+          <input id="balanceDateInput" type="date">
+        </label>
+        <div class="result-box">
+          <p><strong>You have:</strong> <span id="moneyTotal">$0</span> total across your accounts</p>
+          <p>Already spoken for — unpaid bills: <span id="moneyBills">$0</span></p>
+          <p>Already spoken for — this month's planned spending: <span id="moneyBudget">$0</span></p>
+          <p><strong>So you can spend:</strong> <span id="moneyCanSpend">$0</span></p>
+        </div>
+        <p class="warning" id="moneyWarn" hidden>⚠️ Your bills + planned spending add up to more than your balances. Trim spending or hold off on extras until the next paycheck.</p>
+        <p class="hint" id="moneyUpdatedLine"></p>
+      </div>
+    </section>
+
+    <!-- ================= BILLS ================= -->
+    <section class="view" id="view-bills">
+      <h2>Bills</h2>
+      <div class="card">
+        <p class="hint"><strong>Starting points — update or delete them.</strong> These are not live bank data. Put in your real amounts and dates.</p>
+        <div class="add-row bill-add">
+          <input id="billName" type="text" placeholder="Bill name" maxlength="60" aria-label="Bill name">
+          <input id="billAmount" type="number" min="0" step="0.01" placeholder="$ amount" aria-label="Bill amount">
+          <input id="billDue" type="date" aria-label="Due date">
+          <label class="check"><input id="billAuto" type="checkbox"> Auto-pay</label>
+          <button class="btn-primary" id="addBillBtn" type="button">Add bill</button>
+        </div>
+        <p class="bill-total">Upcoming (unpaid): <strong id="billsTotal">$0</strong></p>
+        <div id="billList"></div>
+      </div>
+    </section>
+
+    <!-- ================= DISCOUNTS ================= -->
+    <section class="view" id="view-discounts">
+      <h2>Discount Finder</h2>
+      <div class="card">
+        <h3>🔍 Find a deal</h3>
+        <p>Type a store or item. We'll open real searches — you check the pages yourself. This app never claims a code works.</p>
+        <div class="add-row">
+          <input id="dealQuery" type="text" placeholder="e.g. Nike shoes" maxlength="80" aria-label="Store or item">
+          <button class="btn-primary" id="dealSearchBtn" type="button">Search deals</button>
+        </div>
+        <div class="deal-links" id="dealLinks" hidden>
+          <p>Search for <strong id="dealQueryOut"></strong>:</p>
+          <ul>
+            <li><a id="dealGoogle" href="#" target="_blank" rel="noopener">Google: promo code</a></li>
+            <li><a id="dealBing" href="#" target="_blank" rel="noopener">Bing: promo code</a></li>
+            <li><a id="dealDuck" href="#" target="_blank" rel="noopener">DuckDuckGo: promo code</a></li>
+            <li><a id="dealStudent" href="#" target="_blank" rel="noopener">Google: student discount</a></li>
+          </ul>
+          <p>Or check these deal sites directly: <a href="https://www.retailmenot.com/" target="_blank" rel="noopener">RetailMeNot</a> · <a href="https://www.coupons.com/" target="_blank" rel="noopener">Coupons.com</a></p>
+        </div>
+        <p class="hint">Tip: always check the store's own site too — many codes are fake or expired on coupon sites.</p>
+      </div>
+
+      <div class="card">
+        <h3>🎓 Student discounts</h3>
+        <p>Well-known programs. Always check the official page for current terms — offers change.</p>
+        <div id="studentList"></div>
+      </div>
+
+      <div class="card">
+        <h3>💸 Cashback tools</h3>
+        <p>These are separate services, not part of this app. They pay you cashback when you shop through them, and some try promo codes at checkout. Read their terms before signing up.</p>
+        <div id="cashbackList"></div>
+      </div>
+
+      <div class="card">
+        <h3>🧮 Discount calculator</h3>
+        <label class="field">Original price ($)
+          <input id="discPrice" type="number" min="0" step="0.01" value="100">
+        </label>
+        <label class="field">First discount (% off)
+          <input id="discOne" type="number" min="0" max="100" step="1" value="20">
+        </label>
+        <label class="field">Extra discount (% off) — optional, set to 0 if none
+          <input id="discTwo" type="number" min="0" max="100" step="1" value="10">
+        </label>
+        <label class="field">Cashback (%) — optional, set to 0 if none
+          <input id="discCashback" type="number" min="0" max="100" step="0.5" value="0">
+        </label>
+        <div class="result-box">
+          <p id="discSteps"></p>
+          <p><strong>You pay:</strong> <span id="discFinal">$0</span></p>
+          <p><strong>Total saved:</strong> <span id="discSaved">$0</span></p>
+        </div>
+        <p class="hint">Stacked discounts multiply, they don't add: 20% off then 10% off is $72 on $100, not $70.</p>
+      </div>
+
+      <div class="card">
+        <h3>💵 Cashback estimator</h3>
+        <label class="field">Purchase amount ($)
+          <input id="cbAmount" type="number" min="0" step="0.01" value="50">
+        </label>
+        <label class="field">Cashback (%)
+          <input id="cbPct" type="number" min="0" max="100" step="0.5" value="5">
+        </label>
+        <p class="result-line">Cash back earned: <strong id="cbOut">$0</strong></p>
+      </div>
+    </section>
+
+    <!-- ================= CALCULATORS ================= -->
+    <section class="view" id="view-calculators">
+      <h2>Calculators</h2>
+
+      <div class="card">
+        <h3>🍕 Split a bill</h3>
+        <label class="field">Total bill ($)
+          <input id="splitTotal" type="number" min="0" step="0.01" value="120">
+        </label>
+        <label class="field">Number of people
+          <input id="splitPeople" type="number" min="1" step="1" value="4">
+        </label>
+        <label class="field">Tip (%)
+          <input id="splitTip" type="number" min="0" step="1" value="20">
+        </label>
+        <p class="result-line">Tip: <strong id="splitTipOut">$0</strong> · Total with tip: <strong id="splitTotalOut">$0</strong> · Each person pays: <strong id="splitEachOut">$0</strong></p>
+      </div>
+
+      <div class="card">
+        <h3>🏷️ Unit price — which size is the better deal?</h3>
+        <div class="two-col">
+          <div>
+            <h4>Size A</h4>
+            <label class="field">Price ($)<input id="unitPriceA" type="number" min="0" step="0.01" value="4.00"></label>
+            <label class="field">Size (oz, lb, count…)<input id="unitSizeA" type="number" min="0" step="0.01" value="16"></label>
+            <p class="result-line">Per unit: <strong id="unitOutA">$0</strong></p>
+          </div>
+          <div>
+            <h4>Size B</h4>
+            <label class="field">Price ($)<input id="unitPriceB" type="number" min="0" step="0.01" value="5.50"></label>
+            <label class="field">Size (oz, lb, count…)<input id="unitSizeB" type="number" min="0" step="0.01" value="24"></label>
+            <p class="result-line">Per unit: <strong id="unitOutB">$0</strong></p>
+          </div>
+        </div>
+        <p class="result-line" id="unitVerdict"></p>
+        <p class="hint">Compare the same unit on both sides (both in oz, both in count, etc.).</p>
+      </div>
+
+      <div class="card">
+        <h3>💁 Tip calculator</h3>
+        <label class="field">Bill ($)
+          <input id="tipBill" type="number" min="0" step="0.01" value="50">
+        </label>
+        <label class="field">Tip (%)
+          <input id="tipPct" type="number" min="0" step="1" value="20">
+        </label>
+        <div class="tip-presets">
+          <button class="btn-chip" data-tip="10" type="button">10%</button>
+          <button class="btn-chip" data-tip="15" type="button">15%</button>
+          <button class="btn-chip" data-tip="18" type="button">18%</button>
+          <button class="btn-chip" data-tip="20" type="button">20%</button>
+          <button class="btn-chip" data-tip="25" type="button">25%</button>
+        </div>
+        <p class="result-line">Tip: <strong id="tipOut">$0</strong> · Total: <strong id="tipTotalOut">$0</strong></p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottomnav" aria-label="Sections">
+  <button class="nav-btn active" data-view="budget" type="button">📊<span>Budget</span></button>
+  <button class="nav-btn" data-view="paycheck" type="button">🧾<span>Paycheck</span></button>
+  <button class="nav-btn" data-view="mymoney" type="button">🏦<span>My Money</span></button>
+  <button class="nav-btn" data-view="bills" type="button">🧾<span>Bills</span></button>
+  <button class="nav-btn" data-view="discounts" type="button">🎓<span>Discounts</span></button>
+  <button class="nav-btn" data-view="calculators" type="button">🧮<span>Calc</span></button>
+</nav>
+
+<footer class="footer">
+  <p>Budget Planner <strong>v1.0.0</strong> · Your numbers stay on this device — nothing is sent anywhere.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
