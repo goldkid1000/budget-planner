@@ -1,4 +1,4 @@
-/* Budget Planner v1.2.1 — dark theme. High-contrast light text on dark backgrounds. */
+/* Budget Planner v1.3.0 — dark theme. High-contrast light text on dark backgrounds. */
 :root{
   --green:#46d98a; --green-dark:#178048; --green-soft:#1d2f26;
   --ink:#f2f5f3; --muted:#b6bfba; --line:#333c43; --card:#1c2126;
@@ -77,7 +77,7 @@ input[type=time]{color-scheme:dark}
 .cat-row input[type=number]{width:110px;padding:8px 10px;font-size:1rem;border:1px solid var(--input-line);border-radius:9px;background:var(--input-bg);color:var(--ink)}
 .cat-pct{color:var(--muted);font-size:.9rem;min-width:52px;text-align:right}
 .progress-track{height:18px;background:var(--track);border-radius:999px;overflow:hidden;margin:10px 0 6px}
-.progress-fill{height:100%;background:var(--green);border-radius:999px;width:0;transition:width .3s}
+.progress-fill{height:100%;width:100%;background:var(--green);border-radius:999px;transform:scaleX(0);transform-origin:left center;transition:transform .45s ease}
 .goal-line{margin:6px 0}
 .pace{font-size:1.02rem}
 .bill-add input{flex:1}
@@ -166,4 +166,18 @@ input[type=time]{color-scheme:dark}
   .add-row input,.add-row select{min-width:100px}
   .modal{padding:12px 8px}
   .field.small input{width:76px}
+}
+
+/* v1.3.0 animations — transform/opacity only, short, so the app never feels
+   slower. The donut slices glide via their stroke transitions (circles are
+   kept across renders in JS); the goal bar fills via scaleX; tabs fade in;
+   buttons give a small press. Count-up numbers are animated in JS. */
+.view.active{animation:view-in .18s ease-out}
+@keyframes view-in{from{opacity:0;transform:translateY(6px)}}
+.btn-primary,.btn-mini,.btn-chip,.nav-btn,.btn-danger{transition:transform .08s ease,background-color .15s ease}
+.btn-primary:active,.btn-mini:active,.btn-chip:active,.nav-btn:active,.btn-danger:active{transform:scale(.97)}
+svg.donut circle{transition:stroke-dasharray .45s ease,stroke-dashoffset .45s ease}
+/* Reduced motion: no animation at all — everything snaps to its final state. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none !important;transition:none !important}
 }

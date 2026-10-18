@@ -1,7 +1,7 @@
-/* Budget Planner v1.2.2 — all data stays in localStorage on this device. */
+/* Budget Planner v1.3.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.2.2';
+var APP_VERSION = '1.3.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -160,16 +160,26 @@ function parseStatementCSV(text){
    ded: { ss, medicare, federal, ny, fli, k401 } are % of gross;
         { membership, stockContrib, stockPurch } are flat $ per pay period.
    Each line is rounded to cents first (like a real pay stub), then summed,
-   so the totals match the lines exactly. */
-function calcPaycheck(hours, rate, ded, freq){
+   so the totals match the lines exactly.
+   estimate: when passed { stateCode }, federal + state tax come from the
+   2025 bracket tables instead of ded.federal / ded.ny (estimate mode —
+   no pay stub entered). FICA, FLI, 401K and flat lines still use ded. */
+function calcPaycheck(hours, rate, ded, freq, estimate){
   var weeklyGross = hours * rate;
   var mult = freq === 'biweekly' ? 2 : (freq === 'monthly' ? 52 / 12 : 1);
   var periodGross = weeklyGross * mult;
   var d = ded || {};
   var ssAmt = round2(periodGross * num0(d.ss) / 100);
   var medicareAmt = round2(periodGross * num0(d.medicare) / 100);
-  var fedAmt = round2(periodGross * num0(d.federal) / 100);
-  var nyAmt = round2(periodGross * num0(d.ny) / 100);
+  var fedAmt, nyAmt;
+  if(estimate){
+    var est = calcEstimateTaxes(weeklyGross, estimate.stateCode);
+    fedAmt = round2(est.federalAnnual * mult / 52);
+    nyAmt = round2(est.stateAnnual * mult / 52);
+  } else {
+    fedAmt = round2(periodGross * num0(d.federal) / 100);
+    nyAmt = round2(periodGross * num0(d.ny) / 100);
+  }
   var fliAmt = round2(periodGross * num0(d.fli) / 100);
   var k401Amt = round2(periodGross * num0(d.k401) / 100);
   var memberAmt = round2(num0(d.membership) * mult);
@@ -187,6 +197,7 @@ function calcPaycheck(hours, rate, ded, freq){
            stockContribAmt: stockContribAmt, stockPurchAmt: stockPurchAmt,
            taxesTotal: taxesTotal, dedTotal: dedTotal, totalDed: totalDed,
            net: net, effRate: effRate, monthlyNet: monthlyNet,
+           estimateUsed: !!estimate,
            periodLabel: freq === 'biweekly' ? 'per 2 weeks' : (freq === 'monthly' ? 'per month' : 'per week') };
 }
 /* derive a ded profile from one real pay stub: % lines from (line / gross),
@@ -199,7 +210,37 @@ function deriveDedFromStub(gross, lines){
            membership: round2(lines.membership), stockContrib: round2(lines.stockContrib),
            stockPurch: round2(lines.stockPurch) };
 }
-/* discount stack: sequential % discounts, then cashback on the discounted price */
+/* savings-goal projection from the monthly leftover (take-home − unpaid
+   bills − planned spending). Never invents a date when leftover <= 0.
+   Returns { status: 'reached' | 'date' | 'far' | 'short', toGo, months,
+   dateStr, shortfall, extraHours }. 'far' = over 50 years at this pace. */
+function calcGoalProjection(goal, saved, monthlyLeftover, rate, effRate){
+  var toGo = Math.max(num0(goal) - num0(saved), 0);
+  if(toGo <= 0) return { status: 'reached', toGo: 0, months: 0, dateStr: '', shortfall: 0, extraHours: 0 };
+  var leftover = num0(monthlyLeftover);
+  if(leftover > 0){
+    var months = Math.ceil(toGo / leftover);
+    if(months > 600) return { status: 'far', toGo: toGo, months: months, dateStr: '', shortfall: 0, extraHours: 0 };
+    var date = new Date(); date.setMonth(date.getMonth() + months);
+    return { status: 'date', toGo: toGo, months: months,
+      dateStr: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      shortfall: 0, extraHours: 0 };
+  }
+  var shortfall = -leftover;
+  var perHourMonth = num0(rate) * (1 - num0(effRate)) * (52 / 12);
+  var extraHours = perHourMonth > 0 ? shortfall / perHourMonth : 0;
+  return { status: 'short', toGo: toGo, months: 0, dateStr: '', shortfall: shortfall, extraHours: extraHours };
+}
+/* Deal Watchlist status from the last price the user typed in.
+   The app never checks a store's price by itself — every price here is
+   one the user entered after opening the link. */
+function watchlistStatus(item){
+  if(item.lastSeen === null || item.lastSeen === undefined || item.lastSeen === '')
+    return { kind: 'none', text: 'No price entered yet — open the link and type the price you see.' };
+  var seen = num0(item.lastSeen), target = num0(item.target);
+  if(seen <= target) return { kind: 'deal', text: 'Deal! ' + money(target - seen) + ' below your target.' };
+  return { kind: 'notyet', text: 'Not yet — ' + money(seen - target) + ' above your target.' };
+}
 function calcDiscount(price, d1, d2, cashbackPct){
   var after1 = price * (1 - d1 / 100);
   var after2 = after1 * (1 - d2 / 100);
@@ -215,12 +256,113 @@ function calcSplit(total, people, tipPct){
 function calcUnit(price, size){ return size > 0 ? price / size : 0; }
 function calcTip(bill, pct){ var tip = bill * (pct / 100); return { tip: tip, total: bill + tip }; }
 
+/* ---------- 2025 income-tax estimate tables (single filer) ----------
+   Source: Tax Foundation, "State Individual Income Tax Rates and Brackets,
+   2025" (single-filer columns). Each state: ded = 2025 standard deduction
+   for a single filer PLUS any plain-dollar personal exemption from the same
+   table; credit = single-filer personal-exemption credit where the state
+   gives one instead of a deduction (CA, UT, IA, NE, OR, DE); brackets =
+   [upper bound, rate] pairs, rate applying up to that bound (last = Infinity).
+   States with no wage income tax (AK, FL, NV, NH, SD, TN, TX, WA, WY) are
+   null — WA taxes capital gains only, so wage tax is $0 here.
+   Deliberately NOT modeled (estimate only): personal-exemption phaseouts,
+   itemized deductions, dependent credits/exemptions, local/city income tax,
+   NY tax-benefit recapture, payroll taxes (CA disability, WA Cares, MA PFML).
+   Federal: 2025 single standard deduction $15,000 + 2025 brackets. */
+var NO_TAX_STATE_NAMES = { AK: 'Alaska', FL: 'Florida', NV: 'Nevada',
+  NH: 'New Hampshire', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas',
+  WA: 'Washington', WY: 'Wyoming' };
+var FEDERAL_STD_DED_2025 = 15000;
+var FEDERAL_BRACKETS_2025 = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [197300, 0.24],
+  [250525, 0.32], [626350, 0.35], [Infinity, 0.37]];
+var STATE_TAX_2025 = {
+  AL: { name: 'Alabama', ded: 4500, credit: 0, brackets: [[500, 0.02], [3000, 0.04], [Infinity, 0.05]] },
+  AK: null,
+  AZ: { name: 'Arizona', ded: 15000, credit: 0, brackets: [[Infinity, 0.025]] },
+  AR: { name: 'Arkansas', ded: 2410, credit: 29, brackets: [[4500, 0.02], [Infinity, 0.039]] },
+  CA: { name: 'California', ded: 5540, credit: 149, brackets: [[10756, 0.01], [25499, 0.02], [40245, 0.04], [55866, 0.06], [70606, 0.08], [360659, 0.093], [432787, 0.103], [721314, 0.113], [1000000, 0.123], [Infinity, 0.133]] },
+  CO: { name: 'Colorado', ded: 15000, credit: 0, brackets: [[Infinity, 0.044]] },
+  CT: { name: 'Connecticut', ded: 15000, credit: 0, brackets: [[10000, 0.02], [50000, 0.045], [100000, 0.055], [200000, 0.06], [250000, 0.065], [500000, 0.069], [Infinity, 0.0699]] },
+  DE: { name: 'Delaware', ded: 3250, credit: 110, brackets: [[2000, 0], [5000, 0.022], [10000, 0.039], [20000, 0.048], [25000, 0.052], [60000, 0.0555], [Infinity, 0.066]] },
+  DC: { name: 'Washington DC', ded: 15000, credit: 0, brackets: [[10000, 0.04], [40000, 0.06], [60000, 0.065], [250000, 0.085], [500000, 0.0925], [1000000, 0.0975], [Infinity, 0.1075]] },
+  FL: null,
+  GA: { name: 'Georgia', ded: 12000, credit: 0, brackets: [[Infinity, 0.0539]] },
+  HI: { name: 'Hawaii', ded: 5544, credit: 0, brackets: [[9600, 0.014], [14400, 0.032], [19200, 0.055], [24000, 0.064], [36000, 0.068], [48000, 0.072], [125000, 0.076], [175000, 0.079], [225000, 0.0825], [275000, 0.09], [325000, 0.10], [Infinity, 0.11]] },
+  ID: { name: 'Idaho', ded: 15000, credit: 0, brackets: [[4673, 0], [Infinity, 0.05695]] },
+  IL: { name: 'Illinois', ded: 2850, credit: 0, brackets: [[Infinity, 0.0495]] },
+  IN: { name: 'Indiana', ded: 1000, credit: 0, brackets: [[Infinity, 0.03]] },
+  IA: { name: 'Iowa', ded: 0, credit: 40, brackets: [[Infinity, 0.038]] },
+  KS: { name: 'Kansas', ded: 12765, credit: 0, brackets: [[23000, 0.052], [Infinity, 0.0558]] },
+  KY: { name: 'Kentucky', ded: 3270, credit: 0, brackets: [[Infinity, 0.04]] },
+  LA: { name: 'Louisiana', ded: 12500, credit: 0, brackets: [[Infinity, 0.03]] },
+  ME: { name: 'Maine', ded: 20150, credit: 0, brackets: [[26800, 0.058], [63450, 0.0675], [Infinity, 0.0715]] },
+  MD: { name: 'Maryland', ded: 5900, credit: 0, brackets: [[1000, 0.02], [2000, 0.03], [3000, 0.04], [100000, 0.0475], [125000, 0.05], [150000, 0.0525], [250000, 0.055], [Infinity, 0.0575]] },
+  MA: { name: 'Massachusetts', ded: 4400, credit: 0, brackets: [[1083150, 0.05], [Infinity, 0.09]] },
+  MI: { name: 'Michigan', ded: 5800, credit: 0, brackets: [[Infinity, 0.0425]] },
+  MN: { name: 'Minnesota', ded: 14950, credit: 0, brackets: [[32570, 0.0535], [106990, 0.068], [198630, 0.0785], [Infinity, 0.0985]] },
+  MS: { name: 'Mississippi', ded: 8300, credit: 0, brackets: [[10000, 0], [Infinity, 0.044]] },
+  MO: { name: 'Missouri', ded: 15000, credit: 0, brackets: [[1313, 0], [2626, 0.02], [3939, 0.025], [5252, 0.03], [6565, 0.035], [7878, 0.04], [9191, 0.045], [Infinity, 0.047]] },
+  MT: { name: 'Montana', ded: 15000, credit: 0, brackets: [[21100, 0.047], [Infinity, 0.059]] },
+  NE: { name: 'Nebraska', ded: 8600, credit: 171, brackets: [[4030, 0.0246], [24120, 0.0351], [38870, 0.0501], [Infinity, 0.052]] },
+  NV: null,
+  NH: null,
+  NJ: { name: 'New Jersey', ded: 1000, credit: 0, brackets: [[20000, 0.014], [35000, 0.0175], [40000, 0.035], [75000, 0.05525], [500000, 0.0637], [1000000, 0.0897], [Infinity, 0.1075]] },
+  NM: { name: 'New Mexico', ded: 15000, credit: 0, brackets: [[5500, 0.015], [16500, 0.032], [33500, 0.043], [66500, 0.047], [210000, 0.049], [Infinity, 0.059]] },
+  NY: { name: 'New York', ded: 8000, credit: 0, brackets: [[8500, 0.04], [11700, 0.045], [13900, 0.0525], [80650, 0.055], [215400, 0.06], [1077550, 0.0685], [5000000, 0.0965], [25000000, 0.103], [Infinity, 0.109]] },
+  NC: { name: 'North Carolina', ded: 12750, credit: 0, brackets: [[Infinity, 0.0425]] },
+  ND: { name: 'North Dakota', ded: 15000, credit: 0, brackets: [[48475, 0], [244825, 0.0195], [Infinity, 0.025]] },
+  OH: { name: 'Ohio', ded: 2400, credit: 0, brackets: [[26050, 0], [100000, 0.0275], [Infinity, 0.035]] },
+  OK: { name: 'Oklahoma', ded: 7350, credit: 0, brackets: [[1000, 0.0025], [2500, 0.0075], [3750, 0.0175], [4900, 0.0275], [7200, 0.0375], [Infinity, 0.0475]] },
+  OR: { name: 'Oregon', ded: 2800, credit: 250, brackets: [[4400, 0.0475], [11050, 0.0675], [125000, 0.0875], [Infinity, 0.099]] },
+  PA: { name: 'Pennsylvania', ded: 0, credit: 0, brackets: [[Infinity, 0.0307]] },
+  RI: { name: 'Rhode Island', ded: 16000, credit: 0, brackets: [[79900, 0.0375], [181650, 0.0475], [Infinity, 0.0599]] },
+  SC: { name: 'South Carolina', ded: 15000, credit: 0, brackets: [[3560, 0], [17830, 0.03], [Infinity, 0.062]] },
+  SD: null,
+  TN: null,
+  TX: null,
+  UT: { name: 'Utah', ded: 0, credit: 900, brackets: [[Infinity, 0.0455]] },
+  VT: { name: 'Vermont', ded: 12500, credit: 0, brackets: [[47900, 0.0335], [116000, 0.066], [242000, 0.076], [Infinity, 0.0875]] },
+  VA: { name: 'Virginia', ded: 9430, credit: 0, brackets: [[3000, 0.02], [5000, 0.03], [17000, 0.05], [Infinity, 0.0575]] },
+  WA: null,
+  WV: { name: 'West Virginia', ded: 2000, credit: 0, brackets: [[10000, 0.0222], [25000, 0.0296], [40000, 0.0333], [60000, 0.0444], [Infinity, 0.0482]] },
+  WI: { name: 'Wisconsin', ded: 14260, credit: 0, brackets: [[14680, 0.035], [29370, 0.044], [323290, 0.053], [Infinity, 0.0765]] },
+  WY: null
+};
+/* progressive tax on taxable income: each slice of income pays its own rate */
+function calcBracketTax(taxable, brackets){
+  var t = Math.max(0, num0(taxable));
+  var tax = 0, prev = 0;
+  brackets.forEach(function(b){
+    var upper = b[0], rate = b[1];
+    if(t > prev) tax += (Math.min(t, upper) - prev) * rate;
+    prev = upper;
+  });
+  return tax;
+}
+/* annual federal + state income-tax estimate from a weekly gross (single filer).
+   Returns { federalAnnual, stateAnnual, stateName, noStateTax }. */
+function calcEstimateTaxes(weeklyGross, stateCode){
+  var annual = Math.max(0, num0(weeklyGross)) * 52;
+  var fedTaxable = Math.max(0, annual - FEDERAL_STD_DED_2025);
+  var federalAnnual = calcBracketTax(fedTaxable, FEDERAL_BRACKETS_2025);
+  var st = STATE_TAX_2025[stateCode] || null;
+  if(!st) return { federalAnnual: federalAnnual, stateAnnual: 0,
+    stateName: NO_TAX_STATE_NAMES[stateCode] || 'this state', noStateTax: true };
+  var stateTaxable = Math.max(0, annual - st.ded);
+  var stateAnnual = Math.max(0, calcBracketTax(stateTaxable, st.brackets) - st.credit);
+  return { federalAnnual: federalAnnual, stateAnnual: stateAnnual, stateName: st.name, noStateTax: false };
+}
+
 if (typeof module !== 'undefined' && module.exports){
   module.exports = { round2: round2, money: money, money0: money0, calcPaycheck: calcPaycheck,
     deriveDedFromStub: deriveDedFromStub,
     calcShiftHours: calcShiftHours, calcShiftPaidHours: calcShiftPaidHours, defaultMeal: defaultMeal,
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
-    calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip };
+    calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip,
+    calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
+    calcGoalProjection: calcGoalProjection, watchlistStatus: watchlistStatus,
+    STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
+    FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
 }
 
 /* ---------- app (browser only) ---------- */
@@ -248,7 +390,10 @@ var DEFAULTS = {
     { name: 'Other', amount: 0 }
   ],
   goal: 0, saved: 0,
-  bills: []
+  bills: [],
+  stateCode: 'NY',
+  watchlist: [],
+  dealsRefreshedAt: null
 };
 
 var STUDENT = [
@@ -299,9 +444,9 @@ if(S.stubSaved === undefined) S.stubSaved = null;
 if(!S.shifts) S.shifts = JSON.parse(JSON.stringify(DEFAULTS.shifts));
 if(!S.hoursMode) S.hoursMode = 'total';
 if(S.mealTotal === undefined) S.mealTotal = 0;
-if(S.startingMoney === undefined) S.startingMoney = null;
-if(S.stubSaved === undefined) S.stubSaved = null;
-if(S.checking === undefined) S.checking = 0;
+if(S.stateCode === undefined) S.stateCode = 'NY';
+if(!S.watchlist) S.watchlist = [];
+if(S.dealsRefreshedAt === undefined) S.dealsRefreshedAt = null;
 /* no made-up default date: balances show "Set the date…" until the user picks one */
 /* v1.1.0: shifts saved before meal breaks get the default rule (30 min over 6 hrs) */
 S.shifts.forEach(function(sh){
@@ -321,6 +466,10 @@ function effectiveHours(){
   return paid > 0 ? paid : 0;
 }
 function currentPaycheck(){
+  /* No pay stub entered → estimate mode: federal + state tax from the 2025
+     bracket tables for the picked state. A saved pay stub wins over the
+     estimate — the stub numbers are the real ones. */
+  if(!S.stubSaved) return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq, { stateCode: S.stateCode || 'NY' });
   return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq);
 }
 
@@ -337,10 +486,82 @@ function monthlyIncome(){
 }
 function plannedSpend(){ return S.categories.reduce(function(a, c){ return a + num(c.amount); }, 0); }
 
+/* ---------- animations (v1.3.0): count-ups + donut transitions ----------
+   Transform/opacity only, short durations. Everything here is skipped when
+   the device prefers reduced motion, and when requestAnimationFrame is
+   unavailable (tests, old browsers) numbers are set directly. */
+var REDUCED_MOTION = false;
+try{ REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){}
+function setMoneyText(el, value, fmt){
+  if(!el) return;
+  var fmtFn = fmt || money;
+  var target = num(value);
+  var prev = (el._moneyCurrent !== undefined) ? el._moneyCurrent : null;
+  if(el._moneyRaf){ if(typeof cancelAnimationFrame !== 'undefined'){ try{ cancelAnimationFrame(el._moneyRaf); }catch(e){} } el._moneyRaf = 0; }
+  if(prev === null || REDUCED_MOTION || typeof requestAnimationFrame === 'undefined'){
+    el.textContent = fmtFn(target); el._moneyCurrent = target; return;
+  }
+  var start = prev, startT = null, DUR = 220;
+  function step(ts){
+    if(startT === null) startT = ts;
+    var p = Math.min(1, (ts - startT) / DUR);
+    var e = 1 - Math.pow(1 - p, 3);
+    var cur = start + (target - start) * e;
+    el._moneyCurrent = cur;
+    el.textContent = fmtFn(cur);
+    if(p < 1){ el._moneyRaf = requestAnimationFrame(step); }
+    else { el._moneyRaf = 0; el._moneyCurrent = target; el.textContent = fmtFn(target); }
+  }
+  el._moneyRaf = requestAnimationFrame(step);
+}
+/* donut circles are kept across renders so the CSS transition can glide
+   them to their new sizes instead of rebuilding them every keystroke */
+var donutCircleEls = [];
+function renderDonut(slices, total){
+  var svg = document.getElementById('donutSvg');
+  if(!svg) return;
+  var C = 2 * Math.PI * 80;
+  if(!document.createElementNS){
+    /* fallback (tests / old browsers): rebuild the markup */
+    var acc0 = 0, html = '';
+    slices.forEach(function(s){
+      if(s.value <= 0) return;
+      var frac = s.value / total;
+      var dash = frac * C;
+      html += '<circle cx="100" cy="100" r="80" fill="none" stroke="' + s.color + '" stroke-width="34" ' +
+        'stroke-dasharray="' + dash.toFixed(1) + ' ' + (C - dash).toFixed(1) + '" stroke-dashoffset="' + (-acc0).toFixed(1) + '" />';
+      acc0 += dash;
+    });
+    svg.innerHTML = html;
+    return;
+  }
+  var acc = 0;
+  slices.forEach(function(s, i){
+    var frac = s.value / total;
+    var dash = frac * C;
+    var c = donutCircleEls[i];
+    if(!c){
+      c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', '100'); c.setAttribute('cy', '100'); c.setAttribute('r', '80');
+      c.setAttribute('fill', 'none'); c.setAttribute('stroke-width', '34');
+      svg.appendChild(c);
+      donutCircleEls.push(c);
+    }
+    c.setAttribute('stroke', s.color);
+    c.setAttribute('stroke-dasharray', dash.toFixed(1) + ' ' + (C - dash).toFixed(1));
+    c.setAttribute('stroke-dashoffset', (-acc).toFixed(1));
+    acc += dash;
+  });
+  while(donutCircleEls.length > slices.length){
+    var extra = donutCircleEls.pop();
+    if(extra.parentNode) extra.parentNode.removeChild(extra);
+  }
+}
+
 function renderAll(){
   renderBudget(); renderPaycheck(); renderMyMoney(); renderBills();
   renderDiscountsStatic(); renderDiscountCalc(); renderCashbackEst();
-  renderCalculators();
+  renderCalculators(); renderWatchlist();
 }
 
 function renderBudget(){
@@ -363,12 +584,12 @@ function renderBudgetSummary(){
   var bills = unpaidBillsTotal();
   var spend = plannedSpend();
   var left = starting + income - bills - spend;
-  document.getElementById('startingLine').textContent = money(starting);
-  document.getElementById('incomeLine').textContent = money(income);
-  document.getElementById('billsLine').textContent = money(bills);
-  document.getElementById('spendLine').textContent = money(spend);
-  document.getElementById('leftLine').textContent = money(left);
-  document.getElementById('donutLeft').textContent = money0(left);
+  setMoneyText(document.getElementById('startingLine'), starting);
+  setMoneyText(document.getElementById('incomeLine'), income);
+  setMoneyText(document.getElementById('billsLine'), bills);
+  setMoneyText(document.getElementById('spendLine'), spend);
+  setMoneyText(document.getElementById('leftLine'), left);
+  setMoneyText(document.getElementById('donutLeft'), left, money0);
   document.getElementById('donutSub').textContent = left >= 0 ? 'left this month' : 'over budget';
   document.getElementById('overBudgetWarn').hidden = left >= 0;
   var haveEl = document.getElementById('budgetHaveLine');
@@ -400,24 +621,19 @@ function renderBudgetSummary(){
   var clrBtn = document.getElementById('clearStartingMoneyBtn');
   if(clrBtn) clrBtn.hidden = !overrideActive;
 
-  /* donut: slices = categories + bills, plus a "left" slice when positive */
-  var svg = document.getElementById('donutSvg');
+  /* donut: slices = categories + bills, plus a "left" slice when positive.
+     Circles persist across renders so they glide to their new sizes. */
   var total = Math.max(spend + bills + Math.max(left, 0), 1);
-  var C = 2 * Math.PI * 80;
-  var acc = 0, html = '';
-  function slice(value, color){
-    if(value <= 0) return '';
-    var frac = value / total;
-    var dash = frac * C;
-    var out = '<circle cx="100" cy="100" r="80" fill="none" stroke="' + color + '" stroke-width="34" ' +
-      'stroke-dasharray="' + dash.toFixed(1) + ' ' + (C - dash).toFixed(1) + '" stroke-dashoffset="' + (-acc).toFixed(1) + '" />';
-    acc += dash;
-    return out;
-  }
-  S.categories.forEach(function(c, i){ html += slice(num(c.amount), COLORS[i % COLORS.length]); });
-  if(bills > 0) html += slice(bills, '#e8b34b');
-  if(left > 0) html += slice(left, '#3d4d45');
-  svg.innerHTML = html;
+  var slices = [];
+  S.categories.forEach(function(c, i){
+    if(num(c.amount) > 0) slices.push({ value: num(c.amount), color: COLORS[i % COLORS.length] });
+  });
+  if(bills > 0) slices.push({ value: bills, color: '#e8b34b' });
+  if(left > 0) slices.push({ value: left, color: '#3d4d45' });
+  renderDonut(slices, total);
+  /* the goal projection depends on these same numbers, so it recomputes
+     on every keystroke of every money input — not just its own fields */
+  renderGoal();
 }
 
 function renderCategoryList(){
@@ -445,18 +661,33 @@ function renderGoal(){
   if(document.activeElement !== savedEl) savedEl.value = S.saved;
   var toGo = Math.max(S.goal - S.saved, 0);
   var pct = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
-  document.getElementById('goalFill').style.width = pct + '%';
+  /* progress bar fills via transform (scaleX) so it animates cheaply */
+  var fill = document.getElementById('goalFill');
+  if(fill) fill.style.transform = 'scaleX(' + (pct / 100) + ')';
   document.getElementById('goalPct').textContent = pct + '%';
   document.getElementById('goalToGo').textContent = money(toGo) + ' to go';
-  var weeklySave = (monthlyIncome() - plannedSpend()) * 12 / 52;
+  /* monthly leftover is what can actually go toward the goal:
+     take-home − unpaid bills − planned spending */
+  var monthlyLeftover = monthlyIncome() - unpaidBillsTotal() - plannedSpend();
+  var p = currentPaycheck();
+  var proj = calcGoalProjection(S.goal, S.saved, monthlyLeftover, S.rate, p.effRate);
   var pace = document.getElementById('paceLine');
-  if(S.saved >= S.goal){ pace.textContent = '🎉 Goal reached — nice work.'; }
-  else if(weeklySave <= 0){ pace.textContent = 'At this pace you are not saving — planned spending is at or above your income, so there is no date to show yet.'; }
-  else{
-    var weeks = Math.ceil(toGo / weeklySave);
-    var date = new Date(); date.setDate(date.getDate() + weeks * 7);
-    pace.textContent = 'At this pace: saving about ' + money(weeklySave) + ' / week → goal in about ' + weeks +
-      ' week' + (weeks === 1 ? '' : 's') + ' (around ' + date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ').';
+  if(proj.status === 'reached'){ pace.textContent = '🎉 Goal reached — nice work.'; }
+  else if(proj.status === 'date'){
+    pace.textContent = 'You\'ll hit ' + money0(S.goal) + ' by ' + proj.dateStr +
+      ' — saving about ' + money(monthlyLeftover) + '/month, about ' + proj.months +
+      ' month' + (proj.months === 1 ? '' : 's') + ' to go.';
+  }
+  else if(proj.status === 'far'){
+    pace.textContent = 'At about ' + money(monthlyLeftover) + '/month it would take over 50 years to reach ' +
+      money0(S.goal) + ' — the math is real, but the goal needs a bigger monthly leftover. Cut spending or add hours to move it sooner.';
+  }
+  else {
+    var msg = 'At this pace you are not saving — planned spending is at or above your income, so there is no date to show yet. ' +
+      'You\'re ' + money(proj.shortfall) + '/month short — cut planned spending by ' + money(proj.shortfall);
+    if(proj.extraHours > 0) msg += ', or add about ' + (Math.round(proj.extraHours * 10) / 10) + ' hrs/week at your rate';
+    msg += ', to start saving.';
+    pace.textContent = msg;
   }
 }
 
@@ -473,10 +704,26 @@ function renderPaycheck(){
   if(document.activeElement !== hoursInputEl) hoursInputEl.value = S.hours;
   if(document.activeElement !== rateInputEl) rateInputEl.value = S.rate;
   document.getElementById('freqSelect').value = S.freq;
+  /* state picker drives the estimate; a saved pay stub overrides it */
+  var stateSel = document.getElementById('stateSelect');
+  if(stateSel) stateSel.value = S.stateCode || 'NY';
+  var estimateMode = !S.stubSaved;
+  var fedInput = document.getElementById('federalInput');
+  var nyInput = document.getElementById('nyInput');
+  var pNow = currentPaycheck();
+  if(estimateMode){
+    /* federal + state come from the 2025 tables — show the effective %
+       they work out to, read-only, so the breakdown stays checkable */
+    if(fedInput){ fedInput.disabled = true; fedInput.value = pNow.periodGross > 0 ? (pNow.fedAmt / pNow.periodGross * 100).toFixed(4).replace(/\.?0+$/, '') : 0; }
+    if(nyInput){ nyInput.disabled = true; nyInput.value = pNow.periodGross > 0 ? (pNow.nyAmt / pNow.periodGross * 100).toFixed(4).replace(/\.?0+$/, '') : 0; }
+  } else {
+    if(fedInput) fedInput.disabled = false;
+    if(nyInput) nyInput.disabled = false;
+  }
   document.getElementById('ssInput').value = S.ded.ss;
   document.getElementById('medicareInput').value = S.ded.medicare;
-  document.getElementById('federalInput').value = S.ded.federal;
-  document.getElementById('nyInput').value = S.ded.ny;
+  if(!estimateMode) document.getElementById('federalInput').value = S.ded.federal;
+  if(!estimateMode) document.getElementById('nyInput').value = S.ded.ny;
   document.getElementById('fliInput').value = S.ded.fli;
   document.getElementById('k401Input').value = S.ded.k401;
   document.getElementById('memberInput').value = S.ded.membership;
@@ -516,7 +763,23 @@ function renderPaycheck(){
    safe to call while typing (e.g. a shift meal break) without stealing focus */
 function renderPaycheckOutputs(){
   var p = currentPaycheck();
-  document.getElementById('grossOut').textContent = money(p.periodGross);
+  var st = STATE_TAX_2025[S.stateCode || 'NY'];
+  var stateName = st ? st.name : (NO_TAX_STATE_NAMES[S.stateCode] || 'this state');
+  var stateLabel = document.getElementById('stateTaxLabel');
+  if(stateLabel) stateLabel.textContent = stateName + ' state tax';
+  var noteEl = document.getElementById('stateTaxNote');
+  if(noteEl){
+    if(S.stubSaved){
+      noteEl.textContent = 'Using your real pay stub — the state estimate is not applied. Your stub numbers win.';
+    } else if(!st){
+      noteEl.textContent = stateName + ' has no income tax on wages, so state tax is $0 here. Federal is estimated from the 2025 single-filer standard deduction ($15,000) + 2025 brackets. Estimate only — not tax advice, no city/local tax.';
+    } else {
+      noteEl.textContent = 'Estimate for ' + stateName + ': single filer, 2025 tax year, state income tax only (no city/local tax). Standard deduction ' + money(st.ded) +
+        (st.credit ? ' + ' + money(st.credit) + ' exemption credit' : '') +
+        ' + 2025 brackets. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
+    }
+  }
+  setMoneyText(document.getElementById('grossOut'), p.periodGross);
   document.getElementById('grossPer').textContent = p.periodLabel;
   document.getElementById('ssOut').textContent = '−' + money(p.ssAmt);
   document.getElementById('medicareOut').textContent = '−' + money(p.medicareAmt);
@@ -531,9 +794,9 @@ function renderPaycheckOutputs(){
   document.getElementById('dedTotalOut').textContent = money(p.dedTotal);
   document.getElementById('takenOffOut').textContent = money(p.totalDed);
   document.getElementById('takenOffPct').textContent = (p.effRate * 100).toFixed(2).replace(/\.?0+$/, '') + '%';
-  document.getElementById('takeHomeOut').textContent = money(p.net);
+  setMoneyText(document.getElementById('takeHomeOut'), p.net);
   document.getElementById('takeHomePer').textContent = p.periodLabel;
-  document.getElementById('monthlyOut').textContent = money(p.monthlyNet);
+  setMoneyText(document.getElementById('monthlyOut'), p.monthlyNet);
 
   /* pay-stub form: show what the current profile means in dollars at the
      stub gross (or the current period gross), without clobbering typing */
@@ -599,7 +862,7 @@ function renderMyMoney(){
   var bills = unpaidBillsTotal();
   var budget = plannedSpend();
   var canSpend = total - bills - budget;
-  document.getElementById('moneyTotal').textContent = money(total);
+  setMoneyText(document.getElementById('moneyTotal'), total);
   document.getElementById('moneyBills').textContent = money(bills);
   document.getElementById('moneyBudget').textContent = money(budget);
   document.getElementById('moneyCanSpend').textContent = money(canSpend);
@@ -693,6 +956,12 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '1.3.0', notes: [
+    'Savings goal date: the goal now recomputes on every keystroke — type hours, bills, or spending and the date moves right away. When you are saving, it says "You\'ll hit $X by [Month Year]" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it — never a made-up date.',
+    'Deal Watchlist in Discount Finder: add an item + the price you would buy at. "Check price now" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type — the app never pretends to check a store by itself.',
+    'State tax picker in the Paycheck tab: pick your state and the estimate uses that state\'s real 2025 standard deduction + brackets (single filer). States with no wage income tax come out $0. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. If you entered a real pay stub, the stub numbers still win. Estimate only — not tax advice, no city/local tax.',
+    'Animations: money numbers count up when they change, the donut glides to its new shape, the goal bar fills smoothly, tabs fade in, buttons give a little press feedback. All of it turns off automatically if your device prefers reduced motion, and it stays light on phones.'
+  ] },
   { version: '1.2.2', notes: [
     'Every number now shows how it was worked out — the take-home line shows your paid hours × rate → take-home/week → monthly, so you can check it yourself.',
     'The Budget tab shows an “Updated HH:MM:SS” stamp that refreshes on every change, so you can see the numbers are live.',
@@ -856,6 +1125,47 @@ function renderDiscountCalc(){
   document.getElementById('discSteps').textContent = steps;
   document.getElementById('discFinal').textContent = money(r.finalPay);
   document.getElementById('discSaved').textContent = money(r.saved);
+}
+/* ---------- Deal Watchlist (Discount Finder) ----------
+   The user adds an item + the price they'd buy at. "Check price now"
+   opens the store link; the user types the price they see and the app
+   compares it to the target. The app NEVER checks a store's price by
+   itself — every price here is one the user typed in. */
+function fmtCheckedStamp(ts){
+  if(!ts) return 'Never checked yet.';
+  return 'Last checked ' + new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function renderWatchlist(){
+  var list = document.getElementById('watchlistList');
+  if(!list) return;
+  list.innerHTML = '';
+  if(!S.watchlist.length){
+    list.innerHTML = '<p class="hint">No watched deals yet — add one above.</p>';
+  }
+  S.watchlist.forEach(function(item, i){
+    var status = watchlistStatus(item);
+    var row = document.createElement('div'); row.className = 'disc-card';
+    var safeUrl = String(item.url || '').trim();
+    var href = /^https?:\/\//i.test(safeUrl) ? safeUrl : ('https://' + safeUrl);
+    var statusClass = status.kind === 'deal' ? 'txn-pos' : (status.kind === 'notyet' ? 'txn-neg' : '');
+    row.innerHTML =
+      '<h4><a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(item.name || 'Item') + ' ↗</a></h4>' +
+      '<p>Now: ' + (item.lastSeen !== null && item.lastSeen !== undefined && item.lastSeen !== '' ? money(item.lastSeen) : '—') +
+      ' · Target: ' + money(item.target) + '</p>' +
+      '<p class="result-line ' + statusClass + '">' + esc(status.text) + '</p>' +
+      '<p class="hint">' + esc(fmtCheckedStamp(item.lastChecked)) + '</p>' +
+      '<div class="add-row">' +
+      '<input type="number" min="0" step="0.01" id="wlPrice' + i + '" placeholder="Price you see now ($)" aria-label="Price you see now">' +
+      '<button class="btn-primary" data-wl-update="' + i + '" type="button">Update price</button>' +
+      '<button class="btn-mini" data-wl-check="' + i + '" type="button">Check price now</button>' +
+      '<button class="btn-mini danger" data-wl-del="' + i + '" type="button">Remove</button>' +
+      '</div>';
+    list.appendChild(row);
+  });
+  var stamp = document.getElementById('dealsStamp');
+  if(stamp) stamp.textContent = S.dealsRefreshedAt ? fmtCheckedStamp(S.dealsRefreshedAt) : 'Never refreshed yet.';
+  var hint = document.getElementById('watchlistHint');
+  if(hint) hint.textContent = 'Prices are ones you type in — the app never checks a store\'s price by itself.';
 }
 function renderCashbackEst(){
   var amt = num(document.getElementById('cbAmount').value);
@@ -1164,6 +1474,54 @@ function bind(){
     if(t.dataset.billDel !== undefined){ S.bills.splice(+t.dataset.billDel, 1); save(); renderBills(); renderMyMoney(); renderBudgetSummary(); }
   });
 
+  /* state picker: estimate mode follows the picked state */
+  document.getElementById('stateSelect').addEventListener('change', function(e){
+    S.stateCode = e.target.value || 'NY';
+    save(); renderAll();
+  });
+
+  /* deal watchlist */
+  document.getElementById('addWatchlistBtn').addEventListener('click', function(){
+    var name = document.getElementById('wlName').value.trim();
+    var url = document.getElementById('wlUrl').value.trim();
+    var price = num(document.getElementById('wlPrice').value);
+    var target = num(document.getElementById('wlTarget').value);
+    if(!name){ alert('Give the item a name first.'); return; }
+    if(!url){ alert('Paste the store link first.'); return; }
+    S.watchlist.push({ name: name, url: url, lastSeen: price > 0 ? price : null,
+      target: target, lastChecked: price > 0 ? Date.now() : null });
+    document.getElementById('wlName').value = '';
+    document.getElementById('wlUrl').value = '';
+    document.getElementById('wlPrice').value = '';
+    document.getElementById('wlTarget').value = '';
+    save(); renderWatchlist();
+  });
+  document.getElementById('watchlistList').addEventListener('click', function(e){
+    var t = e.target;
+    if(t.dataset.wlUpdate !== undefined){
+      var i = +t.dataset.wlUpdate;
+      var priceEl = document.getElementById('wlPrice' + i);
+      var v = priceEl ? num(priceEl.value) : 0;
+      if(v <= 0){ alert('Type the price you see on the store page first.'); return; }
+      S.watchlist[i].lastSeen = v;
+      S.watchlist[i].lastChecked = Date.now();
+      save(); renderWatchlist();
+    } else if(t.dataset.wlCheck !== undefined){
+      var j = +t.dataset.wlCheck;
+      var safeUrl = String(S.watchlist[j].url || '').trim();
+      var href = /^https?:\/\//i.test(safeUrl) ? safeUrl : ('https://' + safeUrl);
+      if(typeof window !== 'undefined' && typeof window.open === 'function') window.open(href, '_blank', 'noopener');
+      var hint = document.getElementById('watchlistHint');
+      if(hint) hint.textContent = 'Opened ' + S.watchlist[j].name + ' — type the price you see, then tap Update price.';
+    } else if(t.dataset.wlDel !== undefined){
+      S.watchlist.splice(+t.dataset.wlDel, 1);
+      save(); renderWatchlist();
+    }
+  });
+  document.getElementById('refreshDealsBtn').addEventListener('click', function(){
+    S.dealsRefreshedAt = Date.now();
+    save(); renderWatchlist();
+  });
   /* discounts */
   function doDealSearch(){
     var q = document.getElementById('dealQuery').value.trim();

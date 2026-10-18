@@ -1,1 +1,69 @@
-{"versions": [{"version": "1.2.2", "notes": ["Every number now shows how it was worked out \u2014 the take-home line shows your paid hours \u00d7 rate \u2192 take-home/week \u2192 monthly, so you can check it yourself.", "The Budget tab shows an \u201cUpdated HH:MM:SS\u201d stamp that refreshes on every change, so you can see the numbers are live.", "\u201cMoney I have right now\u201d now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.", "Typing a bill amount or a shift meal break updates the budget right away instead of waiting until you tap away.", "Fixed: a number once typed in \u201cMoney I have right now\u201d used to keep overriding your balances with no visible sign \u2014 now the source is always shown."]}, {"version": "1.2.1", "notes": ["Savings update your budget right away \u2014 typing your saved balance or checking balance updates \u201cYou\u2019ll have left\u201d immediately, no tab switch needed.", "Phone layout \u2014 the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar."]}, {"notes": ["Paycheck now shows every line from a real pay stub \u2014 federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase \u2014 each with a plain-words explanation.", "Use my real pay stub \u2014 enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.", "Your budget starts from the money you actually have \u2014 \"Money I have right now\" at the top of the Budget tab, filled in from your balances, editable in place.", "Installable \u2014 tap \"Install app\" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.", "Everyone starts blank \u2014 your numbers stay on your own device only. Nobody else sees them."], "version": "1.2.0"}, {"notes": ["What's New actually shows the notes now \u2014 the box used to open empty.", "Typing a category amount no longer kicks you out of the box after each number.", "Bills can now be edited in place \u2014 name, amount, due date, and auto-pay \u2014 instead of delete-and-retype.", "Switching between Total hours and My shifts no longer wipes the tip calculator's %.", "New rate box says plainly to type a rate instead of showing $0.00.", "New: Check for updates button in the footer.", "Balances no longer start with a made-up date \u2014 empty until you set it."], "version": "1.1.1"}, {"notes": ["Dark background \u2014 easier on the eyes, day and night.", "Bank statement import \u2014 drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.", "Meal breaks count \u2014 shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.", "Simpler to read \u2014 plain words, one main action per tab, extra details tucked behind \u201cShow details\u201d.", "Update notices \u2014 the app tells you when a new version is out, once per version.", "Polished on PC and phone."], "version": "1.1.0"}, {"notes": ["First version \u2014 budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators."], "version": "1.0.0"}]}
+{
+  "versions": [
+    {
+      "version": "1.3.0",
+      "notes": [
+        "Savings goal date: the goal now recomputes on every keystroke — type hours, bills, or spending and the date moves right away. When you are saving, it says \"You'll hit $X by [Month Year]\" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it — never a made-up date.",
+        "Deal Watchlist in Discount Finder: add an item + the price you would buy at. \"Check price now\" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type — the app never pretends to check a store by itself.",
+        "State tax picker in the Paycheck tab: pick your state and the estimate uses that state's real 2025 standard deduction + brackets (single filer). States with no wage income tax come out $0. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. If you entered a real pay stub, the stub numbers still win. Estimate only — not tax advice, no city/local tax.",
+        "Animations: money numbers count up when they change, the donut glides to its new shape, the goal bar fills smoothly, tabs fade in, buttons give a little press feedback. All of it turns off automatically if your device prefers reduced motion, and it stays light on phones."
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "notes": [
+        "Every number now shows how it was worked out — the take-home line shows your paid hours × rate → take-home/week → monthly, so you can check it yourself.",
+        "The Budget tab shows an “Updated HH:MM:SS” stamp that refreshes on every change, so you can see the numbers are live.",
+        "“Money I have right now” now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.",
+        "Typing a bill amount or a shift meal break updates the budget right away instead of waiting until you tap away.",
+        "Fixed: a number once typed in “Money I have right now” used to keep overriding your balances with no visible sign — now the source is always shown."
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "notes": [
+        "Savings update your budget right away — typing your saved balance or checking balance updates “You’ll have left” immediately, no tab switch needed.",
+        "Phone layout — the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar."
+      ]
+    },
+    {
+      "notes": [
+        "Paycheck now shows every line from a real pay stub — federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase — each with a plain-words explanation.",
+        "Use my real pay stub — enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.",
+        "Your budget starts from the money you actually have — \"Money I have right now\" at the top of the Budget tab, filled in from your balances, editable in place.",
+        "Installable — tap \"Install app\" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.",
+        "Everyone starts blank — your numbers stay on your own device only. Nobody else sees them."
+      ],
+      "version": "1.2.0"
+    },
+    {
+      "notes": [
+        "What's New actually shows the notes now — the box used to open empty.",
+        "Typing a category amount no longer kicks you out of the box after each number.",
+        "Bills can now be edited in place — name, amount, due date, and auto-pay — instead of delete-and-retype.",
+        "Switching between Total hours and My shifts no longer wipes the tip calculator's %.",
+        "New rate box says plainly to type a rate instead of showing $0.00.",
+        "New: Check for updates button in the footer.",
+        "Balances no longer start with a made-up date — empty until you set it."
+      ],
+      "version": "1.1.1"
+    },
+    {
+      "notes": [
+        "Dark background — easier on the eyes, day and night.",
+        "Bank statement import — drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.",
+        "Meal breaks count — shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.",
+        "Simpler to read — plain words, one main action per tab, extra details tucked behind “Show details”.",
+        "Update notices — the app tells you when a new version is out, once per version.",
+        "Polished on PC and phone."
+      ],
+      "version": "1.1.0"
+    },
+    {
+      "notes": [
+        "First version — budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators."
+      ],
+      "version": "1.0.0"
+    }
+  ]
+}
