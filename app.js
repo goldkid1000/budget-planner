@@ -1,7 +1,7 @@
-/* Budget Planner v1.2.0 — all data stays in localStorage on this device. */
+/* Budget Planner v1.2.1 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.2.0';
+var APP_VERSION = '1.2.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -663,6 +663,10 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '1.2.1', notes: [
+    'Savings update your budget right away — typing your saved balance or checking balance updates “You’ll have left” immediately, no tab switch needed.',
+    'Phone layout — the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar.'
+  ] },
   { version: '1.2.0', notes: [
     'Paycheck now shows every line from a real pay stub — federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase — each with a plain-words explanation.',
     'Use my real pay stub — enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.',
@@ -889,7 +893,10 @@ function bind(){
     save(); renderBudget(); renderMyMoney();
   });
   document.getElementById('goalAmount').addEventListener('input', function(e){ S.goal = num(e.target.value); save(); renderGoal(); });
-  document.getElementById('savedAmount').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderGoal(); renderMyMoney(); });
+  /* Saved so far IS the savings balance the budget anchors on (same number
+     as "Savings balance" in My Money) — so it must refresh the budget
+     summary too, or "You'll have left" stays stale after typing here. */
+  document.getElementById('savedAmount').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderGoal(); renderMyMoney(); renderBudgetSummary(); });
 
   /* paycheck inputs */
   function setHours(v){ S.hours = num(v); save(); renderAll(); }
@@ -1034,7 +1041,9 @@ function bind(){
     }
   });
   document.getElementById('savingsBalInput').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderBudget(); renderMyMoney(); });
-  document.getElementById('checkingBalInput').addEventListener('input', function(e){ S.checking = num(e.target.value); save(); renderMyMoney(); });
+  /* Checking balance also feeds the budget anchor (saved + checking) —
+     refresh the budget summary too, or "You'll have left" stays stale. */
+  document.getElementById('checkingBalInput').addEventListener('input', function(e){ S.checking = num(e.target.value); save(); renderMyMoney(); renderBudgetSummary(); });
   document.getElementById('balanceDateInput').addEventListener('change', function(e){ S.balanceDate = e.target.value; save(); renderMyMoney(); });
 
   /* starting money (Budget tab anchor) — blank follows the My Money balances */
