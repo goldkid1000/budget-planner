@@ -1,7 +1,7 @@
-/* Budget Planner v1.3.0 — all data stays in localStorage on this device. */
+/* Budget Planner v1.3.1 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.3.0';
+var APP_VERSION = '1.3.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -35,6 +35,10 @@ function calcShiftPaidHours(startStr, endStr, mealMinutes){
 function defaultMeal(startStr, endStr){
   return calcShiftHours(startStr, endStr) > 6 ? 30 : 0;
 }
+/* v1.3.1: Giel's standard paid break — 15 minutes every shift. Breaks are
+   paid at Walmart, so they never reduce paid hours: tracked and shown,
+   never subtracted. */
+function defaultBreak(){ return 15; }
 function fmtHrs(h){
   var v = Number(h); if(!isFinite(v)) v = 0;
   return (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
@@ -451,7 +455,9 @@ if(S.dealsRefreshedAt === undefined) S.dealsRefreshedAt = null;
 /* v1.1.0: shifts saved before meal breaks get the default rule (30 min over 6 hrs) */
 S.shifts.forEach(function(sh){
   if(sh.meal === undefined || sh.meal === null) sh.meal = defaultMeal(sh.start, sh.end);
+  if(sh.breakMin === undefined || sh.breakMin === null) sh.breakMin = defaultBreak();
 });
+if(S.breakTotal === undefined) S.breakTotal = 0;
 if(!S.statementTxns) S.statementTxns = [];
 if(S.statementInfo === undefined) S.statementInfo = null;
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -732,29 +738,34 @@ function renderPaycheck(){
 
   var shiftList = document.getElementById('shiftList');
   shiftList.innerHTML = '';
-  var totalLen = 0, totalMeal = 0, totalPaid = 0;
+  var totalLen = 0, totalMeal = 0, totalPaid = 0, totalBreak = 0;
   S.shifts.forEach(function(sh, i){
     var len = calcShiftHours(sh.start, sh.end);
     var meal = (sh.meal === undefined || sh.meal === null) ? defaultMeal(sh.start, sh.end) : num(sh.meal);
+    var brk = (sh.breakMin === undefined || sh.breakMin === null) ? defaultBreak() : num(sh.breakMin);
     var paid = calcShiftPaidHours(sh.start, sh.end, meal);
-    totalLen += len; totalMeal += meal; totalPaid += paid;
+    totalLen += len; totalMeal += meal; totalPaid += paid; totalBreak += brk;
     var row = document.createElement('div'); row.className = 'bill-row';
     row.innerHTML = '<span class="bill-name">' + esc(sh.day) + '</span>' +
       '<span>' + esc(fmtTime(sh.start)) + ' – ' + esc(fmtTime(sh.end)) + '</span>' +
       '<label class="field small">Meal (min) <input type="number" min="0" step="5" value="' + meal + '" data-shift-meal="' + i + '" aria-label="Meal break in minutes"></label>' +
+      '<label class="field small">Break (min) <input type="number" min="0" step="5" value="' + brk + '" data-shift-break="' + i + '" aria-label="Paid break in minutes"></label>' +
       '<button class="btn-mini danger" data-shift-del="' + i + '" type="button">Delete</button>' +
-      '<span class="shift-math">' + fmtHrs(len) + ' hrs, meal ' + fmtHrs(meal) + ' min → paid ' + fmtHrs(paid) + ' hrs</span>';
+      '<span class="shift-math">' + fmtHrs(len) + ' hrs, meal ' + fmtHrs(meal) + ' min (unpaid) → paid ' + fmtHrs(paid) + ' hrs · break ' + fmtHrs(brk) + ' min (paid)</span>';
     shiftList.appendChild(row);
   });
   if(!S.shifts.length) shiftList.innerHTML = '<p class="hint">No shifts yet — add one below.</p>';
   document.getElementById('shiftTotalOut').textContent = fmtHrs(totalPaid) + ' hrs / week';
   document.getElementById('shiftMathOut').textContent = S.shifts.length
-    ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total → paid ' + fmtHrs(totalPaid) + ' hrs.'
+    ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total (unpaid) → paid ' + fmtHrs(totalPaid) + ' hrs · breaks ' + fmtHrs(totalBreak) + ' min total (paid).'
     : '';
   if(document.activeElement !== mealTotalEl) mealTotalEl.value = S.mealTotal || 0;
+  var breakTotalEl = document.getElementById('breakTotalInput');
+  if(document.activeElement !== breakTotalEl) breakTotalEl.value = S.breakTotal || 0;
+  var brkNote = num(S.breakTotal) > 0 ? ' · break ' + fmtHrs(num(S.breakTotal)) + ' min total (paid)' : '';
   document.getElementById('totalMealMath').textContent = num(S.mealTotal) > 0
-    ? fmtHrs(num(S.hours)) + ' hrs − ' + fmtHrs(num(S.mealTotal)) + ' min meal → paid ' + fmtHrs(effectiveHours()) + ' hrs.'
-    : 'Paid hours: ' + fmtHrs(effectiveHours()) + ' hrs / week.';
+    ? fmtHrs(num(S.hours)) + ' hrs − ' + fmtHrs(num(S.mealTotal)) + ' min meal (unpaid) → paid ' + fmtHrs(effectiveHours()) + ' hrs.' + brkNote
+    : 'Paid hours: ' + fmtHrs(effectiveHours()) + ' hrs / week.' + brkNote;
 
   renderPaycheckOutputs();
 }
@@ -956,6 +967,9 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '1.3.1', notes: [
+    'Shifts now track your paid 15-minute breaks: every shift starts with a 15-minute break and a 30-minute meal, shown right on the shift line. Breaks are paid, so they never reduce your paid hours \u2014 the math line reads "8 hrs, meal 30 min (unpaid) \u2192 paid 7.5 hrs \u00b7 break 15 min (paid)". Old shifts pick up the 15-minute break automatically.'
+  ] },
   { version: '1.3.0', notes: [
     'Savings goal date: the goal now recomputes on every keystroke — type hours, bills, or spending and the date moves right away. When you are saving, it says "You\'ll hit $X by [Month Year]" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it — never a made-up date.',
     'Deal Watchlist in Discount Finder: add an item + the price you would buy at. "Check price now" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type — the app never pretends to check a store by itself.',
@@ -1255,35 +1269,38 @@ function bind(){
     var start = document.getElementById('shiftStart').value || '09:00';
     var end = document.getElementById('shiftEnd').value || '14:00';
     S.shifts.push({ day: document.getElementById('shiftDay').value,
-      start: start, end: end, meal: defaultMeal(start, end) });
+      start: start, end: end, meal: defaultMeal(start, end), breakMin: defaultBreak() });
     save(); renderAll();
   });
   /* shift meal: update on every keystroke — refresh just this row's math,
      the shift totals, and the paycheck outputs (no list rebuild, no focus loss) */
   document.getElementById('shiftList').addEventListener('input', function(e){
     var t = e.target;
-    if(t.dataset.shiftMeal === undefined) return;
-    var i = +t.dataset.shiftMeal;
-    var m = Math.max(0, num(t.value));
-    S.shifts[i].meal = m;
+    var isMeal = t.dataset.shiftMeal !== undefined, isBreak = t.dataset.shiftBreak !== undefined;
+    if(!isMeal && !isBreak) return;
+    var i = +(isMeal ? t.dataset.shiftMeal : t.dataset.shiftBreak);
+    var v = Math.max(0, num(t.value));
+    if(isMeal) S.shifts[i].meal = v; else S.shifts[i].breakMin = v;
     save();
     var sh = S.shifts[i];
     var len = calcShiftHours(sh.start, sh.end);
-    var paid = calcShiftPaidHours(sh.start, sh.end, m);
+    var mNow = num(sh.meal), bNow = num(sh.breakMin);
+    var paid = calcShiftPaidHours(sh.start, sh.end, mNow);
     var row = t.closest('.bill-row');
     if(row){
       var mathEl = row.querySelector('.shift-math');
-      if(mathEl) mathEl.textContent = fmtHrs(len) + ' hrs, meal ' + fmtHrs(m) + ' min → paid ' + fmtHrs(paid) + ' hrs';
+      if(mathEl) mathEl.textContent = fmtHrs(len) + ' hrs, meal ' + fmtHrs(mNow) + ' min (unpaid) → paid ' + fmtHrs(paid) + ' hrs · break ' + fmtHrs(bNow) + ' min (paid)';
     }
-    var totalLen = 0, totalMeal = 0, totalPaid = 0;
+    var totalLen = 0, totalMeal = 0, totalPaid = 0, totalBreak = 0;
     S.shifts.forEach(function(s){
       totalLen += calcShiftHours(s.start, s.end);
       totalMeal += num(s.meal);
       totalPaid += calcShiftPaidHours(s.start, s.end, s.meal);
+      totalBreak += num(s.breakMin);
     });
     document.getElementById('shiftTotalOut').textContent = fmtHrs(totalPaid) + ' hrs / week';
     document.getElementById('shiftMathOut').textContent = S.shifts.length
-      ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total → paid ' + fmtHrs(totalPaid) + ' hrs.'
+      ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total (unpaid) → paid ' + fmtHrs(totalPaid) + ' hrs · breaks ' + fmtHrs(totalBreak) + ' min total (paid).'
       : '';
     renderPaycheckOutputs(); renderMyMoney(); renderBudgetSummary();
   });
@@ -1295,11 +1312,23 @@ function bind(){
       S.shifts[+t.dataset.shiftMeal].meal = m;
       save(); renderAll();
     }
+    if(t.dataset.shiftBreak !== undefined){
+      var b = num(t.value);
+      if(b < 0) b = 0;
+      S.shifts[+t.dataset.shiftBreak].breakMin = b;
+      save(); renderAll();
+    }
   });
   document.getElementById('mealTotalInput').addEventListener('change', function(e){
     var m = num(e.target.value);
     if(m < 0) m = 0;
     S.mealTotal = m;
+    save(); renderAll();
+  });
+  document.getElementById('breakTotalInput').addEventListener('change', function(e){
+    var b = num(e.target.value);
+    if(b < 0) b = 0;
+    S.breakTotal = b;
     save(); renderAll();
   });
   document.getElementById('shiftList').addEventListener('click', function(e){
