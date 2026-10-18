@@ -1,7 +1,7 @@
-/* Budget Planner v1.2.1 — all data stays in localStorage on this device. */
+/* Budget Planner v1.2.2 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.2.1';
+var APP_VERSION = '1.2.2';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -376,6 +376,30 @@ function renderBudgetSummary(){
   var promptEl = document.getElementById('startingMoneyPrompt');
   if(promptEl) promptEl.hidden = !(starting <= 0 && !S.balanceDate && !(S.statementInfo && S.statementInfo.date));
 
+  /* take-home breakdown: the whole chain, so the monthly number is checkable
+     from its own inputs. weeklyNet uses the same effRate as monthlyNet, so
+     the chain multiplies out exactly to the displayed monthly number. */
+  var p = currentPaycheck();
+  var hrs = effectiveHours();
+  var weeklyNet = p.weeklyGross * (1 - p.effRate);
+  var pctTaken = (p.effRate * 100).toFixed(2).replace(/\.?0+$/, '');
+  var bdEl = document.getElementById('incomeBreakdown');
+  if(bdEl) bdEl.textContent = fmtHrs(hrs) + ' paid hrs/week × ' + money(S.rate) + '/hr = ' +
+    money(p.weeklyGross) + ' gross → ' + money(weeklyNet) + ' take-home/week (' + pctTaken +
+    '% taken off) → × 52 ÷ 12 = ' + money(p.monthlyNet) + ' / month. A month averages 4⅓ weeks, so this is more than 4 weekly paychecks.';
+  /* live stamp: proves the numbers just re-rendered */
+  var stampEl = document.getElementById('budgetUpdatedStamp');
+  if(stampEl) stampEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  /* starting-money source: an override, once typed, wins over the balances
+     until cleared — make that visible instead of silent */
+  var overrideActive = (S.startingMoney !== null && S.startingMoney !== undefined && S.startingMoney !== '' && isFinite(Number(S.startingMoney)));
+  var srcEl = document.getElementById('startingMoneySource');
+  if(srcEl) srcEl.textContent = overrideActive
+    ? 'Using the number you typed here (' + money(S.startingMoney) + '). Changes in My Money will not change this until you clear it.'
+    : 'Following your My Money balances (' + money(num(S.saved) + num(S.checking)) + ').';
+  var clrBtn = document.getElementById('clearStartingMoneyBtn');
+  if(clrBtn) clrBtn.hidden = !overrideActive;
+
   /* donut: slices = categories + bills, plus a "left" slice when positive */
   var svg = document.getElementById('donutSvg');
   var total = Math.max(spend + bills + Math.max(left, 0), 1);
@@ -485,6 +509,12 @@ function renderPaycheck(){
     ? fmtHrs(num(S.hours)) + ' hrs − ' + fmtHrs(num(S.mealTotal)) + ' min meal → paid ' + fmtHrs(effectiveHours()) + ' hrs.'
     : 'Paid hours: ' + fmtHrs(effectiveHours()) + ' hrs / week.';
 
+  renderPaycheckOutputs();
+}
+
+/* paycheck result lines + stub form + what-if — no list rebuild, so it is
+   safe to call while typing (e.g. a shift meal break) without stealing focus */
+function renderPaycheckOutputs(){
   var p = currentPaycheck();
   document.getElementById('grossOut').textContent = money(p.periodGross);
   document.getElementById('grossPer').textContent = p.periodLabel;
@@ -663,6 +693,13 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '1.2.2', notes: [
+    'Every number now shows how it was worked out — the take-home line shows your paid hours × rate → take-home/week → monthly, so you can check it yourself.',
+    'The Budget tab shows an “Updated HH:MM:SS” stamp that refreshes on every change, so you can see the numbers are live.',
+    '“Money I have right now” now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.',
+    'Typing a bill amount or a shift meal break updates the budget right away instead of waiting until you tap away.',
+    'Fixed: a number once typed in “Money I have right now” used to keep overriding your balances with no visible sign — now the source is always shown.'
+  ] },
   { version: '1.2.1', notes: [
     'Savings update your budget right away — typing your saved balance or checking balance updates “You’ll have left” immediately, no tab switch needed.',
     'Phone layout — the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar.'
@@ -911,6 +948,35 @@ function bind(){
       start: start, end: end, meal: defaultMeal(start, end) });
     save(); renderAll();
   });
+  /* shift meal: update on every keystroke — refresh just this row's math,
+     the shift totals, and the paycheck outputs (no list rebuild, no focus loss) */
+  document.getElementById('shiftList').addEventListener('input', function(e){
+    var t = e.target;
+    if(t.dataset.shiftMeal === undefined) return;
+    var i = +t.dataset.shiftMeal;
+    var m = Math.max(0, num(t.value));
+    S.shifts[i].meal = m;
+    save();
+    var sh = S.shifts[i];
+    var len = calcShiftHours(sh.start, sh.end);
+    var paid = calcShiftPaidHours(sh.start, sh.end, m);
+    var row = t.closest('.bill-row');
+    if(row){
+      var mathEl = row.querySelector('.shift-math');
+      if(mathEl) mathEl.textContent = fmtHrs(len) + ' hrs, meal ' + fmtHrs(m) + ' min → paid ' + fmtHrs(paid) + ' hrs';
+    }
+    var totalLen = 0, totalMeal = 0, totalPaid = 0;
+    S.shifts.forEach(function(s){
+      totalLen += calcShiftHours(s.start, s.end);
+      totalMeal += num(s.meal);
+      totalPaid += calcShiftPaidHours(s.start, s.end, s.meal);
+    });
+    document.getElementById('shiftTotalOut').textContent = fmtHrs(totalPaid) + ' hrs / week';
+    document.getElementById('shiftMathOut').textContent = S.shifts.length
+      ? 'Shift time ' + fmtHrs(totalLen) + ' hrs total − meal ' + fmtHrs(totalMeal) + ' min total → paid ' + fmtHrs(totalPaid) + ' hrs.'
+      : '';
+    renderPaycheckOutputs(); renderMyMoney(); renderBudgetSummary();
+  });
   document.getElementById('shiftList').addEventListener('change', function(e){
     var t = e.target;
     if(t.dataset.shiftMeal !== undefined){
@@ -1054,6 +1120,12 @@ function bind(){
     save(); renderBudgetSummary();
   });
 
+  /* clear the override — go back to following the My Money balances */
+  document.getElementById('clearStartingMoneyBtn').addEventListener('click', function(){
+    S.startingMoney = null;
+    save(); renderBudget();
+  });
+
   /* bills inputs */
   document.getElementById('addBillBtn').addEventListener('click', function(){
     var name = document.getElementById('billName').value.trim();
@@ -1066,6 +1138,16 @@ function bind(){
     document.getElementById('billDue').value = '';
     document.getElementById('billAuto').checked = false;
     save(); renderBills(); renderMyMoney(); renderBudgetSummary();
+  });
+  /* bills: update on every keystroke too (the 'change' handler below still
+     rebuilds the list on blur) — typing an amount must move the budget now */
+  document.getElementById('billList').addEventListener('input', function(e){
+    var t = e.target;
+    if(t.dataset.billName !== undefined){ S.bills[+t.dataset.billName].name = t.value.trim() || 'Bill'; }
+    else if(t.dataset.billAmt !== undefined){ S.bills[+t.dataset.billAmt].amount = Math.max(0, num(t.value)); }
+    else if(t.dataset.billDue !== undefined){ S.bills[+t.dataset.billDue].due = t.value; }
+    else return;
+    save(); renderMyMoney(); renderBudgetSummary();
   });
   document.getElementById('billList').addEventListener('change', function(e){
     var t = e.target;

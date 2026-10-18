@@ -68,6 +68,8 @@
           <input id="startingMoneyInput" type="number" min="0" step="0.01" placeholder="0.00">
         </label>
         <p class="explain" id="budgetHaveLine">You have $0 right now.</p>
+        <p class="explain" id="startingMoneySource"></p>
+        <button class="btn-mini" id="clearStartingMoneyBtn" type="button" hidden>Clear — follow my balances</button>
         <p class="explain" id="startingMoneyPrompt">Put how much money you have and your budget will go off that. Leave it blank and it follows the balances in My Money.</p>
       </div>
 
@@ -83,6 +85,7 @@
         <div class="donut-summary">
           <p><strong>Money you have right now:</strong> <span id="startingLine">$0</span></p>
           <p><strong>Money in (take-home):</strong> <span id="incomeLine">$0</span> / month</p>
+          <p class="explain" id="incomeBreakdown"></p>
           <p><strong>Bills due:</strong> <span id="billsLine">$0</span></p>
           <p><strong>You'll spend:</strong> <span id="spendLine">$0</span> / month</p>
           <p><strong>You'll have left:</strong> <span id="leftLine">$0</span> / month</p>
@@ -90,6 +93,7 @@
         </div>
         <p class="warning" id="overBudgetWarn" hidden>⚠️ You're planning to spend more than you have + your paychecks. Trim a category, or leave some spending out of the plan.</p>
         <p class="hint">Income comes from your Paycheck tab. Change your hours or rate there and this updates.</p>
+        <p class="hint" id="budgetUpdatedStamp"></p>
       </div>
 
       <div class="card">
@@ -335,7 +339,7 @@
     <section class="view" id="view-bills">
       <h2>Bills</h2>
       <div class="card">
-        <p class="hint"><strong>Starting points — update or delete them.</strong> These are not live bank data. Tap a bill's name, amount, due date, or auto-pay box to change it.</p>
+        <p class="hint">These are not live bank data. Tap a bill's name, amount, due date, or auto-pay box to change it.</p>
         <div class="add-row bill-add">
           <input id="billName" type="text" placeholder="Bill name" maxlength="60" aria-label="Bill name">
           <input id="billAmount" type="number" min="0" step="0.01" placeholder="$ amount" aria-label="Bill amount">
@@ -486,7 +490,7 @@
 </nav>
 
 <footer class="footer">
-  <p>Budget Planner <strong>v1.2.1</strong> · Your numbers stay on this device — nobody else sees them. · <button class="btn-mini" id="whatsNewBtn" type="button">What's New</button> <button class="btn-mini" id="checkUpdateBtn" type="button">Check for updates</button> <span id="updateCheckStatus"></span></p>
+  <p>Budget Planner <strong>v1.2.2</strong> · Your numbers stay on this device — nobody else sees them. · <button class="btn-mini" id="whatsNewBtn" type="button">What's New</button> <button class="btn-mini" id="checkUpdateBtn" type="button">Check for updates</button> <span id="updateCheckStatus"></span></p>
 </footer>
 
 <div class="modal" id="whatsNewModal" hidden>
