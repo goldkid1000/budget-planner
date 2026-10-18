@@ -1,4 +1,4 @@
-/* Budget Planner v1.1.1 — dark theme. High-contrast light text on dark backgrounds. */
+/* Budget Planner v1.2.1 — dark theme. High-contrast light text on dark backgrounds. */
 :root{
   --green:#46d98a; --green-dark:#178048; --green-soft:#1d2f26;
   --ink:#f2f5f3; --muted:#b6bfba; --line:#333c43; --card:#1c2126;
@@ -11,11 +11,14 @@
 html{overflow-x:hidden}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;overflow-x:hidden}
 a{color:var(--link)}
-.topbar{background:#0d3b23;color:#fff;padding:18px 16px 16px}
+/* iPhone notch / status bar: the page already opts into viewport-fit=cover,
+   so push the header below the status bar instead of letting it clip under it.
+   Browsers without env() ignore the second line and keep the base padding. */
+.topbar{background:#0d3b23;color:#fff;padding:18px 16px 16px;padding-top:calc(18px + env(safe-area-inset-top))}
 .topbar-inner{max-width:1160px;margin:0 auto}
 .topbar h1{margin:0;font-size:1.6rem}
 .tagline{margin:4px 0 0;opacity:.92;font-size:.95rem;color:#d7e8dd;overflow-wrap:break-word}
-.layout{max-width:1160px;margin:0 auto;display:flex;gap:20px;padding:18px 16px 90px}
+.layout{max-width:1160px;margin:0 auto;display:flex;gap:20px;padding:18px 16px 90px;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
 .sidebar{width:230px;flex-shrink:0}
 .nav{display:flex;flex-direction:column;gap:8px}
 .nav-btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:11px 12px;font-size:1rem;text-align:left;cursor:pointer}
@@ -149,7 +152,7 @@ input[type=time]{color-scheme:dark}
 .shift-math{width:100%;font-size:.9rem;color:var(--muted);margin:-4px 0 0}
 @media (max-width:1023px){
   .sidebar{display:none}
-  .layout{padding-bottom:100px}
+  .layout{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   .bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;background:#171c20;border-top:1px solid var(--line);z-index:10;padding:6px 4px calc(6px + env(safe-area-inset-bottom));justify-content:space-around}
   .bottomnav .nav-btn{border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:1.15rem;padding:6px 4px;color:var(--muted);text-align:center}
   .bottomnav .nav-btn span{font-size:.68rem}
