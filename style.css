@@ -159,7 +159,8 @@ input[type=time]{color-scheme:dark}
   .bottomnav .nav-btn.active{color:var(--green);background:none;font-weight:700}
 }
 @media (max-width:600px){
-  .donut-card{flex-direction:column;align-items:flex-start}
+  .donut-card{flex-direction:column;align-items:center}
+  .donut-summary{width:100%}
   .two-col{grid-template-columns:1fr}
   .cat-row input[type=number]{width:95px}
   .topbar h1{font-size:1.35rem}

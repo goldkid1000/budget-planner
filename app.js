@@ -1,7 +1,7 @@
-/* Budget Planner v2.0.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.0.1 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.0.0';
+var APP_VERSION = '2.0.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -698,8 +698,12 @@ function renderBudgetSummary(){
     if(num(c.amount) > 0) slices.push({ label: c.name || 'Category', value: num(c.amount), color: COLORS[i % COLORS.length] });
   });
   if(bills > 0) slices.push({ label: 'Bills due', value: bills, color: '#e8b34b' });
-  if(left > 0) slices.push({ label: "You'll have left", value: left, color: '#3d4d45' });
+  if(left > 0) slices.push({ label: "You'll have left", value: left, color: '#2ed573' });
   renderDonut(slices, total);
+  var donutDetailEl = document.getElementById('donutDetail');
+  if(donutDetailEl) donutDetailEl.textContent = slices.length === 0
+    ? 'Nothing to show yet — add income, bills, or planned spending and your breakdown will appear here.'
+    : 'Tap a donut slice to see its details.';
   /* the goal projection depends on these same numbers, so it recomputes
      on every keystroke of every money input — not just its own fields */
   renderGoal();
@@ -1041,6 +1045,9 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.0.1', notes: [
+    'Fixed the donut on mobile: it now shows a subtle ring with a helpful hint when there is nothing to chart yet, instead of a blank hole. The "left" slice is a brighter green that actually shows up on the dark theme, and the donut centers itself on phone screens.'
+  ] },
   { version: '2.0.0', notes: [
     'Rebuilt for v2.0: where-you-work picker (Walmart, Target, Amazon, McDonald\u2019s, or custom) sets your rate with one tap \u2014 the rate stays editable, presets are starting points.',
     'New Stocks tab (educational): watchlist with prices you type in, price-history charts with highs and lows, an allocation calculator, and beginner investing videos. Paper-trading only \u2014 nothing moves real money, and this is not financial advice.',

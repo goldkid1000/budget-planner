@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "2.0.1",
+      "date": "2026-10-18",
+      "notes": [
+        "Donut fix (mobile): shows a subtle ring + helpful hint when there is nothing to chart yet instead of a blank hole; the 'left' slice is now a brighter green visible on the dark theme; the donut centers itself on phone screens."
+      ],
+      "notify": true
+    },
+    {
       "version": "2.0.0",
       "date": "2026-10-19",
       "notes": [
