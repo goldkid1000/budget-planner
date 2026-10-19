@@ -1,1 +1,1 @@
-{"notes": ["New home-screen logo: the app icon now shows properly on iPhone (was an SVG iOS ignores). Delete and re-add the home screen icon to see it."], "notify": true, "updated": "2026-10-19", "version": "2.0.7"}
+{"notes": ["Home-screen logo now embedded directly in the app (same trick as StudyLens) — shows reliably when adding to Home Screen."], "notify": true, "updated": "2026-10-19", "version": "2.0.8"}
