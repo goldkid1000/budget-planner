@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.4.2",
+      "date": "Oct 19, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed white bar behind the status bar on mobile.",
+        "Header title is now solid champagne \u2014 crisper, no washed-out gradient."
+      ]
+    },
+    {
       "v": "2.4.1",
       "date": "Oct 19, 2026",
       "notes": [

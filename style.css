@@ -575,7 +575,7 @@ input[type=checkbox]{accent-color:var(--green)}
   --glow:0 0 0 3px rgba(212,175,106,.2);
 }
 /* true fullscreen root: dynamic viewport, edge-to-edge */
-html{min-height:100%}
+html{min-height:100%;background:#0b0906}
 body{
   min-height:100dvh;
   background:
@@ -595,9 +595,7 @@ body::after{content:"";position:fixed;inset:0;z-index:200;pointer-events:none;op
 .topbar::after{background:linear-gradient(90deg,transparent,rgba(212,175,106,.75) 30%,rgba(212,175,106,.75) 70%,transparent);
   height:1px}
 .topbar h1{font-family:Georgia,'Times New Roman',serif;font-weight:700;letter-spacing:.01em;font-size:1.8rem}
-@supports ((-webkit-background-clip:text) or (background-clip:text)){
-  .topbar h1{background:linear-gradient(180deg,#fbf6ea 20%,#e9d3a0 80%,#c9973f 130%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-}
+.topbar h1{color:#f2ddab}
 .tagline{color:#9d8c6e}
 
 /* ---------- serif display numerals for money ---------- */
