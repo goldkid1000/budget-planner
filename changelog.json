@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "2.0.4",
+      "date": "2026-10-19",
+      "notes": [
+        "Hot-fix: the app's offline cache now always pulls fresh files from the network when a new version installs — the old installer could pack stale files into the new cache, which is how an update could leave you on the old build."
+      ],
+      "notify": true
+    },
+    {
       "version": "2.0.3",
       "date": "2026-10-19",
       "notes": [
