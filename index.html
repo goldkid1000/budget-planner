@@ -41,6 +41,7 @@
       <button class="nav-btn" data-view="bills" type="button">🧾 Bills</button>
       <button class="nav-btn" data-view="discounts" type="button">🎓 Discounts</button>
       <button class="nav-btn" data-view="stocks" type="button">📈 Stocks</button>
+      <button class="nav-btn" data-view="earn" type="button">💰 Earn</button>
       <button class="nav-btn" data-view="calculators" type="button">🧮 Calculators</button>
     </nav>
     <p class="privacy-note">Your numbers stay on this device — nobody else sees them.</p>
@@ -88,6 +89,7 @@
           <p><strong>Money you have right now:</strong> <span id="startingLine">$0</span></p>
           <p><strong>Money in (take-home):</strong> <span id="incomeLine">$0</span> / month</p>
           <p class="explain" id="incomeBreakdown"></p>
+          <p id="earnLine" hidden><strong>+ Side income (Earn tab):</strong> <span id="earnLineAmt">$0</span> / month <span class="hint-inline">— separate from paycheck math</span></p>
           <p><strong>Bills due:</strong> <span id="billsLine">$0</span></p>
           <p><strong>You'll spend:</strong> <span id="spendLine">$0</span> / month</p>
           <p><strong>You'll have left:</strong> <span id="leftLine">$0</span> / month</p>
@@ -557,6 +559,27 @@
       </div>
     </section>
 
+    <!-- ================= EARN ================= -->
+    <section class="view" id="view-earn">
+      <h2>💰 Earn — ways to make money from your dorm</h2>
+      <div class="card earn-total-card">
+        <div class="earn-total-row">
+          <div>
+            <p class="earn-total-label">Estimated extra income</p>
+            <p class="earn-total-num" id="earnTotalNum">$0–$0 / month</p>
+          </div>
+          <button class="btn-primary" id="earnAddBtn" type="button">Add to my monthly income</button>
+        </div>
+        <p class="hint" id="earnAddedNote" hidden>✓ <span id="earnAddedAmt">$0</span>/mo added as side income (separate from paycheck math).</p>
+      </div>
+      <div class="card earn-frame-card">
+        <h3>🧭 Honest framing</h3>
+        <p>Realistic side income from a dorm is <strong>$200–600/month</strong> — a boost, not a paycheck replacement. Toggle what you're actually doing and the estimate above updates.</p>
+        <p class="hint"><strong>Deliberately excluded:</strong> a second retail job (overwork risk for a sprinter), plasma donation (recovery risk), crypto / MLM / survey farms.</p>
+      </div>
+      <div id="earnGroups"></div>
+    </section>
+
     <!-- ================= CALCULATORS ================= -->
     <section class="view" id="view-calculators">
       <h2>Calculators</h2>
@@ -623,6 +646,7 @@
   <button class="nav-btn" data-view="bills" type="button">🧾<span>Bills</span></button>
   <button class="nav-btn" data-view="discounts" type="button">🎓<span>Discounts</span></button>
   <button class="nav-btn" data-view="stocks" type="button">📈<span>Stocks</span></button>
+  <button class="nav-btn" data-view="earn" type="button">💰<span>Earn</span></button>
   <button class="nav-btn" data-view="calculators" type="button">🧮<span>Calc</span></button>
 </nav>
 

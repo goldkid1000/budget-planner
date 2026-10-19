@@ -495,3 +495,44 @@ input[type=checkbox]{accent-color:var(--green)}
   .field input,.field select,.add-row input,.add-row select{min-height:46px}
   .check input{width:26px;height:26px}
 }
+
+/* ---------- v2.3.0: Earn tab ---------- */
+.earn-total-card{background:linear-gradient(135deg,#0f2417 0%,#0e130f 60%,#241b08 100%);
+  border:1px solid var(--line)}
+.earn-total-row{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.earn-total-label{font-size:.85rem;color:var(--muted);margin:0 0 4px}
+.earn-total-num{font-size:1.7rem;font-weight:800;margin:0;
+  background:linear-gradient(90deg,var(--green),var(--amber));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.earn-frame-card{border-left:3px solid var(--amber)}
+.earn-group{margin:0 0 18px}
+.earn-group > h3{font-size:1.05rem;font-weight:800;margin:0 0 4px}
+.earn-group-note{font-size:.85rem;color:var(--muted);margin:0 0 10px}
+.earn-row{display:flex;align-items:center;gap:12px;padding:12px 4px;
+  border-bottom:1px solid var(--line-soft);min-height:56px}
+.earn-row:last-child{border-bottom:none}
+.earn-info{flex:1;min-width:0}
+.earn-name{font-weight:700;font-size:.95rem}
+.earn-desc{font-size:.82rem;color:var(--muted);line-height:1.4;margin-top:2px}
+.earn-est{font-size:.85rem;font-weight:700;color:var(--amber);white-space:nowrap}
+.earn-math{display:block;font-size:.75rem;color:var(--faint);font-weight:400}
+/* toggle switch */
+.earn-switch{position:relative;flex-shrink:0;width:52px;height:32px;cursor:pointer}
+.earn-switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.earn-switch .track{position:absolute;inset:0;border-radius:999px;background:var(--card2);
+  border:1px solid var(--line);transition:background .18s ease,border-color .18s ease;pointer-events:none}
+.earn-switch .thumb{position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;
+  background:var(--muted);transition:transform .18s ease,background .18s ease;pointer-events:none}
+.earn-switch input:checked + .track{background:linear-gradient(135deg,var(--green-deep),#1fbf68);border-color:transparent}
+.earn-switch input:checked + .track + .thumb{transform:translateX(20px);background:#fff}
+.earn-switch input:focus-visible + .track{outline:2px solid var(--green);outline-offset:2px}
+.hint-inline{font-size:.78rem;color:var(--faint)}
+#earnLine{color:var(--ink)}
+@media (prefers-reduced-motion:reduce){
+  .earn-switch .track,.earn-switch .thumb{transition:none}
+}
+/* 8 tabs fit at 390px */
+@media (max-width:600px){
+  .bottomnav .nav-btn{font-size:.95rem;padding:8px 2px}
+  .bottomnav .nav-btn span{font-size:.56rem}
+}

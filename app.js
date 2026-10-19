@@ -1,7 +1,7 @@
-/* Budget Planner v2.0.4 — all data stays in localStorage on this device. */
+/* Budget Planner v2.3.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.2.0';
+var APP_VERSION = '2.3.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -430,7 +430,9 @@ var DEFAULTS = {
   watchlist: [],
   dealsRefreshedAt: null,
   stocks: [],
-  syncUsed: []
+  syncUsed: [],
+  earn: {},
+  earnAdded: 0
 };
 
 var STUDENT = [
@@ -460,6 +462,9 @@ function loadState(){
 var S = loadState();
 /* fill in fields added in later versions so old saved data keeps working */
 if(!S.ded) S.ded = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
+/* v2.3.0: Earn tab state */
+if(!S.earn || typeof S.earn !== 'object') S.earn = {};
+if(S.earnAdded === undefined || S.earnAdded === null) S.earnAdded = 0;
 /* v1.2.0: the old single FICA % splits into Social Security + Medicare at the
    statutory 6.2 / 1.45 ratio, so old saved rates keep working. The old
    gross/net "calibration" is gone — the per-line pay-stub profile replaces it. */
@@ -667,7 +672,7 @@ function renderDonut(slices, total){
 function renderAll(){
   renderBudget(); renderPaycheck(); renderMyMoney(); renderBills();
   renderDiscountsStatic(); renderDiscountCalc(); renderCashbackEst();
-  renderCalculators(); renderWatchlist(); renderStocks();
+  renderCalculators(); renderWatchlist(); renderStocks(); renderEarn();
 }
 
 function renderBudget(){
@@ -695,6 +700,7 @@ function renderBudgetSummary(){
   setMoneyText(document.getElementById('billsLine'), bills);
   setMoneyText(document.getElementById('spendLine'), spend);
   setMoneyText(document.getElementById('leftLine'), left);
+  updateEarnTotal();
   setMoneyText(document.getElementById('donutLeft'), left, money);
   /* v2.0.0 grow/shrink pulse: the center number pops up or down with the change */
   (function(){
@@ -1412,6 +1418,7 @@ function bind(){
   document.querySelectorAll('.nav-btn').forEach(function(b){
     b.addEventListener('click', function(){ switchView(b.dataset.view); });
   });
+  bindEarn();
   document.getElementById('clearAllBtn').addEventListener('click', function(){
     if(confirm('Clear all your numbers? Everything you typed will be reset to the starting values.')){
       try{ localStorage.removeItem(KEY); }catch(e){}
@@ -1982,6 +1989,155 @@ function renderStocks(){
   });
   renderAlloc();
 }
+
+/* ---------- v2.3.0: Earn tab — dorm-friendly ways to make money ----------
+   Toggles per option, realistic monthly ranges, combined total bar.
+   Side income is a SEPARATE line — never folded into the pay-stub
+   paycheck math (monthlyIncome() stays paycheck-derived). */
+var EARN_GROUPS = [
+  { name: '🧪 User testing sites',
+    note: 'Tip: sign up for all — invites are sporadic.',
+    options: [
+      { id: 'usertesting', name: 'UserTesting', desc: '$10 per ~20-min test · up to $60+ live interviews', lo: 40, hi: 80, math: '\u22484\u20138 tests/mo' },
+      { id: 'trymyui', name: 'TryMyUI (Trymata)', desc: '$10 per ~20-min test', lo: 20, hi: 40, math: '\u22482\u20134 tests/mo' },
+      { id: 'userlytics', name: 'Userlytics', desc: '$5\u201390 per test', lo: 10, hi: 50, math: '\u22482 tests/mo' },
+      { id: 'userinterviews', name: 'User Interviews', desc: '$50\u2013200+ per study', lo: 25, hi: 100, math: '\u22481 study every 2 mo' },
+      { id: 'intellizoom', name: 'IntelliZoom (UserZoom)', desc: '$5\u201310 per test', lo: 15, hi: 30, math: '\u22483 tests/mo' },
+      { id: 'userbrain', name: 'UserBrain', desc: '$3\u20135 per test', lo: 10, hi: 20, math: '\u22484 tests/mo' },
+      { id: 'respondent', name: 'Respondent.io', desc: '$50\u2013200 per session', lo: 15, hi: 65, math: '\u22481 session every 3 mo' },
+      { id: 'userfeel', name: 'Userfeel', desc: '$3\u201330 per test', lo: 5, hi: 30, math: '\u22482 tests/mo' },
+      { id: 'testbirds', name: 'Testbirds', desc: '\u20AC10\u201350 per test', lo: 10, hi: 50, math: '\u22481 test/mo' },
+      { id: 'testingtime', name: 'TestingTime', desc: '\u20AC20\u201355 per test', lo: 20, hi: 55, math: '\u22481 test/mo' },
+      { id: 'betatesting', name: 'BetaTesting', desc: '$10\u2013150+ per test', lo: 10, hi: 75, math: '\u22481 test/mo' }
+    ] },
+  { name: '\u2699\uFE0F Microtasks & research',
+    note: null,
+    options: [
+      { id: 'prolific', name: 'Prolific', desc: 'Academic studies — the best-paying survey site', lo: 20, hi: 60, math: null },
+      { id: 'rev', name: 'Rev / TranscribeMe', desc: 'Transcription, paid per audio minute', lo: 30, hi: 80, math: null },
+      { id: 'appen', name: 'Appen / Clickworker / Telus', desc: 'Data annotation tasks', lo: 20, hi: 60, math: null },
+      { id: 'campusresearch', name: 'Campus research studies', desc: 'Check Plattsburgh psych department postings', lo: 10, hi: 40, math: null }
+    ] },
+  { name: '\uD83D\uDCBB Freelance & remote',
+    note: null,
+    options: [
+      { id: 'va', name: 'Virtual assistant', desc: '$15\u201325/hr — email, scheduling, data entry', lo: 180, hi: 300, math: '3 hrs/wk \u00D7 $20/hr' },
+      { id: 'fiverr', name: 'Fiverr / Upwork', desc: 'Freelance writing and small gigs', lo: 50, hi: 150, math: null },
+      { id: 'printify', name: 'Printify', desc: 'Print-on-demand — no inventory needed', lo: 0, hi: 50, math: 'slow ramp' }
+    ] },
+  { name: '\uD83D\uDCB0 Sell what you know or own',
+    note: null,
+    options: [
+      { id: 'stuvia', name: 'Stuvia / Nexus Notes', desc: 'Sell your class notes', lo: 10, hi: 40, math: null },
+      { id: 'sellitems', name: 'Sell owned items', desc: 'Facebook Marketplace — meet on campus in public', lo: 20, hi: 100, math: null },
+      { id: 'trackguide', name: 'Track training guide (PDF)', desc: 'Gumroad/Etsy — your own knowledge only, never promise \u201Cguaranteed\u201D results', lo: 10, hi: 60, math: null }
+    ] },
+  { name: '\uD83C\uDFEB Campus',
+    note: null,
+    options: [
+      { id: 'handshake', name: 'Handshake campus job', desc: '\u2248$16\u201316.50/hr', lo: 260, hi: 300, math: '4 hrs/wk \u00D7 $16.25' },
+      { id: 'coaching', name: 'Private sprint coaching', desc: '$30\u201350/hr — MUST clear with Plattsburgh athletics compliance first', lo: 240, hi: 400, math: '2 hrs/wk \u00D7 $40/hr' }
+    ] },
+  { name: '\uD83C\uDFAE Gaming (PC)',
+    note: 'Gaming money is slow except DevEx on a game with players — treat the rest as long shots.',
+    options: [
+      { id: 'devex', name: 'Pet Power DevEx', desc: 'His published Roblox game — $0.0038/Robux cash-out, 30K Robux minimum (\u2248$114+). Most realistic gaming income since the game is already live.', lo: 0, hi: 100, math: '$114 per 30K Robux cash-out' },
+      { id: 'betatesting-game', name: 'BetaTesting — game tests', desc: '$10\u2013150+ per game playtest (game tests appear here too)', lo: 10, hi: 75, math: '\u22481 test/mo' },
+      { id: 'remoteqa', name: 'Remote game QA', desc: 'Lionbridge, Keywords Studios — real jobs, usually want experience', lo: 0, hi: 150, math: null },
+      { id: 'streaming', name: 'Streaming', desc: 'Twitch/YouTube/TikTok — honest note: $0 for a long while, needs a consistent schedule', lo: 0, hi: 25, math: null },
+      { id: 'gamecoaching', name: 'Game coaching', desc: 'Metafy, Gamer Sensei — $10\u201330/hr, only if high-ranked in a popular game', lo: 0, hi: 120, math: '2 hrs/wk \u00D7 $20/hr' },
+      { id: 'tournaments', name: 'Small tournaments', desc: 'Battlefy, Challengermode — small prize pools, needs real skill', lo: 0, hi: 40, math: null }
+    ] }
+];
+
+function earnFind(id){
+  for(var g = 0; g < EARN_GROUPS.length; g++){
+    for(var i = 0; i < EARN_GROUPS[g].options.length; i++){
+      if(EARN_GROUPS[g].options[i].id === id) return EARN_GROUPS[g].options[i];
+    }
+  }
+  return null;
+}
+function earnTotals(){
+  var lo = 0, hi = 0, n = 0;
+  Object.keys(S.earn || {}).forEach(function(id){
+    if(!S.earn[id]) return;
+    var o = earnFind(id);
+    if(o){ lo += o.lo; hi += o.hi; n++; }
+  });
+  return { lo: lo, hi: hi, n: n, mid: Math.round((lo + hi) / 2) };
+}
+function renderEarn(){
+  var host = document.getElementById('earnGroups');
+  if(!host) return;
+  host.innerHTML = '';
+  EARN_GROUPS.forEach(function(g){
+    var div = document.createElement('div');
+    div.className = 'card earn-group';
+    var html = '<h3>' + g.name + '</h3>';
+    if(g.note) html += '<p class="earn-group-note">' + g.note + '</p>';
+    g.options.forEach(function(o){
+      var on = !!(S.earn && S.earn[o.id]);
+      html += '<div class="earn-row">' +
+        '<div class="earn-info"><div class="earn-name">' + o.name + '</div>' +
+        '<div class="earn-desc">' + o.desc + '</div></div>' +
+        '<div class="earn-est">$' + o.lo + '\u2013$' + o.hi + '/mo' +
+        (o.math ? '<span class="earn-math">' + o.math + '</span>' : '') + '</div>' +
+        '<label class="earn-switch"><input type="checkbox" data-earn-toggle="' + o.id + '"' +
+        (on ? ' checked' : '') + ' aria-label="I\u2019m doing this: ' + o.name + '">' +
+        '<span class="track"></span><span class="thumb"></span></label>' +
+        '</div>';
+    });
+    div.innerHTML = html;
+    host.appendChild(div);
+  });
+  host.querySelectorAll('[data-earn-toggle]').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      S.earn[cb.getAttribute('data-earn-toggle')] = cb.checked;
+      save(); updateEarnTotal();
+    });
+  });
+  updateEarnTotal();
+}
+function updateEarnTotal(){
+  var t = earnTotals();
+  var el = document.getElementById('earnTotalNum');
+  if(el) el.textContent = '$' + t.lo + '\u2013$' + t.hi + ' / month';
+  var note = document.getElementById('earnAddedNote');
+  var amt = document.getElementById('earnAddedAmt');
+  if(note && amt){
+    if(S.earnAdded > 0){ note.hidden = false; amt.textContent = money(S.earnAdded); }
+    else note.hidden = true;
+  }
+  /* Budget tab side-income line — display only, never touches paycheck math */
+  var line = document.getElementById('earnLine');
+  var lineAmt = document.getElementById('earnLineAmt');
+  if(line && lineAmt){
+    if(S.earnAdded > 0){ line.hidden = false; setMoneyText(lineAmt, S.earnAdded); }
+    else line.hidden = true;
+  }
+}
+function bindEarn(){
+  var btn = document.getElementById('earnAddBtn');
+  if(btn && !btn._earnBound){
+    btn._earnBound = true;
+    btn.addEventListener('click', function(){
+      var t = earnTotals();
+      if(t.n === 0){
+        btn.textContent = 'Toggle something first';
+        setTimeout(function(){ btn.textContent = 'Add to my monthly income'; }, 1600);
+        return;
+      }
+      /* No standalone monthly-income input exists (income is paycheck-derived),
+         so the midpoint is stored as a separate side-income line. */
+      S.earnAdded = t.mid;
+      save(); updateEarnTotal();
+      btn.textContent = '\u2713 Added ' + money(t.mid) + '/mo';
+      setTimeout(function(){ btn.textContent = 'Add to my monthly income'; }, 2000);
+    });
+  }
+}
+
 function renderAlloc(){
   var out = document.getElementById('allocOut');
   if(!out) return;

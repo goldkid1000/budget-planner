@@ -1,8 +1,8 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "updated": "2026-10-19",
   "notify": true,
   "notes": [
-    "Duotone rework: mint + amber on deeper layered dark \u2014 stronger visual hierarchy, halo + sheen on the donut, duotone goal progress, accent-rail sidebar, tighter mobile tab bar. All features unchanged."
+    "NEW Earn tab: 29 dorm-friendly ways to make money in 6 groups (user testing sites, microtasks, freelance, selling, campus, gaming/PC) — each with a toggle and realistic monthly range, a live combined $/mo total bar, and one button that adds the midpoint as a separate side-income line (never touches paycheck math). Honest framing: $200–600/mo is a boost, not a paycheck replacement; second retail job, plasma, crypto/MLM/survey farms excluded."
   ]
 }

@@ -1,11 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.3.0",
+      "date": "2026-10-19",
+      "notes": [
+        "NEW Earn tab: 29 dorm-friendly ways to make money in 6 groups (user testing sites, microtasks, freelance, selling, campus, gaming/PC) — each with a toggle and realistic monthly range, a live combined $/mo total bar, and one button that adds the midpoint as a separate side-income line (never touches paycheck math). Honest framing: $200–600/mo is a boost, not a paycheck replacement; second retail job, plasma, crypto/MLM/survey farms excluded."
+      ],
+      "notify": true
+    },
+    {
       "version": "2.2.0",
       "date": "2026-10-19",
       "notify": true,
       "notes": [
-        "Duotone visual rework: mint + amber accents on a deeper layered dark background \u2014 stronger hierarchy on every tab, richer cards, and tighter spacing.",
+        "Duotone visual rework: mint + amber accents on a deeper layered dark background — stronger hierarchy on every tab, richer cards, and tighter spacing.",
         "Donut glow-up: soft halo behind the donut, slow rotating sheen (respects reduced-motion), larger on desktop.",
         "Goal progress bar now fades mint to amber; result boxes get an accent rail; hints read as info strips.",
         "Desktop sidebar active item gets an amber accent rail; bottom tab bar on phones is a tighter 7-item fit with a glowing active pill.",
@@ -17,7 +25,7 @@
       "date": "2026-10-19",
       "notify": true,
       "notes": [
-        "Full visual rework: a premium dark fintech look \u2014 deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.",
+        "Full visual rework: a premium dark fintech look — deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.",
         "New micro-details: gradient card titles with accent underlines, bolder money figures, smoother press feedback, and clearer focus states for keyboard users. All animations still respect your reduced-motion setting."
       ]
     },
@@ -25,7 +33,7 @@
       "version": "2.0.8",
       "date": "2026-10-19",
       "notes": [
-        "Home-screen logo now embedded directly in the app (same trick as StudyLens) \u2014 shows reliably when adding to Home Screen."
+        "Home-screen logo now embedded directly in the app (same trick as StudyLens) — shows reliably when adding to Home Screen."
       ],
       "notify": true
     },
@@ -50,7 +58,7 @@
       "version": "2.0.5",
       "date": "2026-10-19",
       "notes": [
-        "Fixed: the Install button could stay visible inside the installed app \u2014 the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web."
+        "Fixed: the Install button could stay visible inside the installed app — the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web."
       ],
       "notify": true
     },
@@ -58,7 +66,7 @@
       "version": "2.0.4",
       "date": "2026-10-19",
       "notes": [
-        "Hot-fix: the app's offline cache now always pulls fresh files from the network when a new version installs \u2014 the old installer could pack stale files into the new cache, which is how an update could leave you on the old build."
+        "Hot-fix: the app's offline cache now always pulls fresh files from the network when a new version installs — the old installer could pack stale files into the new cache, which is how an update could leave you on the old build."
       ],
       "notify": true
     },
@@ -66,7 +74,7 @@
       "version": "2.0.3",
       "date": "2026-10-19",
       "notes": [
-        "Fixed updates getting stuck: tapping Update now waits for the new version to actually install before reloading, and the update notice stays until the new version is confirmed running \u2014 no more 'latest version' while showing the old number. The footer version number is now written by the app itself, so it can never go stale."
+        "Fixed updates getting stuck: tapping Update now waits for the new version to actually install before reloading, and the update notice stays until the new version is confirmed running — no more 'latest version' while showing the old number. The footer version number is now written by the app itself, so it can never go stale."
       ],
       "notify": true
     },
@@ -74,8 +82,8 @@
       "version": "2.0.2",
       "date": "2026-10-19",
       "notes": [
-        "Install prompt now hides completely when the app is installed \u2014 it only shows on the web.",
-        "Paycheck auto-detections: overtime is now automatic \u2014 hours over 40/week are paid at 1.5x and the breakdown says so. A new Auto-detections card shows your next payday (pick your payday weekday; add your last payday date for every-2-weeks pay) and flags odd inputs, like hours over 80/week, a rate below federal minimum wage, or deductions higher than your gross."
+        "Install prompt now hides completely when the app is installed — it only shows on the web.",
+        "Paycheck auto-detections: overtime is now automatic — hours over 40/week are paid at 1.5x and the breakdown says so. A new Auto-detections card shows your next payday (pick your payday weekday; add your last payday date for every-2-weeks pay) and flags odd inputs, like hours over 80/week, a rate below federal minimum wage, or deductions higher than your gross."
       ],
       "notify": true
     },
@@ -91,9 +99,9 @@
       "version": "2.0.0",
       "date": "2026-10-19",
       "notes": [
-        "Where-you-work picker (Paycheck tab): Walmart Digital Personal Shopper, Target, Amazon warehouse, McDonald's, or Custom \u2014 one tap sets your rate. Presets are starting points; the rate stays editable.",
-        "NEW Stocks tab (educational): watchlist with prices you type in yourself, price-history charts with highs and lows, an allocation calculator against your savings, and beginner investing videos. Paper-trading only \u2014 nothing moves real money, and this is not financial advice.",
-        "Device sync code (My Money tab): generate a one-time code on your phone, paste it on your PC, and everything moves over. No server, no account \u2014 copy/paste it yourself.",
+        "Where-you-work picker (Paycheck tab): Walmart Digital Personal Shopper, Target, Amazon warehouse, McDonald's, or Custom — one tap sets your rate. Presets are starting points; the rate stays editable.",
+        "NEW Stocks tab (educational): watchlist with prices you type in yourself, price-history charts with highs and lows, an allocation calculator against your savings, and beginner investing videos. Paper-trading only — nothing moves real money, and this is not financial advice.",
+        "Device sync code (My Money tab): generate a one-time code on your phone, paste it on your PC, and everything moves over. No server, no account — copy/paste it yourself.",
         "Deal Watchlist upgrade: store presets (Best Buy, Walmart, Amazon, Target, Newegg), per-item price history with a mini highs/lows chart, and a target-hit alert when the price you see hits your buy price.",
         "Donut chart: tap any slice to see its category, amount, and share of the total; the center number pops up or down as your numbers change.",
         "Fixed empty states: the goal celebration only fires when you set a real goal and reach it; with no income entered, the budget says so plainly instead of showing a $0.00 math chain.",
@@ -112,65 +120,65 @@
     {
       "version": "1.3.0",
       "notes": [
-        "Savings goal date: the goal now recomputes on every keystroke \u2014 type hours, bills, or spending and the date moves right away. When you are saving, it says \"You'll hit $X by [Month Year]\" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it \u2014 never a made-up date.",
-        "Deal Watchlist in Discount Finder: add an item + the price you would buy at. \"Check price now\" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type \u2014 the app never pretends to check a store by itself.",
-        "State tax picker in the Paycheck tab: pick your state and the estimate uses that state's real 2025 standard deduction + brackets (single filer). States with no wage income tax come out $0. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. If you entered a real pay stub, the stub numbers still win. Estimate only \u2014 not tax advice, no city/local tax.",
+        "Savings goal date: the goal now recomputes on every keystroke — type hours, bills, or spending and the date moves right away. When you are saving, it says \"You'll hit $X by [Month Year]\" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it — never a made-up date.",
+        "Deal Watchlist in Discount Finder: add an item + the price you would buy at. \"Check price now\" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type — the app never pretends to check a store by itself.",
+        "State tax picker in the Paycheck tab: pick your state and the estimate uses that state's real 2025 standard deduction + brackets (single filer). States with no wage income tax come out $0. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. If you entered a real pay stub, the stub numbers still win. Estimate only — not tax advice, no city/local tax.",
         "Animations: money numbers count up when they change, the donut glides to its new shape, the goal bar fills smoothly, tabs fade in, buttons give a little press feedback. All of it turns off automatically if your device prefers reduced motion, and it stays light on phones."
       ]
     },
     {
       "version": "1.2.2",
       "notes": [
-        "Every number now shows how it was worked out \u2014 the take-home line shows your paid hours \u00d7 rate \u2192 take-home/week \u2192 monthly, so you can check it yourself.",
-        "The Budget tab shows an \u201cUpdated HH:MM:SS\u201d stamp that refreshes on every change, so you can see the numbers are live.",
-        "\u201cMoney I have right now\u201d now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.",
+        "Every number now shows how it was worked out — the take-home line shows your paid hours × rate → take-home/week → monthly, so you can check it yourself.",
+        "The Budget tab shows an “Updated HH:MM:SS” stamp that refreshes on every change, so you can see the numbers are live.",
+        "“Money I have right now” now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.",
         "Typing a bill amount or a shift meal break updates the budget right away instead of waiting until you tap away.",
-        "Fixed: a number once typed in \u201cMoney I have right now\u201d used to keep overriding your balances with no visible sign \u2014 now the source is always shown."
+        "Fixed: a number once typed in “Money I have right now” used to keep overriding your balances with no visible sign — now the source is always shown."
       ]
     },
     {
       "version": "1.2.1",
       "notes": [
-        "Savings update your budget right away \u2014 typing your saved balance or checking balance updates \u201cYou\u2019ll have left\u201d immediately, no tab switch needed.",
-        "Phone layout \u2014 the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar."
+        "Savings update your budget right away — typing your saved balance or checking balance updates “You’ll have left” immediately, no tab switch needed.",
+        "Phone layout — the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar."
       ]
     },
     {
       "notes": [
-        "Paycheck now shows every line from a real pay stub \u2014 federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase \u2014 each with a plain-words explanation.",
-        "Use my real pay stub \u2014 enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.",
-        "Your budget starts from the money you actually have \u2014 \"Money I have right now\" at the top of the Budget tab, filled in from your balances, editable in place.",
-        "Installable \u2014 tap \"Install app\" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.",
-        "Everyone starts blank \u2014 your numbers stay on your own device only. Nobody else sees them."
+        "Paycheck now shows every line from a real pay stub — federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase — each with a plain-words explanation.",
+        "Use my real pay stub — enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.",
+        "Your budget starts from the money you actually have — \"Money I have right now\" at the top of the Budget tab, filled in from your balances, editable in place.",
+        "Installable — tap \"Install app\" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.",
+        "Everyone starts blank — your numbers stay on your own device only. Nobody else sees them."
       ],
       "version": "1.2.0"
     },
     {
       "notes": [
-        "What's New actually shows the notes now \u2014 the box used to open empty.",
+        "What's New actually shows the notes now — the box used to open empty.",
         "Typing a category amount no longer kicks you out of the box after each number.",
-        "Bills can now be edited in place \u2014 name, amount, due date, and auto-pay \u2014 instead of delete-and-retype.",
+        "Bills can now be edited in place — name, amount, due date, and auto-pay — instead of delete-and-retype.",
         "Switching between Total hours and My shifts no longer wipes the tip calculator's %.",
         "New rate box says plainly to type a rate instead of showing $0.00.",
         "New: Check for updates button in the footer.",
-        "Balances no longer start with a made-up date \u2014 empty until you set it."
+        "Balances no longer start with a made-up date — empty until you set it."
       ],
       "version": "1.1.1"
     },
     {
       "notes": [
-        "Dark background \u2014 easier on the eyes, day and night.",
-        "Bank statement import \u2014 drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.",
-        "Meal breaks count \u2014 shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.",
-        "Simpler to read \u2014 plain words, one main action per tab, extra details tucked behind \u201cShow details\u201d.",
-        "Update notices \u2014 the app tells you when a new version is out, once per version.",
+        "Dark background — easier on the eyes, day and night.",
+        "Bank statement import — drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.",
+        "Meal breaks count — shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.",
+        "Simpler to read — plain words, one main action per tab, extra details tucked behind “Show details”.",
+        "Update notices — the app tells you when a new version is out, once per version.",
         "Polished on PC and phone."
       ],
       "version": "1.1.0"
     },
     {
       "notes": [
-        "First version \u2014 budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators."
+        "First version — budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators."
       ],
       "version": "1.0.0"
     }
