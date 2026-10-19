@@ -1,9 +1,8 @@
 {
-  "version": "2.4.3",
+  "version": "2.4.4",
   "updated": "2026-10-19",
   "notify": true,
   "notes": [
-    "Donut center amount now auto-shrinks to fit big numbers \u2014 no more overlap with the ring.",
-    "Tightened a couple of Budget tab wordings."
+    "Donut center: \"YOU'LL HAVE LEFT\" replaced with a smaller \"REMAINING\" label."
   ]
 }

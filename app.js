@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.4.3';
+var APP_VERSION = '2.4.4';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -749,7 +749,7 @@ function renderBudgetSummary(){
       dl.classList.add(dir);
     }
   })();
-  document.getElementById('donutSub').textContent = left >= 0 ? 'left this month' : 'over budget';
+  document.getElementById('donutSub').textContent = left >= 0 ? 'this month' : 'over budget';
   document.getElementById('overBudgetWarn').hidden = left >= 0;
   var haveEl = document.getElementById('budgetHaveLine');
   if(haveEl) haveEl.textContent = 'You have ' + money(starting) + ' right now.';

@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "v": "2.4.4",
+      "date": "Oct 19, 2026",
+      "notes": [
+        "Donut center label reworked: \"REMAINING\" (small, muted gold) above the amount, \"this month\" below \u2014 cleaner than the old wording."
+      ]
+    },
+    {
       "v": "2.4.3",
       "date": "Oct 19, 2026",
       "notes": [
