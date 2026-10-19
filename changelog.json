@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "v": "2.4.1",
+      "date": "Oct 19, 2026",
+      "notes": [
+        "Earn tab: every option now links to its real signup site \u2014 tap a name to open it."
+      ]
+    },
+    {
       "version": "2.4.0",
       "date": "2026-10-19",
       "notify": true,

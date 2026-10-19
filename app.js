@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.4.0';
+var APP_VERSION = '2.4.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -1998,55 +1998,55 @@ var EARN_GROUPS = [
   { name: '🧪 User testing sites',
     note: 'Tip: sign up for all — invites are sporadic.',
     options: [
-      { id: 'usertesting', name: 'UserTesting', desc: '$10 per ~20-min test · up to $60+ live interviews', lo: 40, hi: 80, math: '\u22484\u20138 tests/mo' },
-      { id: 'trymyui', name: 'TryMyUI (Trymata)', desc: '$10 per ~20-min test', lo: 20, hi: 40, math: '\u22482\u20134 tests/mo' },
-      { id: 'userlytics', name: 'Userlytics', desc: '$5\u201390 per test', lo: 10, hi: 50, math: '\u22482 tests/mo' },
-      { id: 'userinterviews', name: 'User Interviews', desc: '$50\u2013200+ per study', lo: 25, hi: 100, math: '\u22481 study every 2 mo' },
-      { id: 'intellizoom', name: 'IntelliZoom (UserZoom)', desc: '$5\u201310 per test', lo: 15, hi: 30, math: '\u22483 tests/mo' },
-      { id: 'userbrain', name: 'UserBrain', desc: '$3\u20135 per test', lo: 10, hi: 20, math: '\u22484 tests/mo' },
-      { id: 'respondent', name: 'Respondent.io', desc: '$50\u2013200 per session', lo: 15, hi: 65, math: '\u22481 session every 3 mo' },
-      { id: 'userfeel', name: 'Userfeel', desc: '$3\u201330 per test', lo: 5, hi: 30, math: '\u22482 tests/mo' },
-      { id: 'testbirds', name: 'Testbirds', desc: '\u20AC10\u201350 per test', lo: 10, hi: 50, math: '\u22481 test/mo' },
-      { id: 'testingtime', name: 'TestingTime', desc: '\u20AC20\u201355 per test', lo: 20, hi: 55, math: '\u22481 test/mo' },
-      { id: 'betatesting', name: 'BetaTesting', desc: '$10\u2013150+ per test', lo: 10, hi: 75, math: '\u22481 test/mo' }
+      { id: 'usertesting', url: 'https://www.usertesting.com/get-paid-to-test', name: 'UserTesting', desc: '$10 per ~20-min test · up to $60+ live interviews', lo: 40, hi: 80, math: '\u22484\u20138 tests/mo' },
+      { id: 'trymyui', url: 'https://trymata.com/testers', name: 'TryMyUI (Trymata)', desc: '$10 per ~20-min test', lo: 20, hi: 40, math: '\u22482\u20134 tests/mo' },
+      { id: 'userlytics', url: 'https://www.userlytics.com/tester/', name: 'Userlytics', desc: '$5\u201390 per test', lo: 10, hi: 50, math: '\u22482 tests/mo' },
+      { id: 'userinterviews', url: 'https://www.userinterviews.com/become-a-participant', name: 'User Interviews', desc: '$50\u2013200+ per study', lo: 25, hi: 100, math: '\u22481 study every 2 mo' },
+      { id: 'intellizoom', url: 'https://www.intellizoom.com/testers', name: 'IntelliZoom (UserZoom)', desc: '$5\u201310 per test', lo: 15, hi: 30, math: '\u22483 tests/mo' },
+      { id: 'userbrain', url: 'https://userbrain.com/tester', name: 'UserBrain', desc: '$3\u20135 per test', lo: 10, hi: 20, math: '\u22484 tests/mo' },
+      { id: 'respondent', url: 'https://app.respondent.io/participants', name: 'Respondent.io', desc: '$50\u2013200 per session', lo: 15, hi: 65, math: '\u22481 session every 3 mo' },
+      { id: 'userfeel', url: 'https://www.userfeel.com/en/testers', name: 'Userfeel', desc: '$3\u201330 per test', lo: 5, hi: 30, math: '\u22482 tests/mo' },
+      { id: 'testbirds', url: 'https://www.testbirds.com/tester/', name: 'Testbirds', desc: '\u20AC10\u201350 per test', lo: 10, hi: 50, math: '\u22481 test/mo' },
+      { id: 'testingtime', url: 'https://www.testingtime.com/become-a-test-user', name: 'TestingTime', desc: '\u20AC20\u201355 per test', lo: 20, hi: 55, math: '\u22481 test/mo' },
+      { id: 'betatesting', url: 'https://betatesting.com/beta-testers', name: 'BetaTesting', desc: '$10\u2013150+ per test', lo: 10, hi: 75, math: '\u22481 test/mo' }
     ] },
   { name: '\u2699\uFE0F Microtasks & research',
     note: null,
     options: [
-      { id: 'prolific', name: 'Prolific', desc: 'Academic studies — the best-paying survey site', lo: 20, hi: 60, math: null },
-      { id: 'rev', name: 'Rev / TranscribeMe', desc: 'Transcription, paid per audio minute', lo: 30, hi: 80, math: null },
-      { id: 'appen', name: 'Appen / Clickworker / Telus', desc: 'Data annotation tasks', lo: 20, hi: 60, math: null },
+      { id: 'prolific', url: 'https://www.prolific.com/', name: 'Prolific', desc: 'Academic studies — the best-paying survey site', lo: 20, hi: 60, math: null },
+      { id: 'rev', url: 'https://www.rev.com/freelancers/transcription', name: 'Rev / TranscribeMe', desc: 'Transcription, paid per audio minute', lo: 30, hi: 80, math: null },
+      { id: 'appen', url: 'https://appen.com/jobs/', name: 'Appen / Clickworker / Telus', desc: 'Data annotation tasks', lo: 20, hi: 60, math: null },
       { id: 'campusresearch', name: 'Campus research studies', desc: 'Check Plattsburgh psych department postings', lo: 10, hi: 40, math: null }
     ] },
   { name: '\uD83D\uDCBB Freelance & remote',
     note: null,
     options: [
       { id: 'va', name: 'Virtual assistant', desc: '$15\u201325/hr — email, scheduling, data entry', lo: 180, hi: 300, math: '3 hrs/wk \u00D7 $20/hr' },
-      { id: 'fiverr', name: 'Fiverr / Upwork', desc: 'Freelance writing and small gigs', lo: 50, hi: 150, math: null },
-      { id: 'printify', name: 'Printify', desc: 'Print-on-demand — no inventory needed', lo: 0, hi: 50, math: 'slow ramp' }
+      { id: 'fiverr', url: 'https://www.fiverr.com/', name: 'Fiverr / Upwork', desc: 'Freelance writing and small gigs', lo: 50, hi: 150, math: null },
+      { id: 'printify', url: 'https://www.printify.com/', name: 'Printify', desc: 'Print-on-demand — no inventory needed', lo: 0, hi: 50, math: 'slow ramp' }
     ] },
   { name: '\uD83D\uDCB0 Sell what you know or own',
     note: null,
     options: [
-      { id: 'stuvia', name: 'Stuvia / Nexus Notes', desc: 'Sell your class notes', lo: 10, hi: 40, math: null },
-      { id: 'sellitems', name: 'Sell owned items', desc: 'Facebook Marketplace — meet on campus in public', lo: 20, hi: 100, math: null },
-      { id: 'trackguide', name: 'Track training guide (PDF)', desc: 'Gumroad/Etsy — your own knowledge only, never promise \u201Cguaranteed\u201D results', lo: 10, hi: 60, math: null }
+      { id: 'stuvia', url: 'https://www.stuvia.com/', name: 'Stuvia / Nexus Notes', desc: 'Sell your class notes', lo: 10, hi: 40, math: null },
+      { id: 'sellitems', url: 'https://www.facebook.com/marketplace/', name: 'Sell owned items', desc: 'Facebook Marketplace — meet on campus in public', lo: 20, hi: 100, math: null },
+      { id: 'trackguide', url: 'https://gumroad.com/', name: 'Track training guide (PDF)', desc: 'Gumroad/Etsy — your own knowledge only, never promise \u201Cguaranteed\u201D results', lo: 10, hi: 60, math: null }
     ] },
   { name: '\uD83C\uDFEB Campus',
     note: null,
     options: [
-      { id: 'handshake', name: 'Handshake campus job', desc: '\u2248$16\u201316.50/hr', lo: 260, hi: 300, math: '4 hrs/wk \u00D7 $16.25' },
+      { id: 'handshake', url: 'https://joinhandshake.com/', name: 'Handshake campus job', desc: '\u2248$16\u201316.50/hr', lo: 260, hi: 300, math: '4 hrs/wk \u00D7 $16.25' },
       { id: 'coaching', name: 'Private sprint coaching', desc: '$30\u201350/hr — MUST clear with Plattsburgh athletics compliance first', lo: 240, hi: 400, math: '2 hrs/wk \u00D7 $40/hr' }
     ] },
   { name: '\uD83C\uDFAE Gaming (PC)',
     note: 'Gaming money is slow except DevEx on a game with players — treat the rest as long shots.',
     options: [
-      { id: 'devex', name: 'Pet Power DevEx', desc: 'His published Roblox game — $0.0038/Robux cash-out, 30K Robux minimum (\u2248$114+). Most realistic gaming income since the game is already live.', lo: 0, hi: 100, math: '$114 per 30K Robux cash-out' },
-      { id: 'betatesting-game', name: 'BetaTesting — game tests', desc: '$10\u2013150+ per game playtest (game tests appear here too)', lo: 10, hi: 75, math: '\u22481 test/mo' },
-      { id: 'remoteqa', name: 'Remote game QA', desc: 'Lionbridge, Keywords Studios — real jobs, usually want experience', lo: 0, hi: 150, math: null },
-      { id: 'streaming', name: 'Streaming', desc: 'Twitch/YouTube/TikTok — honest note: $0 for a long while, needs a consistent schedule', lo: 0, hi: 25, math: null },
-      { id: 'gamecoaching', name: 'Game coaching', desc: 'Metafy, Gamer Sensei — $10\u201330/hr, only if high-ranked in a popular game', lo: 0, hi: 120, math: '2 hrs/wk \u00D7 $20/hr' },
-      { id: 'tournaments', name: 'Small tournaments', desc: 'Battlefy, Challengermode — small prize pools, needs real skill', lo: 0, hi: 40, math: null }
+      { id: 'devex', url: 'https://create.roblox.com/docs/production/monetization/developer-exchange', name: 'Pet Power DevEx', desc: 'His published Roblox game — $0.0038/Robux cash-out, 30K Robux minimum (\u2248$114+). Most realistic gaming income since the game is already live.', lo: 0, hi: 100, math: '$114 per 30K Robux cash-out' },
+      { id: 'betatesting-game', url: 'https://betatesting.com/beta-testers', name: 'BetaTesting — game tests', desc: '$10\u2013150+ per game playtest (game tests appear here too)', lo: 10, hi: 75, math: '\u22481 test/mo' },
+      { id: 'remoteqa', url: 'https://www.lionbridgegames.com/', name: 'Remote game QA', desc: 'Lionbridge, Keywords Studios — real jobs, usually want experience', lo: 0, hi: 150, math: null },
+      { id: 'streaming', url: 'https://www.twitch.tv/', name: 'Streaming', desc: 'Twitch/YouTube/TikTok — honest note: $0 for a long while, needs a consistent schedule', lo: 0, hi: 25, math: null },
+      { id: 'gamecoaching', url: 'https://metafy.gg/', name: 'Game coaching', desc: 'Metafy, Gamer Sensei — $10\u201330/hr, only if high-ranked in a popular game', lo: 0, hi: 120, math: '2 hrs/wk \u00D7 $20/hr' },
+      { id: 'tournaments', url: 'https://battlefy.com/', name: 'Small tournaments', desc: 'Battlefy, Challengermode — small prize pools, needs real skill', lo: 0, hi: 40, math: null }
     ] }
 ];
 
@@ -2079,7 +2079,7 @@ function renderEarn(){
     g.options.forEach(function(o){
       var on = !!(S.earn && S.earn[o.id]);
       html += '<div class="earn-row">' +
-        '<div class="earn-info"><div class="earn-name">' + o.name + '</div>' +
+        '<div class="earn-info"><div class="earn-name">' + (o.url ? '<a class="earn-link" href="' + o.url + '" target="_blank" rel="noopener">' + o.name + '</a>' : o.name) + '</div>' +
         '<div class="earn-desc">' + o.desc + '</div></div>' +
         '<div class="earn-est">$' + o.lo + '\u2013$' + o.hi + '/mo' +
         (o.math ? '<span class="earn-math">' + o.math + '</span>' : '') + '</div>' +

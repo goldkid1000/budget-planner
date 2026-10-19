@@ -1,8 +1,8 @@
 {
-  "version": "2.4.0",
+  "version": "2.4.1",
   "updated": "2026-10-19",
   "notify": true,
   "notes": [
-    "Sovereign visual rework: noir-lux banking theme \u2014 champagne gold on warm charcoal, hairline gold dividers, serif display numerals, subtle grain + vignette. True fullscreen on mobile (edge-to-edge, notch-safe). Nothing else changed \u2014 all 8 tabs and every feature work exactly as before."
+    "Earn tab: every option now links to its real signup site (tap the name)."
   ]
 }

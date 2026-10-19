@@ -513,6 +513,9 @@ input[type=checkbox]{accent-color:var(--green)}
 .earn-row:last-child{border-bottom:none}
 .earn-info{flex:1;min-width:0}
 .earn-name{font-weight:700;font-size:.95rem}
+.earn-link{color:inherit;text-decoration:underline dotted;text-decoration-color:var(--gold,#d4af6a);text-underline-offset:3px}
+.earn-link:hover{color:var(--gold,#d4af6a)}
+.earn-link::after{content:' ↗';font-size:.75em}
 .earn-desc{font-size:.82rem;color:var(--muted);line-height:1.4;margin-top:2px}
 .earn-est{font-size:.85rem;font-weight:700;color:var(--amber);white-space:nowrap}
 .earn-math{display:block;font-size:.75rem;color:var(--faint);font-weight:400}
