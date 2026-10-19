@@ -1,8 +1,9 @@
 {
-  "version": "2.4.2",
+  "version": "2.4.3",
   "updated": "2026-10-19",
   "notify": true,
   "notes": [
-    "Fixed white bar behind the status bar on mobile (solid charcoal under the safe area). Header title is now solid champagne \u2014 crisper, no washed-out gradient."
+    "Donut center amount now auto-shrinks to fit big numbers \u2014 no more overlap with the ring.",
+    "Tightened a couple of Budget tab wordings."
   ]
 }

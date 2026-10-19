@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.4.3",
+      "date": "Oct 19, 2026",
+      "notes": [
+        "Donut center amount now auto-shrinks so large amounts fit inside the hole instead of overlapping the ring.",
+        "More breathing room above the donut label.",
+        "Tightened a couple of Budget tab wordings."
+      ]
+    },
+    {
       "v": "2.4.2",
       "date": "Oct 19, 2026",
       "notify": true,

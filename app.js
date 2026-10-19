@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.4.2';
+var APP_VERSION = '2.4.3';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -596,7 +596,9 @@ function setMoneyText(el, value, fmt){
   var prev = (el._moneyCurrent !== undefined) ? el._moneyCurrent : null;
   if(el._moneyRaf){ if(typeof cancelAnimationFrame !== 'undefined'){ try{ cancelAnimationFrame(el._moneyRaf); }catch(e){} } el._moneyRaf = 0; }
   if(prev === null || REDUCED_MOTION || typeof requestAnimationFrame === 'undefined'){
-    el.textContent = fmtFn(target); el._moneyCurrent = target; return;
+    el.textContent = fmtFn(target); el._moneyCurrent = target;
+    if(el.id === 'donutLeft') fitDonutValue();
+    return;
   }
   var start = prev, startT = null, DUR = 220;
   function step(ts){
@@ -607,7 +609,7 @@ function setMoneyText(el, value, fmt){
     el._moneyCurrent = cur;
     el.textContent = fmtFn(cur);
     if(p < 1){ el._moneyRaf = requestAnimationFrame(step); }
-    else { el._moneyRaf = 0; el._moneyCurrent = target; el.textContent = fmtFn(target); }
+    else { el._moneyRaf = 0; el._moneyCurrent = target; el.textContent = fmtFn(target); if(el.id === 'donutLeft') fitDonutValue(); }
   }
   el._moneyRaf = requestAnimationFrame(step);
 }
@@ -687,6 +689,39 @@ function renderBudget(){
   renderGoal();
 }
 
+/* v2.4.3: auto-shrink the donut center amount so big numbers never
+   overflow the hole and touch the ring. Canvas-measured, serif kept. */
+var _donutFitCanvas = null;
+var _donutFitBasePx = 0;
+function fitDonutValue(){
+  if(!fitDonutValue._bound){
+    fitDonutValue._bound = true;
+    window.addEventListener('resize', fitDonutValue);
+    window.addEventListener('orientationchange', fitDonutValue);
+  }
+  var dl = document.getElementById('donutLeft');
+  var wrap = document.querySelector('.donut-wrap');
+  if(!dl || !wrap || !wrap.clientWidth) return;
+  if(!_donutFitCanvas){ _donutFitCanvas = document.createElement('canvas'); }
+  var ctx = _donutFitCanvas.getContext('2d');
+  if(!ctx) return;
+  if(!_donutFitBasePx){
+    var basePx = 29.6;
+    try{ basePx = parseFloat(window.getComputedStyle(dl).fontSize) || 29.6; }catch(e){}
+    _donutFitBasePx = basePx;
+  }
+  var text = dl.textContent || '';
+  /* donut hole = 126/200 of the wrap width; keep an 8% margin inside it */
+  var maxW = wrap.clientWidth * 0.63 * 0.92;
+  var size = _donutFitBasePx, MIN = 11, guard = 0;
+  ctx.font = '';
+  while(size > MIN && guard++ < 40){
+    ctx.font = '700 ' + size + 'px Georgia,"Times New Roman",serif';
+    if(ctx.measureText(text).width <= maxW) break;
+    size -= 1;
+  }
+  dl.style.fontSize = size + 'px';
+}
 function renderBudgetSummary(){
   /* Budget anchors on the money the user HAS:
      money I have + money coming in − bills due − planned spending = left */
@@ -733,7 +768,7 @@ function renderBudgetSummary(){
     ? fmtHrs(hrs) + ' paid hrs/week' + (p.otHrs > 0.001 ? ' (' + fmtHrs(p.regHrs) + ' regular + ' + fmtHrs(p.otHrs) + ' OT at 1.5×)' : '') + ' × ' + money(S.rate) + '/hr = ' +
       money(p.weeklyGross) + ' gross → ' + money(weeklyNet) + ' take-home/week (' + pctTaken +
       '% taken off) → × 52 ÷ 12 = ' + money(p.monthlyNet) + ' / month. A month averages 4⅓ weeks, so this is more than 4 weekly paychecks.'
-    : 'No income entered yet — set your hours and rate in the Paycheck tab and this will show the full math.';
+    : 'No income yet — set your hours and rate in the Paycheck tab.';
   /* live stamp: proves the numbers just re-rendered */
   var stampEl = document.getElementById('budgetUpdatedStamp');
   if(stampEl) stampEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -742,7 +777,7 @@ function renderBudgetSummary(){
   var overrideActive = (S.startingMoney !== null && S.startingMoney !== undefined && S.startingMoney !== '' && isFinite(Number(S.startingMoney)));
   var srcEl = document.getElementById('startingMoneySource');
   if(srcEl) srcEl.textContent = overrideActive
-    ? 'Using the number you typed here (' + money(S.startingMoney) + '). Changes in My Money will not change this until you clear it.'
+    ? 'Using what you typed (' + money(S.startingMoney) + '). My Money won\u2019t change this until you clear it.'
     : 'Following your My Money balances (' + money(num(S.saved) + num(S.checking)) + ').';
   var clrBtn = document.getElementById('clearStartingMoneyBtn');
   if(clrBtn) clrBtn.hidden = !overrideActive;
