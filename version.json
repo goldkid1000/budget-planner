@@ -1,8 +1,8 @@
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "updated": "2026-10-19",
   "notify": true,
   "notes": [
-    "Full visual rework: premium dark fintech theme — new palette, gradient cards/buttons, glassy mobile tab bar, polished forms, refined typography. All features unchanged."
+    "Duotone rework: mint + amber on deeper layered dark \u2014 stronger visual hierarchy, halo + sheen on the donut, duotone goal progress, accent-rail sidebar, tighter mobile tab bar. All features unchanged."
   ]
 }

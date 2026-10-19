@@ -321,3 +321,177 @@ svg.donut circle{transition:stroke-dasharray .45s ease,stroke-dashoffset .45s ea
 .donut-summary strong,#leftLine,#moneyCanSpend,#takeHomeOut{font-weight:800;letter-spacing:-.01em}
 /* Focus-visible for keyboard users */
 button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+/* ================================================================
+   v2.2.0 — "Duotone" rework: mint + amber on deeper layered dark.
+   Same selectors, same JS contract, deeper visual hierarchy.
+   ================================================================ */
+:root{
+  --bg:#05080a;
+  --bg2:#090d0b;
+  --card:#0f1512;
+  --card2:#141b16;
+  --line:#24332c;
+  --line-soft:#18211c;
+  --ink:#f5faf6;
+  --muted:#a8bcb0;
+  --green:#2ed573;
+  --green-hi:#5cf0a0;
+  --green-deep:#149a4c;
+  --amber:#e8b34b;
+  --amber-hi:#ffd97a;
+  --link:#9df5c0;
+  --radius:18px;
+  --input-bg:#0c120e;
+  --track:#151d18;
+  --shadow:0 10px 28px rgba(0,0,0,.5);
+  --glow:0 0 0 3px rgba(46,213,115,.2);
+}
+body{
+  background:
+    radial-gradient(900px 480px at 12% -8%,rgba(46,213,115,.09) 0%,transparent 55%) fixed,
+    radial-gradient(800px 520px at 92% 108%,rgba(232,179,75,.07) 0%,transparent 55%) fixed,
+    radial-gradient(1200px 500px at 50% -10%,#0c1710 0%,var(--bg) 60%) fixed,
+    var(--bg);
+}
+::selection{background:rgba(232,179,75,.3)}
+
+/* ---------- header: duotone hairline ---------- */
+.topbar{background:linear-gradient(135deg,#0a3520 0%,#082a1a 55%,#062016 100%);
+  border-bottom:none;position:relative;
+  box-shadow:0 6px 28px rgba(0,0,0,.45)}
+.topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
+  background:linear-gradient(90deg,transparent,#2ed573 22%,#e8b34b 78%,transparent)}
+.topbar h1{font-size:1.9rem}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .topbar h1{background:linear-gradient(180deg,#ffffff 30%,#c8f4da 75%,#f4e3bb 130%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+}
+.tagline{color:#b7d6c2}
+
+/* ---------- layout rhythm ---------- */
+.layout{gap:26px;padding:24px 18px 96px;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+
+/* ---------- view titles: stronger hierarchy ---------- */
+.view h2{margin:4px 0 20px;font-size:1.65rem;font-weight:800;letter-spacing:-.02em;position:relative;padding-bottom:12px}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .view h2{background:linear-gradient(120deg,#ffffff 20%,#b9f5d4 70%,#ffe1a1 110%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+}
+.view h2::after{content:"";position:absolute;left:0;bottom:0;width:44px;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--green),var(--amber))}
+
+/* ---------- cards: richer depth, duotone title accent ---------- */
+.card{background:linear-gradient(180deg,#111814 0%,#0d120e 60%,#0b0f0c 100%);
+  border:1px solid var(--line-soft);border-radius:var(--radius);padding:22px;margin-bottom:18px;
+  box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.05)}
+.card > h3:first-child::after{width:40px;height:3px;
+  background:linear-gradient(90deg,var(--green) 0%,var(--amber) 100%)}
+.card h3{font-size:1.22rem}
+.card p.explain,.card p.hint{max-width:62ch}
+
+/* ---------- donut: halo + sheen, bigger on desktop ---------- */
+.donut-card{position:relative;overflow:hidden}
+.donut-card::before{content:"";position:absolute;top:-70px;right:-70px;width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,rgba(232,179,75,.1),transparent 65%);pointer-events:none}
+.donut-wrap::before{content:"";position:absolute;inset:-26px;border-radius:50%;z-index:0;
+  background:radial-gradient(circle,rgba(46,213,115,.16) 0%,rgba(232,179,75,.09) 48%,transparent 68%)}
+.donut{position:relative;z-index:1}
+.donut-center{z-index:1}
+.donut-value{font-size:1.85rem}
+.donut-summary{font-size:1.08rem}
+@media (prefers-reduced-motion: no-preference){
+  .donut-wrap::after{content:"";position:absolute;inset:-13px;border-radius:50%;z-index:0;pointer-events:none;
+    background:conic-gradient(from 0deg,transparent 0 38%,rgba(46,213,115,.14) 50%,transparent 62% 100%);
+    animation:donut-sheen 10s linear infinite}
+  @keyframes donut-sheen{to{transform:rotate(360deg)}}
+}
+@media (min-width:1024px){
+  .donut-wrap{width:216px;height:216px}
+  .donut{width:216px;height:216px}
+}
+
+/* ---------- progress: duotone fill ---------- */
+.progress-track{height:22px}
+.progress-fill{background:linear-gradient(90deg,var(--green-deep),var(--green) 55%,var(--amber))}
+
+/* ---------- results: accent rail ---------- */
+.result-box{border-left:3px solid var(--green);padding:16px 18px}
+.result-box .result-line strong,#leftLine,#moneyCanSpend,#takeHomeOut{color:#fff}
+
+/* ---------- sidebar: accent rail on active ---------- */
+.nav-btn{position:relative;overflow:hidden}
+.nav-btn.active{background:linear-gradient(135deg,#149a4c,#2ed573 70%,#7ce8ab);color:#04230f;border-color:transparent;
+  box-shadow:0 6px 20px rgba(46,213,115,.35)}
+.nav-btn.active::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:2px;background:var(--amber)}
+.nav-btn:hover{transform:translateX(2px)}
+
+/* ---------- buttons: duotone primary ---------- */
+.btn-primary{background:linear-gradient(135deg,#149a4c,#2ed573 60%,#5cf0a0);color:#03220f;
+  box-shadow:0 6px 20px rgba(46,213,115,.35),inset 0 1px 0 rgba(255,255,255,.35)}
+.btn-primary:hover{filter:brightness(1.07)}
+.btn-chip.active{background:linear-gradient(135deg,#149a4c,#2ed573);color:#fff}
+
+/* ---------- forms: warmer focus ---------- */
+.field input:focus,.field select:focus,.add-row input:focus,.add-row select:focus,.add-row textarea:focus,.import-panel textarea:focus{
+  border-color:var(--green-hi);box-shadow:0 0 0 3px rgba(46,213,115,.2),0 0 18px rgba(46,213,115,.12)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%232ed573' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")}
+input[type=range]{accent-color:var(--green)}
+input[type=checkbox]{accent-color:var(--green)}
+
+/* ---------- rows: hover affordance ---------- */
+.cat-row,.bill-row{border-radius:10px;margin:0 -8px;padding-left:8px;padding-right:8px}
+@media (hover:hover){
+  .cat-row:hover,.bill-row:hover{background:rgba(46,213,115,.05)}
+}
+.bill-auto{background:rgba(46,213,115,.12);color:var(--link);border-color:rgba(46,213,115,.3)}
+
+/* ---------- hints: info-strip treatment ---------- */
+.hint{border-left:3px solid rgba(232,179,75,.45);padding-left:12px}
+
+/* ---------- stocks / discounts cards: unified depth ---------- */
+.stock-card,.disc-card{background:linear-gradient(180deg,#121814,#0c100d);border-radius:14px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 6px 18px rgba(0,0,0,.35)}
+@media (hover:hover){
+  .stock-card,.disc-card{transition:transform .16s ease,box-shadow .16s ease}
+  .stock-card:hover,.disc-card:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 10px 24px rgba(0,0,0,.45)}
+}
+.disc-card{border-left:3px solid transparent}
+.disc-card:has(.result-line.txn-pos){border-left-color:var(--green)}
+.mini-chart{border-color:var(--line-soft)}
+
+/* ---------- install banner: duotone ---------- */
+.install-row{background:linear-gradient(135deg,rgba(46,213,115,.16),rgba(232,179,75,.1));
+  border:1px solid rgba(46,213,115,.3);padding:16px 18px}
+
+/* ---------- update banner ---------- */
+.update-banner{background:linear-gradient(180deg,#0f241a,#0c1c13);border-bottom:2px solid var(--green)}
+
+/* ---------- footer hairline ---------- */
+.footer{border-top:1px solid var(--line-soft);margin-top:8px}
+
+/* ---------- empty states ---------- */
+.txn-list:empty::after{content:"Nothing here yet — add your first entry above.";display:block;
+  color:var(--faint);font-size:.92rem;text-align:center;padding:22px 12px;border:1px dashed var(--line);
+  border-radius:12px;margin-top:4px}
+
+/* ---------- mobile: 7-tab bar fitting at 390px ---------- */
+@media (max-width:1023px){
+  .layout{padding-left:14px;padding-right:14px}
+  .bottomnav{padding:6px 2px calc(8px + env(safe-area-inset-bottom))}
+  .bottomnav .nav-btn{flex:1 1 0;min-width:44px;min-height:52px;padding:8px 2px;font-size:1.1rem;gap:3px}
+  .bottomnav .nav-btn span{font-size:.62rem;line-height:1.15}
+  .bottomnav .nav-btn.active{color:#04230f;background:linear-gradient(135deg,#2ed573,#7ce8ab);
+    box-shadow:0 4px 14px rgba(46,213,115,.4)}
+  .bottomnav .nav-btn.active span{font-weight:700}
+}
+@media (max-width:600px){
+  .topbar h1{font-size:1.6rem}
+  .view h2{font-size:1.45rem}
+  .card{padding:18px}
+  .layout{gap:20px}
+  .btn-primary{width:100%;padding:14px 18px;min-height:48px}
+  .add-row .btn-primary{width:auto;min-width:44px}
+  .cat-row input[type=number]{width:92px}
+  .bill-row input[type=date]{width:138px}
+  .field input,.field select,.add-row input,.add-row select{min-height:46px}
+  .check input{width:26px;height:26px}
+}
