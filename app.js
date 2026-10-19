@@ -1,7 +1,7 @@
-/* Budget Planner v1.3.1 — all data stays in localStorage on this device. */
+/* Budget Planner v2.0.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '1.3.1';
+var APP_VERSION = '2.0.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -220,7 +220,10 @@ function deriveDedFromStub(gross, lines){
    dateStr, shortfall, extraHours }. 'far' = over 50 years at this pace. */
 function calcGoalProjection(goal, saved, monthlyLeftover, rate, effRate){
   var toGo = Math.max(num0(goal) - num0(saved), 0);
-  if(toGo <= 0) return { status: 'reached', toGo: 0, months: 0, dateStr: '', shortfall: 0, extraHours: 0 };
+  /* v2.0.0: a $0 goal is not "reached" — it means no goal was set yet */
+  if(toGo <= 0) return num0(goal) > 0
+    ? { status: 'reached', toGo: 0, months: 0, dateStr: '', shortfall: 0, extraHours: 0 }
+    : { status: 'noset', toGo: 0, months: 0, dateStr: '', shortfall: 0, extraHours: 0 };
   var leftover = num0(monthlyLeftover);
   if(leftover > 0){
     var months = Math.ceil(toGo / leftover);
@@ -357,6 +360,29 @@ function calcEstimateTaxes(weeklyGross, stateCode){
   return { federalAnnual: federalAnnual, stateAnnual: stateAnnual, stateName: st.name, noStateTax: false };
 }
 
+/* v2.0.0 employer presets — starting points only, the rate stays editable.
+   Nothing here is personal data: these are public job titles + typical rates. */
+var EMPLOYERS = {
+  custom:   { name: 'Custom', rate: null },
+  walmart:  { name: 'Walmart — Digital Personal Shopper', rate: 16 },
+  target:   { name: 'Target', rate: 16 },
+  amazon:   { name: 'Amazon warehouse', rate: 19 },
+  mcdonalds:{ name: "McDonald's", rate: 15 }
+};
+/* ---------- v2.0.0: employer presets ---------- */
+function employerForKey(key){ return EMPLOYERS[key] || EMPLOYERS.custom; }
+
+/* ---------- v2.0.0: device sync code (manual one-time transfer, no server) ---------- */
+function syncEncode(payload){
+  var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function syncDecode(code){
+  var b64 = String(code).replace(/-/g, '+').replace(/_/g, '/');
+  while(b64.length % 4) b64 += '=';
+  return decodeURIComponent(escape(atob(b64)));
+}
+
 if (typeof module !== 'undefined' && module.exports){
   module.exports = { round2: round2, money: money, money0: money0, calcPaycheck: calcPaycheck,
     deriveDedFromStub: deriveDedFromStub,
@@ -364,7 +390,7 @@ if (typeof module !== 'undefined' && module.exports){
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
     calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
-    calcGoalProjection: calcGoalProjection, watchlistStatus: watchlistStatus,
+    calcGoalProjection: calcGoalProjection, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
     FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
 }
@@ -377,6 +403,7 @@ var COLORS = ['#46d98a','#4db2ff','#f2c14e','#b48cff','#ff7a70','#2dd4bf','#f472
 
 var DEFAULTS = {
   hours: 0, rate: 0, freq: 'weekly',
+  employerKey: 'custom',
   hoursMode: 'total',
   mealTotal: 0,
   shifts: [],
@@ -397,7 +424,9 @@ var DEFAULTS = {
   bills: [],
   stateCode: 'NY',
   watchlist: [],
-  dealsRefreshedAt: null
+  dealsRefreshedAt: null,
+  stocks: [],
+  syncUsed: []
 };
 
 var STUDENT = [
@@ -460,6 +489,12 @@ S.shifts.forEach(function(sh){
 if(S.breakTotal === undefined) S.breakTotal = 0;
 if(!S.statementTxns) S.statementTxns = [];
 if(S.statementInfo === undefined) S.statementInfo = null;
+/* v2.0.0: new fields */
+if(S.employerKey === undefined) S.employerKey = 'custom';
+if(!S.stocks) S.stocks = [];
+if(!S.syncUsed) S.syncUsed = [];
+S.watchlist.forEach(function(it){ if(!it.history) it.history = []; if(it.store === undefined) it.store = 'Other'; });
+S.stocks.forEach(function(st){ if(!st.history) st.history = []; });
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function num(v, d){ var n = parseFloat(v); return isFinite(n) ? n : (d || 0); }
 
@@ -523,6 +558,7 @@ function setMoneyText(el, value, fmt){
 /* donut circles are kept across renders so the CSS transition can glide
    them to their new sizes instead of rebuilding them every keystroke */
 var donutCircleEls = [];
+var donutPrevLeft = 0;
 function renderDonut(slices, total){
   var svg = document.getElementById('donutSvg');
   if(!svg) return;
@@ -557,6 +593,19 @@ function renderDonut(slices, total){
     c.setAttribute('stroke-dasharray', dash.toFixed(1) + ' ' + (C - dash).toFixed(1));
     c.setAttribute('stroke-dashoffset', (-acc).toFixed(1));
     acc += dash;
+    /* v2.0.0: tap/hover a slice to see its details */
+    if(!c._detailBound){
+      c._detailBound = true;
+      c.style.cursor = 'pointer';
+      (function(lbl, val){
+        var show = function(){
+          var d = document.getElementById('donutDetail');
+          if(d && total > 0) d.textContent = lbl + ' — ' + money(val) + ' (' + Math.round(val / total * 100) + '% of ' + money(total) + ')';
+        };
+        c.addEventListener('click', show);
+        c.addEventListener('mouseover', show);
+      })(s.label || 'Slice', s.value);
+    }
   });
   while(donutCircleEls.length > slices.length){
     var extra = donutCircleEls.pop();
@@ -567,7 +616,7 @@ function renderDonut(slices, total){
 function renderAll(){
   renderBudget(); renderPaycheck(); renderMyMoney(); renderBills();
   renderDiscountsStatic(); renderDiscountCalc(); renderCashbackEst();
-  renderCalculators(); renderWatchlist();
+  renderCalculators(); renderWatchlist(); renderStocks();
 }
 
 function renderBudget(){
@@ -596,6 +645,18 @@ function renderBudgetSummary(){
   setMoneyText(document.getElementById('spendLine'), spend);
   setMoneyText(document.getElementById('leftLine'), left);
   setMoneyText(document.getElementById('donutLeft'), left, money0);
+  /* v2.0.0 grow/shrink pulse: the center number pops up or down with the change */
+  (function(){
+    var dl = document.getElementById('donutLeft');
+    if(!dl) return;
+    var dir = left > donutPrevLeft ? 'pulse-up' : (left < donutPrevLeft ? 'pulse-down' : '');
+    donutPrevLeft = left;
+    if(dir && !REDUCED_MOTION){
+      dl.classList.remove('pulse-up', 'pulse-down');
+      void dl.offsetWidth;
+      dl.classList.add(dir);
+    }
+  })();
   document.getElementById('donutSub').textContent = left >= 0 ? 'left this month' : 'over budget';
   document.getElementById('overBudgetWarn').hidden = left >= 0;
   var haveEl = document.getElementById('budgetHaveLine');
@@ -611,9 +672,11 @@ function renderBudgetSummary(){
   var weeklyNet = p.weeklyGross * (1 - p.effRate);
   var pctTaken = (p.effRate * 100).toFixed(2).replace(/\.?0+$/, '');
   var bdEl = document.getElementById('incomeBreakdown');
-  if(bdEl) bdEl.textContent = fmtHrs(hrs) + ' paid hrs/week × ' + money(S.rate) + '/hr = ' +
-    money(p.weeklyGross) + ' gross → ' + money(weeklyNet) + ' take-home/week (' + pctTaken +
-    '% taken off) → × 52 ÷ 12 = ' + money(p.monthlyNet) + ' / month. A month averages 4⅓ weeks, so this is more than 4 weekly paychecks.';
+  if(bdEl) bdEl.textContent = income > 0
+    ? fmtHrs(hrs) + ' paid hrs/week × ' + money(S.rate) + '/hr = ' +
+      money(p.weeklyGross) + ' gross → ' + money(weeklyNet) + ' take-home/week (' + pctTaken +
+      '% taken off) → × 52 ÷ 12 = ' + money(p.monthlyNet) + ' / month. A month averages 4⅓ weeks, so this is more than 4 weekly paychecks.'
+    : 'No income entered yet — set your hours and rate in the Paycheck tab and this will show the full math.';
   /* live stamp: proves the numbers just re-rendered */
   var stampEl = document.getElementById('budgetUpdatedStamp');
   if(stampEl) stampEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -632,10 +695,10 @@ function renderBudgetSummary(){
   var total = Math.max(spend + bills + Math.max(left, 0), 1);
   var slices = [];
   S.categories.forEach(function(c, i){
-    if(num(c.amount) > 0) slices.push({ value: num(c.amount), color: COLORS[i % COLORS.length] });
+    if(num(c.amount) > 0) slices.push({ label: c.name || 'Category', value: num(c.amount), color: COLORS[i % COLORS.length] });
   });
-  if(bills > 0) slices.push({ value: bills, color: '#e8b34b' });
-  if(left > 0) slices.push({ value: left, color: '#3d4d45' });
+  if(bills > 0) slices.push({ label: 'Bills due', value: bills, color: '#e8b34b' });
+  if(left > 0) slices.push({ label: "You'll have left", value: left, color: '#3d4d45' });
   renderDonut(slices, total);
   /* the goal projection depends on these same numbers, so it recomputes
      on every keystroke of every money input — not just its own fields */
@@ -679,6 +742,7 @@ function renderGoal(){
   var proj = calcGoalProjection(S.goal, S.saved, monthlyLeftover, S.rate, p.effRate);
   var pace = document.getElementById('paceLine');
   if(proj.status === 'reached'){ pace.textContent = '🎉 Goal reached — nice work.'; }
+  else if(proj.status === 'noset'){ pace.textContent = 'Set a savings goal above and this will project the date you\'ll reach it.'; }
   else if(proj.status === 'date'){
     pace.textContent = 'You\'ll hit ' + money0(S.goal) + ' by ' + proj.dateStr +
       ' — saving about ' + money(monthlyLeftover) + '/month, about ' + proj.months +
@@ -713,6 +777,16 @@ function renderPaycheck(){
   /* state picker drives the estimate; a saved pay stub overrides it */
   var stateSel = document.getElementById('stateSelect');
   if(stateSel) stateSel.value = S.stateCode || 'NY';
+  /* v2.0.0 employer preset drives the rate (rate stays editable after) */
+  var empSel = document.getElementById('employerSelect');
+  if(empSel) empSel.value = S.employerKey || 'custom';
+  var empHint = document.getElementById('employerHint');
+  if(empHint){
+    var ep = employerForKey(S.employerKey);
+    empHint.textContent = (ep.rate !== null && ep.rate !== undefined)
+      ? ep.name + ' preset: $' + ep.rate + '/hr \u2014 starting point only, change the rate below if yours is different.'
+      : 'Custom \u2014 type your own rate below.';
+  }
   var estimateMode = !S.stubSaved;
   var fedInput = document.getElementById('federalInput');
   var nyInput = document.getElementById('nyInput');
@@ -967,6 +1041,15 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.0.0', notes: [
+    'Rebuilt for v2.0: where-you-work picker (Walmart, Target, Amazon, McDonald\u2019s, or custom) sets your rate with one tap \u2014 the rate stays editable, presets are starting points.',
+    'New Stocks tab (educational): watchlist with prices you type in, price-history charts with highs and lows, an allocation calculator, and beginner investing videos. Paper-trading only \u2014 nothing moves real money, and this is not financial advice.',
+    'Device sync code: generate a one-time code on your phone, paste it on your PC (or the other way), and everything moves over. No server, no account.',
+    'Deal Watchlist upgrade: store presets (Best Buy, Walmart, Amazon, Target, Newegg), per-item price history with a mini chart, and a target-hit alert.',
+    'Donut chart: tap any slice to see its category, amount, and share; the center number pops up or down as it changes.',
+    'Fixed empty states: the goal celebration only fires on a real goal you reached, and with no income entered the budget says so plainly instead of showing a $0 math chain.',
+    'New layout: phones get the single-column stacked cards with the bottom tab bar; PCs get a multi-column dashboard.'
+  ] },
   { version: '1.3.1', notes: [
     'Shifts now track your paid 15-minute breaks: every shift starts with a 15-minute break and a 30-minute meal, shown right on the shift line. Breaks are paid, so they never reduce your paid hours \u2014 the math line reads "8 hrs, meal 30 min (unpaid) \u2192 paid 7.5 hrs \u00b7 break 15 min (paid)". Old shifts pick up the 15-minute break automatically.'
   ] },
@@ -1162,19 +1245,26 @@ function renderWatchlist(){
     var safeUrl = String(item.url || '').trim();
     var href = /^https?:\/\//i.test(safeUrl) ? safeUrl : ('https://' + safeUrl);
     var statusClass = status.kind === 'deal' ? 'txn-pos' : (status.kind === 'notyet' ? 'txn-neg' : '');
+    var hist = item.history || [];
+    var statusText = (status.kind === 'deal' ? '🎯 ' : '') + status.text;
     row.innerHTML =
       '<h4><a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(item.name || 'Item') + ' ↗</a></h4>' +
+      '<p class="hint">🏪 ' + esc(item.store || 'Other') + '</p>' +
       '<p>Now: ' + (item.lastSeen !== null && item.lastSeen !== undefined && item.lastSeen !== '' ? money(item.lastSeen) : '—') +
       ' · Target: ' + money(item.target) + '</p>' +
-      '<p class="result-line ' + statusClass + '">' + esc(status.text) + '</p>' +
+      '<p class="result-line ' + statusClass + '">' + esc(statusText) + '</p>' +
       '<p class="hint">' + esc(fmtCheckedStamp(item.lastChecked)) + '</p>' +
+      '<canvas class="mini-chart" id="wlChart' + i + '" width="300" height="64" aria-label="Price history chart"></canvas>' +
+      '<p class="hint">' + (hist.length ? hist.length + ' logged price' + (hist.length === 1 ? '' : 's') + ' \u2014 the chart shows your highs and lows.' : 'Log prices over time to build a price-history chart.') + '</p>' +
       '<div class="add-row">' +
       '<input type="number" min="0" step="0.01" id="wlPrice' + i + '" placeholder="Price you see now ($)" aria-label="Price you see now">' +
       '<button class="btn-primary" data-wl-update="' + i + '" type="button">Update price</button>' +
+      '<button class="btn-mini" data-wl-log="' + i + '" type="button">Log price</button>' +
       '<button class="btn-mini" data-wl-check="' + i + '" type="button">Check price now</button>' +
       '<button class="btn-mini danger" data-wl-del="' + i + '" type="button">Remove</button>' +
       '</div>';
     list.appendChild(row);
+    drawPriceChart('wlChart' + i, hist);
   });
   var stamp = document.getElementById('dealsStamp');
   if(stamp) stamp.textContent = S.dealsRefreshedAt ? fmtCheckedStamp(S.dealsRefreshedAt) : 'Never refreshed yet.';
@@ -1509,6 +1599,93 @@ function bind(){
     save(); renderAll();
   });
 
+  /* v2.0.0 employer preset */
+  document.getElementById('employerSelect').addEventListener('change', function(e){
+    var key = e.target.value || 'custom';
+    S.employerKey = key;
+    var ep = employerForKey(key);
+    if(ep.rate !== null && ep.rate !== undefined) S.rate = ep.rate;
+    save(); renderAll();
+  });
+
+  /* v2.0.0 stocks */
+  document.getElementById('addStockBtn').addEventListener('click', function(){
+    var symEl = document.getElementById('stockSym');
+    var sym = symEl.value.trim().toUpperCase().replace(/[^A-Z.]/g, '');
+    if(!sym){ alert('Type a ticker symbol first.'); return; }
+    if(S.stocks.some(function(s){ return s.sym === sym; })){ alert(sym + ' is already on your watchlist.'); return; }
+    S.stocks.push({ sym: sym, price: null, change: null, high52: null, low52: null, history: [] });
+    symEl.value = ''; save(); renderStocks();
+  });
+  document.getElementById('stockSym').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') document.getElementById('addStockBtn').click();
+  });
+  var stockListEl = document.getElementById('stockList');
+  stockListEl.addEventListener('change', function(e){
+    var t = e.target, i = -1;
+    if(t.dataset.stockPrice !== undefined){ i = +t.dataset.stockPrice; S.stocks[i].price = num(t.value) || null; }
+    else if(t.dataset.stockChange !== undefined){ i = +t.dataset.stockChange; S.stocks[i].change = (t.value === '' ? null : num(t.value)); }
+    else if(t.dataset.stockHigh !== undefined){ i = +t.dataset.stockHigh; S.stocks[i].high52 = num(t.value) || null; }
+    else if(t.dataset.stockLow !== undefined){ i = +t.dataset.stockLow; S.stocks[i].low52 = num(t.value) || null; }
+    else return;
+    save(); renderStocks();
+  });
+  stockListEl.addEventListener('click', function(e){
+    var t = e.target;
+    if(t.dataset.stockLog !== undefined){
+      var i = +t.dataset.stockLog, st = S.stocks[i], pv = num(st.price);
+      if(!(pv > 0)){ alert('Type the current price first, then log it.'); return; }
+      st.history.push({ d: Date.now(), p: pv });
+      if(st.history.length > 90) st.history = st.history.slice(-90);
+      save(); renderStocks();
+    } else if(t.dataset.stockDel !== undefined){
+      S.stocks.splice(+t.dataset.stockDel, 1); save(); renderStocks();
+    }
+  });
+  document.getElementById('allocAmt').addEventListener('input', renderAlloc);
+
+  /* v2.0.0 device sync code */
+  document.getElementById('syncExportBtn').addEventListener('click', function(){
+    var payload = { v: 1,
+      id: 's' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36),
+      ts: Date.now(), state: S };
+    document.getElementById('syncCodeOut').value = syncEncode(payload);
+    document.getElementById('syncCopyBtn').hidden = false;
+    document.getElementById('syncStatus').textContent = 'Code generated \u2014 copy it, then paste it on your other device. Use it once.';
+  });
+  document.getElementById('syncCopyBtn').addEventListener('click', function(){
+    var ta = document.getElementById('syncCodeOut');
+    var status = document.getElementById('syncStatus');
+    function done(){ status.textContent = 'Copied \u2014 paste it on your other device.'; }
+    function manual(){ status.textContent = 'Copy didn\u2019t work \u2014 long-press the code to copy it manually.'; }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ta.value).then(done, manual);
+    } else { ta.select(); try{ document.execCommand('copy'); done(); }catch(e){ manual(); } }
+  });
+  document.getElementById('syncImportBtn').addEventListener('click', function(){
+    var raw = document.getElementById('syncCodeIn').value.trim();
+    var status = document.getElementById('syncStatus');
+    if(!raw){ status.textContent = 'Paste a sync code first.'; return; }
+    var pl;
+    try{ pl = JSON.parse(syncDecode(raw)); }
+    catch(e){ status.textContent = 'That code didn\u2019t decode \u2014 check you copied the whole thing.'; return; }
+    if(!pl || pl.v !== 1 || !pl.state || typeof pl.state !== 'object'){
+      status.textContent = 'That doesn\u2019t look like a Budget Planner sync code.'; return;
+    }
+    if((S.syncUsed || []).indexOf(pl.id) >= 0){
+      status.textContent = 'This code was already used on this device.'; return;
+    }
+    if(!window.confirm('Replace everything on this device with the synced data?')) return;
+    S = pl.state;
+    if(S.employerKey === undefined) S.employerKey = 'custom';
+    if(!S.stocks) S.stocks = [];
+    if(!S.syncUsed) S.syncUsed = [];
+    S.watchlist.forEach(function(it){ if(!it.history) it.history = []; });
+    S.syncUsed.push(pl.id);
+    save(); renderAll();
+    status.textContent = '\u2713 Synced \u2014 your numbers from the other device are now here.';
+  });
+
   /* deal watchlist */
   document.getElementById('addWatchlistBtn').addEventListener('click', function(){
     var name = document.getElementById('wlName').value.trim();
@@ -1517,8 +1694,11 @@ function bind(){
     var target = num(document.getElementById('wlTarget').value);
     if(!name){ alert('Give the item a name first.'); return; }
     if(!url){ alert('Paste the store link first.'); return; }
-    S.watchlist.push({ name: name, url: url, lastSeen: price > 0 ? price : null,
-      target: target, lastChecked: price > 0 ? Date.now() : null });
+    var storeEl = document.getElementById('wlStore');
+    S.watchlist.push({ name: name, store: storeEl ? storeEl.value : 'Other', url: url,
+      lastSeen: price > 0 ? price : null, target: target,
+      lastChecked: price > 0 ? Date.now() : null,
+      history: price > 0 ? [{ d: Date.now(), p: price }] : [] });
     document.getElementById('wlName').value = '';
     document.getElementById('wlUrl').value = '';
     document.getElementById('wlPrice').value = '';
@@ -1534,6 +1714,17 @@ function bind(){
       if(v <= 0){ alert('Type the price you see on the store page first.'); return; }
       S.watchlist[i].lastSeen = v;
       S.watchlist[i].lastChecked = Date.now();
+      save(); renderWatchlist();
+    } else if(t.dataset.wlLog !== undefined){
+      var k = +t.dataset.wlLog;
+      var logEl = document.getElementById('wlPrice' + k);
+      var lv = logEl ? num(logEl.value) : 0;
+      if(lv <= 0){ alert('Type the price you see on the store page first.'); return; }
+      if(!S.watchlist[k].history) S.watchlist[k].history = [];
+      S.watchlist[k].history.push({ d: Date.now(), p: lv });
+      if(S.watchlist[k].history.length > 60) S.watchlist[k].history = S.watchlist[k].history.slice(-60);
+      S.watchlist[k].lastSeen = lv;
+      S.watchlist[k].lastChecked = Date.now();
       save(); renderWatchlist();
     } else if(t.dataset.wlCheck !== undefined){
       var j = +t.dataset.wlCheck;
@@ -1606,6 +1797,76 @@ function bind(){
   document.getElementById('installHelpClose').addEventListener('click', function(){
     document.getElementById('installHelp').hidden = true;
   });
+}
+
+
+/* ---------- v2.0.0: price history mini chart (shared by stocks + watchlist) ---------- */
+function drawPriceChart(id, hist){
+  var cv = document.getElementById(id);
+  if(!cv || !cv.getContext) return;
+  var ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  var ps = (hist || []).map(function(h){ return num(h.p); }).filter(function(x){ return x > 0; });
+  if(ps.length < 2){
+    ctx.fillStyle = '#8a949c'; ctx.font = '11px sans-serif';
+    ctx.fillText('Log 2+ prices to see the chart', 8, H / 2 + 4);
+    return;
+  }
+  var hi = Math.max.apply(null, ps), lo = Math.min.apply(null, ps), span = (hi - lo) || 1;
+  var n = ps.length, slot = (W - 16) / n, bw = Math.max(2, slot - 3);
+  ps.forEach(function(val, i){
+    var h = 10 + (val - lo) / span * (H - 30);
+    var x = 8 + i * slot;
+    var up = i === 0 || val >= ps[i - 1];
+    ctx.fillStyle = up ? '#7fd6a8' : '#e06c6c';
+    ctx.fillRect(x, H - 8 - h, bw, h);
+  });
+  ctx.fillStyle = '#8a949c'; ctx.font = '10px sans-serif';
+  ctx.fillText('high ' + money(hi), W - 64, 11);
+  ctx.fillText('low ' + money(lo), W - 64, H - 1);
+}
+
+/* ---------- v2.0.0: stocks (educational paper-trading — prices are user-typed) ---------- */
+function renderStocks(){
+  var list = document.getElementById('stockList');
+  if(!list) return;
+  list.innerHTML = '';
+  if(!S.stocks.length){
+    list.innerHTML = '<p class="hint">No stocks yet \u2014 add a ticker above. Paper-trading only: prices you type, nothing real moves.</p>';
+  }
+  S.stocks.forEach(function(st, i){
+    var row = document.createElement('div'); row.className = 'stock-card';
+    var hist = st.history || [];
+    row.innerHTML =
+      '<h4>' + esc(String(st.sym || '').toUpperCase()) + '</h4>' +
+      '<div class="add-row">' +
+      '<input type="number" min="0" step="0.01" placeholder="Price you see ($)" value="' + (st.price || '') + '" data-stock-price="' + i + '" aria-label="Current price">' +
+      '<input type="number" step="0.01" placeholder="Day change %" value="' + (st.change === null || st.change === undefined ? '' : st.change) + '" data-stock-change="' + i + '" aria-label="Day change percent">' +
+      '</div>' +
+      '<div class="add-row">' +
+      '<input type="number" min="0" step="0.01" placeholder="52-wk high ($)" value="' + (st.high52 || '') + '" data-stock-high="' + i + '" aria-label="52 week high">' +
+      '<input type="number" min="0" step="0.01" placeholder="52-wk low ($)" value="' + (st.low52 || '') + '" data-stock-low="' + i + '" aria-label="52 week low">' +
+      '</div>' +
+      '<canvas class="mini-chart" id="stockChart' + i + '" width="300" height="64" aria-label="Price history chart"></canvas>' +
+      '<p class="hint">' + (hist.length ? hist.length + ' logged price' + (hist.length === 1 ? '' : 's') + ' \u2014 tap Log to add more over time.' : 'Log prices over time to build a highs/lows chart.') + '</p>' +
+      '<div class="add-row">' +
+      '<button class="btn-mini" data-stock-log="' + i + '" type="button">Log today\u2019s price</button>' +
+      '<button class="btn-mini danger" data-stock-del="' + i + '" type="button">Remove</button>' +
+      '</div>';
+    list.appendChild(row);
+    drawPriceChart('stockChart' + i, hist);
+  });
+  renderAlloc();
+}
+function renderAlloc(){
+  var out = document.getElementById('allocOut');
+  if(!out) return;
+  var amt = num(document.getElementById('allocAmt').value);
+  var base = num(S.saved) + num(S.checking);
+  if(!(amt > 0)){ out.textContent = 'Type an amount to see what share of your savings that is.'; return; }
+  if(!(base > 0)){ out.textContent = 'Add your savings balance in My Money first \u2014 then this shows the share.'; return; }
+  var pct = Math.round(amt / base * 1000) / 10;
+  out.textContent = money(amt) + ' is ' + pct + '% of your ' + money(base) + ' savings. That leaves ' + money(base - amt) + ' untouched.';
 }
 
 bind();

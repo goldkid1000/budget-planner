@@ -1,6 +1,20 @@
 {
   "versions": [
     {
+      "version": "2.0.0",
+      "date": "2026-10-19",
+      "notes": [
+        "Where-you-work picker (Paycheck tab): Walmart Digital Personal Shopper, Target, Amazon warehouse, McDonald's, or Custom — one tap sets your rate. Presets are starting points; the rate stays editable.",
+        "NEW Stocks tab (educational): watchlist with prices you type in yourself, price-history charts with highs and lows, an allocation calculator against your savings, and beginner investing videos. Paper-trading only — nothing moves real money, and this is not financial advice.",
+        "Device sync code (My Money tab): generate a one-time code on your phone, paste it on your PC, and everything moves over. No server, no account — copy/paste it yourself.",
+        "Deal Watchlist upgrade: store presets (Best Buy, Walmart, Amazon, Target, Newegg), per-item price history with a mini highs/lows chart, and a target-hit alert when the price you see hits your buy price.",
+        "Donut chart: tap any slice to see its category, amount, and share of the total; the center number pops up or down as your numbers change.",
+        "Fixed empty states: the goal celebration only fires when you set a real goal and reach it; with no income entered, the budget says so plainly instead of showing a $0.00 math chain.",
+        "New responsive layout: phones keep the single-column stacked cards with the bottom tab bar; PCs get a multi-column dashboard."
+      ],
+      "notify": true
+    },
+    {
       "version": "1.3.1",
       "date": "2026-10-18",
       "notes": [
