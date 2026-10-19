@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "2.1.0",
+      "date": "2026-10-19",
+      "notify": true,
+      "notes": [
+        "Full visual rework: a premium dark fintech look — deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.",
+        "New micro-details: gradient card titles with accent underlines, bolder money figures, smoother press feedback, and clearer focus states for keyboard users. All animations still respect your reduced-motion setting."
+      ]
+    },
+    {
       "version": "2.0.8",
       "date": "2026-10-19",
       "notes": [

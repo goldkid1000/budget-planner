@@ -1,1 +1,8 @@
-{"notes": ["Home-screen logo now embedded directly in the app (same trick as StudyLens) — shows reliably when adding to Home Screen."], "notify": true, "updated": "2026-10-19", "version": "2.0.8"}
+{
+  "version": "2.1.0",
+  "updated": "2026-10-19",
+  "notify": true,
+  "notes": [
+    "Full visual rework: premium dark fintech theme — new palette, gradient cards/buttons, glassy mobile tab bar, polished forms, refined typography. All features unchanged."
+  ]
+}

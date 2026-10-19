@@ -1,7 +1,7 @@
 /* Budget Planner v2.0.4 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.0.8';
+var APP_VERSION = '2.1.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -1122,6 +1122,10 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.1.0', notes: [
+    'Full visual rework: a premium dark fintech look \u2014 deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.',
+    'New micro-details: gradient card titles with accent underlines, bolder money figures, smoother press feedback, and clearer focus states for keyboard users. All animations still respect your reduced-motion setting.'
+  ] },
   { version: '2.0.5', notes: [
     'Fixed: the Install button could stay visible inside the installed app — the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web.'
   ] },
