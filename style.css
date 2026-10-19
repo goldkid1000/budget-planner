@@ -536,3 +536,146 @@ input[type=checkbox]{accent-color:var(--green)}
   .bottomnav .nav-btn{font-size:.95rem;padding:8px 2px}
   .bottomnav .nav-btn span{font-size:.56rem}
 }
+
+/* ================================================================
+   v2.4.0 — "Sovereign" rework: noir-lux banking.
+   Champagne gold (#d4af6a) on warm charcoal. Hairline gold dividers,
+   serif display numerals, subtle grain + vignette. Premium, calm,
+   expensive. Same selectors, same JS contract — pure visual layer.
+   ================================================================ */
+:root{
+  --bg:#0b0906;
+  --bg2:#100d09;
+  --card:#15110c;
+  --card2:#1a1510;
+  --line:rgba(212,175,106,.24);
+  --line-soft:rgba(212,175,106,.13);
+  --ink:#f6f0e3;
+  --muted:#b3a487;
+  --faint:#877a61;
+  --green:#d4af6a;
+  --green-hi:#f2ddab;
+  --green-deep:#a67c3d;
+  --green-ink:#241a0b;
+  --green-soft:#1d160c;
+  --amber:#c9973f;
+  --amber-hi:#e8c47c;
+  --amber-bg:#241a0c;
+  --amber-ink:#f4dfae;
+  --link:#e9cfa1;
+  --radius:18px;
+  --input-bg:#0f0c08;
+  --input-line:rgba(212,175,106,.28);
+  --input-ph:#877a61;
+  --track:#1b1510;
+  --shadow:0 12px 32px rgba(0,0,0,.55);
+  --glow:0 0 0 3px rgba(212,175,106,.2);
+}
+/* true fullscreen root: dynamic viewport, edge-to-edge */
+html{min-height:100%}
+body{
+  min-height:100dvh;
+  background:
+    radial-gradient(120% 95% at 50% 38%,transparent 52%,rgba(0,0,0,.44) 100%) fixed,
+    radial-gradient(760px 460px at 88% -6%,rgba(212,175,106,.07) 0%,transparent 55%) fixed,
+    radial-gradient(900px 520px at 8% 108%,rgba(166,124,61,.06) 0%,transparent 55%) fixed,
+    var(--bg);
+}
+/* film grain over everything — pointer-events safe, static (no motion) */
+body::after{content:"";position:fixed;inset:0;z-index:200;pointer-events:none;opacity:.038;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E")}
+::selection{background:rgba(212,175,106,.32)}
+
+/* ---------- header: charcoal, hairline gold rule, serif wordmark ---------- */
+.topbar{background:linear-gradient(180deg,#141009 0%,#0d0a06 100%);
+  border-bottom:none;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.topbar::after{background:linear-gradient(90deg,transparent,rgba(212,175,106,.75) 30%,rgba(212,175,106,.75) 70%,transparent);
+  height:1px}
+.topbar h1{font-family:Georgia,'Times New Roman',serif;font-weight:700;letter-spacing:.01em;font-size:1.8rem}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .topbar h1{background:linear-gradient(180deg,#fbf6ea 20%,#e9d3a0 80%,#c9973f 130%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+}
+.tagline{color:#9d8c6e}
+
+/* ---------- serif display numerals for money ---------- */
+.donut-value,.donut-summary strong,#leftLine,#moneyCanSpend,#takeHomeOut,
+.txn-amt,.earn-total-num,.bill-total,.earn-est{
+  font-family:Georgia,'Times New Roman',serif;font-weight:700;letter-spacing:.005em}
+.donut-label{letter-spacing:.14em;color:var(--faint)}
+
+/* ---------- view titles ---------- */
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .view h2{background:linear-gradient(120deg,#fbf6ea 25%,#e9d3a0 75%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+}
+.view h2::after{background:linear-gradient(90deg,var(--gold,#d4af6a),transparent);width:56px;height:2px}
+
+/* ---------- cards: hairline gold title rules ---------- */
+.card{background:linear-gradient(180deg,#171309 0%,#100d08 70%,#0d0a06 100%);
+  box-shadow:var(--shadow),inset 0 1px 0 rgba(242,221,171,.06)}
+.card > h3:first-child::after{width:44px;height:2px;background:linear-gradient(90deg,#d4af6a,transparent)}
+
+/* ---------- donut: champagne halo + gold sheen ---------- */
+.donut-wrap::before{background:radial-gradient(circle,rgba(212,175,106,.17) 0%,rgba(201,151,63,.08) 48%,transparent 68%)}
+.donut-card::before{background:radial-gradient(circle,rgba(212,175,106,.09),transparent 65%)}
+@media (prefers-reduced-motion: no-preference){
+  .donut-wrap::after{background:conic-gradient(from 0deg,transparent 0 38%,rgba(212,175,106,.16) 50%,transparent 62% 100%)}
+}
+
+/* ---------- progress: champagne fill ---------- */
+.progress-fill{background:linear-gradient(90deg,#a67c3d,#d4af6a 60%,#f2ddab)}
+
+/* ---------- results: gold rail ---------- */
+.result-box{border-left:2px solid #d4af6a}
+.result-box .result-line strong,#leftLine,#moneyCanSpend,#takeHomeOut{color:#fbf3df}
+
+/* ---------- sidebar / tab bar: gold actives ---------- */
+.nav-btn.active{background:linear-gradient(135deg,#b08a44,#d4af6a 60%,#f2ddab);color:#241a0b;
+  box-shadow:0 6px 22px rgba(212,175,106,.3)}
+.nav-btn.active::before{background:#fbf3df}
+.nav-btn:hover{transform:translateX(2px)}
+
+/* ---------- buttons: champagne primary ---------- */
+.btn-primary{background:linear-gradient(135deg,#b08a44,#d4af6a 55%,#ecd29a);color:#241a0b;
+  box-shadow:0 6px 20px rgba(212,175,106,.32),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-primary:hover{filter:brightness(1.06)}
+.btn-chip.active{background:linear-gradient(135deg,#b08a44,#d4af6a);color:#241a0b}
+
+/* ---------- forms: gold focus ---------- */
+.field input:focus,.field select:focus,.add-row input:focus,.add-row select:focus,.add-row textarea:focus,.import-panel textarea:focus{
+  border-color:var(--green-hi);box-shadow:0 0 0 3px rgba(212,175,106,.2),0 0 20px rgba(212,175,106,.1)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23d4af6a' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")}
+
+/* ---------- hints / strips ---------- */
+.hint{border-left:2px solid rgba(212,175,106,.5);padding-left:12px}
+.bill-auto{background:rgba(212,175,106,.1);color:var(--link);border-color:rgba(212,175,106,.3)}
+
+/* ---------- install + update banners ---------- */
+.install-row{background:linear-gradient(135deg,rgba(212,175,106,.13),rgba(212,175,106,.04));
+  border:1px solid rgba(212,175,106,.3)}
+.update-banner{background:linear-gradient(180deg,#171208,#100c06);border-bottom:1px solid #d4af6a;
+  padding-top:calc(14px + env(safe-area-inset-top))}
+
+/* ---------- earn tab: gold total ---------- */
+.earn-total-card{background:linear-gradient(135deg,#181207 0%,#100d08 60%,#1c1408 100%)}
+.earn-total-num{background:linear-gradient(90deg,#f2ddab,#d4af6a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.earn-frame-card{border-left:2px solid #d4af6a}
+.earn-switch input:checked + .track{background:linear-gradient(135deg,#a67c3d,#d4af6a)}
+.earn-est{color:var(--gold-hi,#f2ddab)}
+
+/* ---------- modal: notch-safe ---------- */
+.modal{padding-top:calc(24px + env(safe-area-inset-top))}
+.modal-card{background:linear-gradient(180deg,#181410,#0f0c08)}
+
+/* ---------- footer hairline ---------- */
+.footer{border-top:1px solid rgba(212,175,106,.16)}
+
+/* ---------- mobile: edge-to-edge, 8 tabs, 44px+ targets ---------- */
+@media (max-width:1023px){
+  .bottomnav{background:rgba(13,10,6,.94);border-top:1px solid rgba(212,175,106,.2)}
+  .bottomnav .nav-btn.active{color:#241a0b;background:linear-gradient(135deg,#d4af6a,#f2ddab);
+    box-shadow:0 4px 16px rgba(212,175,106,.4)}
+}
+@media (max-width:600px){
+  .btn-primary{min-height:48px}
+  .field input,.field select,.add-row input,.add-row select{min-height:46px}
+}

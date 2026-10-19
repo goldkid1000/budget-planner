@@ -1,1 +1,25 @@
-{"background_color":"#101315","description":"A simple budget planner: see what you'll spend, what you'll have left, and what your paycheck works out to.","display":"standalone","icons":[{"purpose":"any","sizes":"any","src":"icons/icon.svg","type":"image/svg+xml"},{"purpose":"maskable","sizes":"any","src":"icons/icon.svg","type":"image/svg+xml"}],"name":"Budget Planner","orientation":"portrait","scope":".","short_name":"Budget","start_url":".","theme_color":"#101315"}
+{
+  "background_color": "#0b0906",
+  "description": "A simple budget planner: see what you'll spend, what you'll have left, and what your paycheck works out to.",
+  "display": "fullscreen",
+  "icons": [
+    {
+      "purpose": "any",
+      "sizes": "any",
+      "src": "icons/icon.svg",
+      "type": "image/svg+xml"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "any",
+      "src": "icons/icon.svg",
+      "type": "image/svg+xml"
+    }
+  ],
+  "name": "Budget Planner",
+  "orientation": "portrait",
+  "scope": ".",
+  "short_name": "Budget",
+  "start_url": ".",
+  "theme_color": "#0b0906"
+}
