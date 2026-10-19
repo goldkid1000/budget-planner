@@ -1,7 +1,7 @@
-/* Budget Planner v2.0.2 — all data stays in localStorage on this device. */
+/* Budget Planner v2.0.3 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.0.2';
+var APP_VERSION = '2.0.3';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -1122,6 +1122,9 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.0.3', notes: [
+    'Fixed updates getting stuck: tapping Update now waits for the new version to actually install before reloading, and the update notice stays until the new version is confirmed running — no more "latest version" while showing the old number. The footer version number is now written by the app itself, so it can never go stale.'
+  ] },
   { version: '2.0.2', notes: [
     'Install prompt now hides completely when the app is installed — it only shows on the web.',
     'Paycheck auto-detections: overtime is now automatic — hours over 40/week are paid at 1.5x and the breakdown says so. A new Auto-detections card shows your next payday (pick your payday weekday; add your last payday date for every-2-weeks pay) and flags odd inputs, like hours over 80/week, a rate below federal minimum wage, or deductions higher than your gross.'
@@ -1603,9 +1606,30 @@ function bind(){
 
   /* update system */
   document.getElementById('updateNowBtn').addEventListener('click', function(){
+    /* v2.0.3: never strand the user on the old build. The notice is only
+       consumed once the NEW build boots (see boot check below). Wait for the
+       updated service worker to activate before reloading, so the reload
+       serves the new cached shell instead of the old one. */
     var v = document.getElementById('updateBanner').dataset.version || '';
-    markUpdateSeen(v);
-    location.reload();
+    function go(){
+      try{ sessionStorage.setItem('bp.update.pending', v); }catch(e){}
+      location.reload();
+    }
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.getRegistration().then(function(reg){
+        if(!reg){ go(); return; }
+        reg.update().then(function(){
+          var sw = reg.installing || reg.waiting;
+          if(sw && sw.state !== 'activated'){
+            var done = false;
+            sw.addEventListener('statechange', function(){
+              if(!done && sw.state === 'activated'){ done = true; go(); }
+            });
+            setTimeout(function(){ if(!done){ done = true; go(); } }, 5000);
+          } else { go(); }
+        }).catch(go);
+      }).catch(go);
+    } else { go(); }
   });
   document.getElementById('updateLaterBtn').addEventListener('click', function(){
     var v = document.getElementById('updateBanner').dataset.version || '';
@@ -2004,5 +2028,17 @@ updateInstallBtn();
 if('serviceWorker' in navigator && window.location.protocol !== 'file:'){
   navigator.serviceWorker.register('sw.js').catch(function(){});
 }
+(function(){
+  /* v2.0.3: every visible version string is written at runtime from APP_VERSION */
+  var vf = document.getElementById('appVersionFoot');
+  if(vf) vf.textContent = 'v' + APP_VERSION;
+  try{
+    var pend = sessionStorage.getItem('bp.update.pending');
+    if(pend && pend === APP_VERSION){
+      markUpdateSeen(APP_VERSION);
+      sessionStorage.removeItem('bp.update.pending');
+    }
+  }catch(e){}
+})();
 checkForUpdate(false);
 }
