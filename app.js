@@ -1,7 +1,7 @@
-/* Budget Planner v2.0.1 — all data stays in localStorage on this device. */
+/* Budget Planner v2.0.2 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.0.1';
+var APP_VERSION = '2.0.2';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -169,7 +169,10 @@ function parseStatementCSV(text){
    2025 bracket tables instead of ded.federal / ded.ny (estimate mode —
    no pay stub entered). FICA, FLI, 401K and flat lines still use ded. */
 function calcPaycheck(hours, rate, ded, freq, estimate){
-  var weeklyGross = hours * rate;
+  /* v2.0.2 auto-detect: overtime — hours over 40/week are paid at 1.5x.
+     Automatic; the breakdown always shows when it kicked in. */
+  var regHrs = Math.min(hours, 40), otHrs = Math.max(hours - 40, 0);
+  var weeklyGross = round2(regHrs * rate + otHrs * rate * 1.5);
   var mult = freq === 'biweekly' ? 2 : (freq === 'monthly' ? 52 / 12 : 1);
   var periodGross = weeklyGross * mult;
   var d = ded || {};
@@ -195,7 +198,8 @@ function calcPaycheck(hours, rate, ded, freq, estimate){
   var net = round2(periodGross - totalDed);
   var effRate = periodGross > 0 ? totalDed / periodGross : 0;
   var monthlyNet = weeklyGross * (1 - effRate) * (52 / 12);
-  return { weeklyGross: weeklyGross, periodGross: periodGross,
+  return { weeklyGross: weeklyGross, periodGross: periodGross, otHrs: otHrs,
+           otAmt: round2(otHrs * rate * 1.5), regHrs: regHrs,
            ssAmt: ssAmt, medicareAmt: medicareAmt, fedAmt: fedAmt, nyAmt: nyAmt,
            fliAmt: fliAmt, k401Amt: k401Amt, memberAmt: memberAmt,
            stockContribAmt: stockContribAmt, stockPurchAmt: stockPurchAmt,
@@ -487,6 +491,8 @@ S.shifts.forEach(function(sh){
   if(sh.breakMin === undefined || sh.breakMin === null) sh.breakMin = defaultBreak();
 });
 if(S.breakTotal === undefined) S.breakTotal = 0;
+if(S.paydayWeekday === undefined || S.paydayWeekday === null) S.paydayWeekday = 2;
+if(S.lastPayday === undefined) S.lastPayday = '';
 if(!S.statementTxns) S.statementTxns = [];
 if(S.statementInfo === undefined) S.statementInfo = null;
 /* v2.0.0: new fields */
@@ -505,6 +511,51 @@ function effectiveHours(){
   /* total-hours mode: unpaid meal break comes off the total */
   var paid = num(S.hours) - num(S.mealTotal) / 60;
   return paid > 0 ? paid : 0;
+}
+/* v2.0.2 auto-detect: next payday from payday weekday + frequency.
+   Returns {date: Date|null, daysAway: number|null}. */
+function nextPaydayInfo(nowOpt){
+  var now = nowOpt || new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var wd = (S.paydayWeekday === undefined || S.paydayWeekday === null) ? 2 : num(S.paydayWeekday, 2);
+  var freq = S.freq || 'weekly';
+  function atNoon(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12); }
+  if(freq === 'weekly'){
+    var d = new Date(today);
+    while(d.getDay() !== wd) d.setDate(d.getDate() + 1);
+    d = atNoon(d);
+    return { date: d, daysAway: Math.round((d - atNoon(today)) / 86400000) };
+  }
+  /* biweekly/monthly need an anchor: last payday, else the most recent payday weekday */
+  var anchor = null;
+  if(S.lastPayday){ var pa = new Date(S.lastPayday + 'T12:00:00'); if(isFinite(pa)) anchor = pa; }
+  if(!anchor){
+    anchor = new Date(today);
+    while(anchor.getDay() !== wd) anchor.setDate(anchor.getDate() - 1);
+    anchor = atNoon(anchor);
+  }
+  if(freq === 'biweekly'){
+    var d2 = new Date(anchor);
+    var t = atNoon(today);
+    if(d2 <= t){ var diff = Math.ceil((t - d2) / 86400000 / 14); d2.setDate(d2.getDate() + diff * 14); }
+    return { date: d2, daysAway: Math.round((d2 - t) / 86400000) };
+  }
+  /* monthly: same calendar date next month, rolling forward while past */
+  var m = new Date(anchor); m.setMonth(m.getMonth() + 1);
+  var t2 = atNoon(today);
+  while(m <= t2) m.setMonth(m.getMonth() + 1);
+  return { date: m, daysAway: Math.round((m - t2) / 86400000) };
+}
+function fmtPayday(d){
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+/* v2.0.2 auto-detect: sanity flags on odd paycheck inputs. Returns string[]. */
+function paycheckFlags(hours, rate, net){
+  var flags = [];
+  if(hours > 80) flags.push(fmtHrs(hours) + ' hrs/week is very high \u2014 double-check your hours.');
+  if(rate > 0 && rate < 7.25) flags.push(money(rate) + '/hr is below the federal minimum wage ($7.25) \u2014 check your rate.');
+  if(net < 0 && (hours > 0 || rate > 0)) flags.push('Deductions are higher than gross pay \u2014 check your deduction entries.');
+  return flags;
 }
 function currentPaycheck(){
   /* No pay stub entered → estimate mode: federal + state tax from the 2025
@@ -673,7 +724,7 @@ function renderBudgetSummary(){
   var pctTaken = (p.effRate * 100).toFixed(2).replace(/\.?0+$/, '');
   var bdEl = document.getElementById('incomeBreakdown');
   if(bdEl) bdEl.textContent = income > 0
-    ? fmtHrs(hrs) + ' paid hrs/week × ' + money(S.rate) + '/hr = ' +
+    ? fmtHrs(hrs) + ' paid hrs/week' + (p.otHrs > 0.001 ? ' (' + fmtHrs(p.regHrs) + ' regular + ' + fmtHrs(p.otHrs) + ' OT at 1.5×)' : '') + ' × ' + money(S.rate) + '/hr = ' +
       money(p.weeklyGross) + ' gross → ' + money(weeklyNet) + ' take-home/week (' + pctTaken +
       '% taken off) → × 52 ÷ 12 = ' + money(p.monthlyNet) + ' / month. A month averages 4⅓ weeks, so this is more than 4 weekly paychecks.'
     : 'No income entered yet — set your hours and rate in the Paycheck tab and this will show the full math.';
@@ -886,6 +937,32 @@ function renderPaycheckOutputs(){
   setMoneyText(document.getElementById('takeHomeOut'), p.net);
   document.getElementById('takeHomePer').textContent = p.periodLabel;
   setMoneyText(document.getElementById('monthlyOut'), p.monthlyNet);
+  /* v2.0.2 auto-detections box: overtime, next payday, sanity flags */
+  (function(){
+    var box = document.getElementById('detectBox');
+    if(!box) return;
+    var hrs = effectiveHours();
+    var lines = [];
+    if(p.otHrs > 0.001){
+      lines.push('<p><strong>Overtime detected:</strong> ' + fmtHrs(p.otHrs) + ' hrs over 40 at 1.5\u00d7 = ' +
+        money(p.otAmt) + ' extra gross. (' + fmtHrs(p.regHrs) + ' regular + ' + fmtHrs(p.otHrs) + ' OT.)</p>');
+    }
+    var pd = nextPaydayInfo();
+    if(pd.date){
+      lines.push('<p><strong>Next payday:</strong> ' + fmtPayday(pd.date) +
+        (pd.daysAway === 0 ? ' \u2014 today!' : pd.daysAway === 1 ? ' \u2014 tomorrow.' : ' \u2014 in ' + pd.daysAway + ' days.') + '</p>');
+    }
+    paycheckFlags(hrs, S.rate, p.net).forEach(function(f){
+      lines.push('<p class="flag">\u26a0\ufe0f ' + esc(f) + '</p>');
+    });
+    box.innerHTML = lines.length ? lines.join('') : '<p class="explain">No detections \u2014 everything looks normal.</p>';
+    var lpw = document.getElementById('lastPaydayWrap');
+    if(lpw) lpw.hidden = (S.freq !== 'biweekly' && S.freq !== 'monthly');
+    var pds = document.getElementById('paydayWeekday');
+    if(pds && document.activeElement !== pds) pds.value = String((S.paydayWeekday === undefined || S.paydayWeekday === null) ? 2 : S.paydayWeekday);
+    var lpi = document.getElementById('lastPaydayInput');
+    if(lpi && document.activeElement !== lpi) lpi.value = S.lastPayday || '';
+  })();
 
   /* pay-stub form: show what the current profile means in dollars at the
      stub gross (or the current period gross), without clobbering typing */
@@ -1045,6 +1122,10 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.0.2', notes: [
+    'Install prompt now hides completely when the app is installed — it only shows on the web.',
+    'Paycheck auto-detections: overtime is now automatic — hours over 40/week are paid at 1.5x and the breakdown says so. A new Auto-detections card shows your next payday (pick your payday weekday; add your last payday date for every-2-weeks pay) and flags odd inputs, like hours over 80/week, a rate below federal minimum wage, or deductions higher than your gross.'
+  ] },
   { version: '2.0.1', notes: [
     'Fixed the donut on mobile: it now shows a subtle ring with a helpful hint when there is nothing to chart yet, instead of a blank hole. The "left" slice is a brighter green that actually shows up on the dark theme, and the donut centers itself on phone screens.'
   ] },
@@ -1434,6 +1515,8 @@ function bind(){
   });
   document.getElementById('rateInput').addEventListener('input', function(e){ S.rate = num(e.target.value); save(); renderAll(); });
   document.getElementById('freqSelect').addEventListener('change', function(e){ S.freq = e.target.value; save(); renderAll(); });
+  document.getElementById('paydayWeekday').addEventListener('change', function(e){ S.paydayWeekday = num(e.target.value, 2); save(); renderAll(); });
+  document.getElementById('lastPaydayInput').addEventListener('change', function(e){ S.lastPayday = e.target.value || ''; save(); renderAll(); });
   /* deduction profile inputs: % lines computed from gross, flat lines are $ per check */
   var dedInputMap = { ssInput: 'ss', medicareInput: 'medicare', federalInput: 'federal', nyInput: 'ny',
     fliInput: 'fli', k401Input: 'k401', memberInput: 'membership', stockContribInput: 'stockContrib', stockPurchInput: 'stockPurch' };
@@ -1890,14 +1973,17 @@ function isStandalone(){
   catch(e){ return false; }
 }
 function updateInstallBtn(){
+  /* v2.0.2: when the app is installed, the whole install area hides —
+     the prompt only shows on the web. */
+  var row = document.getElementById('installRow');
   var btn = document.getElementById('installBtn');
   if(!btn) return;
   if(isStandalone()){
-    btn.textContent = 'Installed \u2713';
-    btn.disabled = true;
+    if(row) row.hidden = true;
     var help = document.getElementById('installHelp');
     if(help) help.hidden = true;
   } else {
+    if(row) row.hidden = false;
     btn.textContent = 'Install app';
     btn.disabled = false;
   }
