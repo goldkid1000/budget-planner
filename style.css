@@ -225,3 +225,23 @@ svg.donut circle{transition:stroke-dasharray .45s ease,stroke-dashoffset .45s ea
   .bottomnav .nav-btn{font-size:1.05rem;padding:6px 2px}
   .bottomnav .nav-btn span{font-size:.6rem}
 }
+
+/* ---------- v2.0.6: mobile fit pass (390px) ----------
+   Phones get real tap targets, nothing clips, nothing scrolls sideways.
+   PC (min-width:1024px) rules above are untouched. */
+@media (max-width:600px){
+  /* tap targets: all small-button classes reach 44px tall */
+  .btn-chip{padding:11px 18px}
+  .btn-mini{padding:11px 15px}
+  .btn-danger{padding:11px 14px}
+  /* bottom tab bar: ~46px tall per tab, labels stay readable */
+  .bottomnav .nav-btn{padding:8px 2px}
+  .bottomnav .nav-btn span{font-size:.66rem}
+  /* checkboxes: big enough to tap without hunting */
+  .check input{width:24px;height:24px}
+  /* donut center scales down for long cents amounts (e.g. $12,345.67) so
+     the value never spills past the circle */
+  .donut-value{font-size:clamp(1.15rem,6.5vw,1.7rem)}
+  /* long video/deal links wrap instead of pushing the card wider */
+  .video-list a,.disc-card a,.deal-links a{overflow-wrap:anywhere}
+}

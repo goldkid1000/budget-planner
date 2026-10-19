@@ -1,7 +1,7 @@
 /* Budget Planner v2.0.4 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.0.5';
+var APP_VERSION = '2.0.6';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -695,7 +695,7 @@ function renderBudgetSummary(){
   setMoneyText(document.getElementById('billsLine'), bills);
   setMoneyText(document.getElementById('spendLine'), spend);
   setMoneyText(document.getElementById('leftLine'), left);
-  setMoneyText(document.getElementById('donutLeft'), left, money0);
+  setMoneyText(document.getElementById('donutLeft'), left, money);
   /* v2.0.0 grow/shrink pulse: the center number pops up or down with the change */
   (function(){
     var dl = document.getElementById('donutLeft');
