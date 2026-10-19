@@ -108,6 +108,8 @@ input[type=time]{color-scheme:dark}
 .bottomnav{display:none}
 .footer{text-align:center;color:var(--muted);font-size:.85rem;padding:10px 16px 20px}
 /* install button + help card (Budget tab top) */
+/* v2.0.5: the hidden attribute must always win — author display values (like the flex below) used to override it, so hide-when-installed silently failed */
+[hidden]{display:none!important}
 .install-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
 .install-hint{margin:0}
 .install-help{border-color:var(--green-dark)}

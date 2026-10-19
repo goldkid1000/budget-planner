@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "version": "2.0.5",
+      "date": "2026-10-19",
+      "notes": [
+        "Fixed: the Install button could stay visible inside the installed app — the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web."
+      ],
+      "notify": true
+    },
+    {
       "version": "2.0.4",
       "date": "2026-10-19",
       "notes": [

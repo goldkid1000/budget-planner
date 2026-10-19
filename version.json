@@ -1,1 +1,1 @@
-{"notes": ["Hot-fix: the app's offline cache now always pulls fresh files from the network when a new version installs — the old installer could pack stale files into the new cache, which is how an update could leave you on the old build."], "notify": true, "updated": "2026-10-19", "version": "2.0.4"}
+{"notes": ["Fixed: the Install button could stay visible inside the installed app — the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web."], "notify": true, "updated": "2026-10-19", "version": "2.0.5"}

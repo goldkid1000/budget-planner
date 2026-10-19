@@ -1,7 +1,7 @@
 /* Budget Planner v2.0.4 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.0.4';
+var APP_VERSION = '2.0.5';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -1122,6 +1122,9 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.0.5', notes: [
+    'Fixed: the Install button could stay visible inside the installed app — the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web.'
+  ] },
   { version: '2.0.4', notes: [
     'Hot-fix: the app\u2019s offline cache now always pulls fresh files from the network when a new version installs — the old installer could pack stale files into the new cache, which is how an update could leave you on the old build.'
   ] },
