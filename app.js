@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.10.0';
+var APP_VERSION = '2.11.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -82,8 +82,9 @@ function minsToHHMM(mins){
    v2.9.0: the entries are classes AND practices (any timed schedule
    entry blocks time the same way — kind never reaches this function).
    v2.10.0: busy-day guard — a 4th argument, busyThresholdHrs
-   (4 / 5 / 6, default 5). A day whose merged class + practice load
-   reaches the cutoff is BUSY: no work is suggested on it.
+   (4 / 5 / 6, default 5). A day whose merged scheduled load
+   (classes, practices + workouts) reaches the cutoff is BUSY:
+   no work is suggested on it.
    classes: [{ days:[Mon=0..Sun=6], s:'HH:MM', e:'HH:MM' }];
    schoolTags: [[tag,...] ×7]. Returns { days: [{s,e,paid}|null ×7],
    totalPaid, capacity (hrs), shortfall (hrs vs the target),
@@ -592,7 +593,8 @@ var DEFAULTS = {
                school: [0, 0, 0, 0, 0, 0, 0],
                break:  [0, 0, 0, 0, 0, 0, 0],
                /* v2.6.0: school day tags (per day: 'class' | 'practice' |
-                  'meet'), last school-week template applied, the break
+                  'meet' — v2.11.0 adds 'workout'), last school-week
+                  template applied, the break
                   being built in the Break Calendar, and saved breaks
                   ({ id, name, start, end, days: { 'YYYY-MM-DD': hours } }) */
                schoolTags: [[], [], [], [], [], [], []],
@@ -612,7 +614,11 @@ var DEFAULTS = {
                /* v2.10.0: busy-day guard cutoff (scheduled hrs of
                   class + practice at/above which Suggest puts no
                   work on that day) — one of 4 / 5 / 6 */
-               busyThresholdHrs: 5 },
+               busyThresholdHrs: 5,
+               /* v2.11.0: which tab of the schedule builder is open —
+                  'class' | 'practice' | 'workout'; the tab fixes the
+                  kind of the entry being added */
+               schedTab: 'class' },
   /* v2.6.1: Work Log — weeks he ACTUALLY worked, saved to look back on.
      Entries: { id, week (Monday 'YYYY-MM-DD'), days [7], times [7 {s,e}],
      total, gross, net } — pay frozen at save time via planScenarioPaycheck. */
@@ -669,7 +675,7 @@ if(S.planHours.term !== 'break') S.planHours.term = 'school';
 });
 /* v2.6.0: backfill + normalize tags / week type / break calendar state */
 (function(){
-  var ph = S.planHours, VALID_TAGS = ['class', 'practice', 'meet'];
+  var ph = S.planHours, VALID_TAGS = ['class', 'practice', 'workout', 'meet'];
   var rawTags = Array.isArray(ph.schoolTags) ? ph.schoolTags : [];
   var normTags = [];
   for(var ti = 0; ti < 7; ti++){
@@ -720,6 +726,8 @@ function normWeekTimes(v){
   if([12, 16, 20].indexOf(ph.suggestTarget) === -1) ph.suggestTarget = 16;
   /* v2.10.0: busy-day guard cutoff — 4, 5 or 6, else 5 */
   if([4, 5, 6].indexOf(ph.busyThresholdHrs) === -1) ph.busyThresholdHrs = 5;
+  /* v2.11.0: schedule builder tab — class / practice / workout */
+  if(['class', 'practice', 'workout'].indexOf(ph.schedTab) === -1) ph.schedTab = 'class';
   if(!ph.breakCal.times || typeof ph.breakCal.times !== 'object' || Array.isArray(ph.breakCal.times)) ph.breakCal.times = {};
   Object.keys(ph.breakCal.times).forEach(function(k){ ph.breakCal.times[k] = normTimePair(ph.breakCal.times[k]); });
   if(!Array.isArray(S.workLog)) S.workLog = [];
@@ -746,7 +754,9 @@ function normWeekTimes(v){
    missing or not exactly 'practice' becomes 'class', so schedules
    saved before practices existed load unchanged. This one function
    serves BOTH normalize paths: the load-time backfill below and the
-   sync-import guard. */
+   sync-import guard.
+   v2.11.0: 'workout' is a third valid kind; anything that isn't
+   exactly 'class', 'practice' or 'workout' still becomes 'class'. */
 function newClassId(){
   return 'cl' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
 }
@@ -767,7 +777,7 @@ function normClasses(v){
     var pair = normTimePair({ s: c.s, e: c.e });
     if(!pair.s || !pair.e) return;
     out.push({ id: (typeof c.id === 'string' && c.id) ? c.id : newClassId(),
-               kind: c.kind === 'practice' ? 'practice' : 'class',
+               kind: ['class', 'practice', 'workout'].indexOf(c.kind) >= 0 ? c.kind : 'class',
                name: name, days: days, s: pair.s, e: pair.e });
   });
   return out;
@@ -969,6 +979,7 @@ function planFillFromTimes(term, i){
 var PLAN_TAGS = [
   { key: 'class', label: 'Class' },
   { key: 'practice', label: 'Practice' },
+  { key: 'workout', label: 'Workout' },
   { key: 'meet', label: 'Meet' }
 ];
 /* templates are Mon..Sun hours. Meet week: Friday lightened for travel,
@@ -1936,14 +1947,42 @@ function bindWorkLog(){
    are first-class timed entries: the suggester and the overlap
    checker route around them exactly like classes. A bare 'practice'
    day TAG in the planner carries no times, so on its own it blocks
-   nothing here — the copy says practices need times added here. */
+   nothing here — the copy says practices need times added here.
+   v2.11.0: the builder is TABBED — 🎓 Classes / 🏃 Practices /
+   💪 Workouts (S.planHours.schedTab). The active tab fixes the kind
+   of the entry being added and filters the list below the form, so
+   he can stack up classes one after another, then switch tabs and
+   do the same for practices and solo workouts. 'workout' is a third
+   entry kind: it blocks suggested work, counts toward busy days,
+   gets overlap warnings, and auto-tags its days 'workout' — exactly
+   like the other kinds. */
+var SCHED_KINDS = ['class', 'practice', 'workout'];
+var SCHED_TABS = {
+  class:    { icon: '🎓', plural: 'Classes',   word: 'class',
+              nameLabel: 'Class name',    placeholder: 'Class name — e.g. ENV 350',
+              addLabel: 'Add class',    giveName: 'Give the class a name first.',
+              empty: 'No classes yet — add your first one above.' },
+  practice: { icon: '🏃', plural: 'Practices', word: 'practice',
+              nameLabel: 'Practice name', placeholder: 'Practice name — e.g. Track Practice',
+              addLabel: 'Add practice', giveName: 'Give the practice a name first.',
+              empty: 'No practices yet — add your first one above.' },
+  workout:  { icon: '💪', plural: 'Workouts',  word: 'workout',
+              nameLabel: 'Workout name',  placeholder: 'Workout name — e.g. Solo Workout',
+              addLabel: 'Add workout',  giveName: 'Give the workout a name first.',
+              empty: 'No workouts yet — add your first one above.' }
+};
+function schedTab(){
+  var t = S.planHours && S.planHours.schedTab;
+  return SCHED_KINDS.indexOf(t) >= 0 ? t : 'class';
+}
+function schedTabDef(kind){ return SCHED_TABS[SCHED_KINDS.indexOf(kind) >= 0 ? kind : 'class']; }
 var classDraft = { kind: 'class', name: '', days: [], s: '08:00', e: '08:50' };
 var classEditingId = null;
 /* per-kind display bits: marker, capitalized label for pills/lines,
    and the lowercase word for sentences ("overlaps a practice") */
-function entryKind(c){ return c && c.kind === 'practice' ? 'practice' : 'class'; }
-function entryMarker(c){ return entryKind(c) === 'practice' ? '🏃' : '🎓'; }
-function entryKindLabel(c){ return entryKind(c) === 'practice' ? 'Practice' : 'Class'; }
+function entryKind(c){ return c && SCHED_KINDS.indexOf(c.kind) >= 0 ? c.kind : 'class'; }
+function entryMarker(c){ return schedTabDef(entryKind(c)).icon; }
+function entryKindLabel(c){ return entryKind(c) === 'practice' ? 'Practice' : (entryKind(c) === 'workout' ? 'Workout' : 'Class'); }
 /* v2.8.0: the pending work-hours suggestion preview ({ target, result }
    from suggestWorkWeek) — module state only, never saved; it's stale
    the moment the classes or the target change, so those paths clear it */
@@ -1979,12 +2018,28 @@ function classPreviewText(){
   return 'Set a start and an end time to see the exact length.';
 }
 function resetClassForm(){
-  classDraft = { kind: 'class', name: '', days: [], s: '08:00', e: '08:50' };
+  /* the draft's kind is whatever tab is open — the tab IS the kind */
+  classDraft = { kind: schedTab(), name: '', days: [], s: '08:00', e: '08:50' };
   classEditingId = null;
   var n = document.getElementById('classNameInput'); if(n) n.value = '';
   var st = document.getElementById('classStart'); if(st) st.value = '08:00';
   var en = document.getElementById('classEnd'); if(en) en.value = '08:50';
   var note = document.getElementById('classNote'); if(note) note.textContent = '';
+}
+/* v2.11.0: load an entry into the form for editing — jumps to the
+   entry's own tab first, wherever the Edit tap came from */
+function startClassEdit(c){
+  if(!c) return;
+  if(S.planHours.schedTab !== entryKind(c)){ S.planHours.schedTab = entryKind(c); save(); }
+  classEditingId = c.id;
+  classDraft = { kind: entryKind(c), name: c.name, days: c.days.slice(), s: c.s, e: c.e };
+  document.getElementById('classNameInput').value = c.name;
+  document.getElementById('classStart').value = c.s;
+  document.getElementById('classEnd').value = c.e;
+  document.getElementById('classNote').textContent = '';
+  renderSchedule();
+  var nameEl = document.getElementById('classNameInput');
+  if(nameEl && nameEl.scrollIntoView) nameEl.scrollIntoView({ block: 'center' });
 }
 function renderSchedule(){
   var listEl = document.getElementById('classList');
@@ -2000,37 +2055,47 @@ function renderSchedule(){
       chips[ci].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
-  /* v2.9.0: Class/Practice toggle — highlight the draft's kind, and
-     the name field follows it (label + placeholder) */
-  var kindEl = document.getElementById('classKindChips');
-  if(kindEl){
-    var kChips = kindEl.querySelectorAll('[data-class-kind]');
-    for(var ki = 0; ki < kChips.length; ki++){
-      var kOn = kChips[ki].dataset.classKind === classDraft.kind;
-      kChips[ki].classList.toggle('active', kOn);
-      kChips[ki].setAttribute('aria-pressed', kOn ? 'true' : 'false');
+  /* v2.11.0: tab row — highlight the open tab; the form's name field
+     and Add button follow the tab (the tab fixes the entry kind) */
+  var tab = schedTab(), tabDef = schedTabDef(tab);
+  var tabsEl = document.getElementById('schedTabs');
+  if(tabsEl){
+    var tChips = tabsEl.querySelectorAll('[data-sched-tab]');
+    for(var ti = 0; ti < tChips.length; ti++){
+      var tOn = tChips[ti].dataset.schedTab === tab;
+      tChips[ti].classList.toggle('active', tOn);
+      tChips[ti].setAttribute('aria-pressed', tOn ? 'true' : 'false');
     }
   }
-  var isPractice = classDraft.kind === 'practice';
   var nameLabel = document.getElementById('classNameLabel');
-  if(nameLabel) nameLabel.textContent = isPractice ? 'Practice name' : 'Class name';
+  if(nameLabel) nameLabel.textContent = tabDef.nameLabel;
   var nameInput = document.getElementById('classNameInput');
-  if(nameInput) nameInput.placeholder = isPractice ? 'Practice name — e.g. Track Practice' : 'Class name — e.g. ENV 350';
+  if(nameInput) nameInput.placeholder = tabDef.placeholder;
   var prev = document.getElementById('classPreview');
   if(prev) prev.textContent = classPreviewText();
   var addBtn = document.getElementById('classAddBtn');
-  if(addBtn) addBtn.textContent = classEditingId ? 'Save changes' : (isPractice ? 'Add practice' : 'Add class');
+  if(addBtn) addBtn.textContent = classEditingId ? 'Save changes' : tabDef.addLabel;
   var cancelBtn = document.getElementById('classCancelEdit');
   if(cancelBtn) cancelBtn.hidden = !classEditingId;
+  var anotherBtn = document.getElementById('classAddAnother');
+  if(anotherBtn) anotherBtn.textContent = '＋ Add another ' + tabDef.word;
 
-  /* saved entries, one row each — classes and practices together,
-     each marked with its kind (🎓 Class / 🏃 Practice) */
+  /* saved entries — ONLY the open tab's kind, sorted by name, then
+     first day, then start time; each row keeps its kind pill */
   var classes = getClasses();
-  if(!classes.length){
-    listEl.innerHTML = '<p class="hint">No classes or practices yet — add your first one above and your week fills in below.</p>';
+  var tabEntries = classes.filter(function(c){ return entryKind(c) === tab; })
+    .slice().sort(function(a, b){
+      var an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+      if(an !== bn) return an < bn ? -1 : 1;
+      var ad = a.days.length ? a.days[0] : 7, bd = b.days.length ? b.days[0] : 7;
+      if(ad !== bd) return ad - bd;
+      return a.s < b.s ? -1 : (a.s > b.s ? 1 : 0);
+    });
+  if(!tabEntries.length){
+    listEl.innerHTML = '<p class="hint">' + tabDef.empty + '</p>';
   } else {
     var html = '';
-    classes.forEach(function(c){
+    tabEntries.forEach(function(c){
       var mins = exactMinutes(c.s, c.e);
       var daysStr = c.days.map(function(d){ return PLAN_DAYS[d]; }).join('/');
       html += '<div class="class-row">' +
@@ -2046,13 +2111,17 @@ function renderSchedule(){
     listEl.innerHTML = html;
   }
 
-  /* week view: classes + practices vs the school work plan, day by
-     day — the overlap check covers BOTH kinds (v2.9.0) */
+  /* week view: classes, practices + workouts vs the school work
+     plan, day by day — the overlap check covers ALL kinds (v2.9.0
+     added practices, v2.11.0 workouts) */
   var conflicts = [];
-  var totalClassMins = 0, totalPracticeMins = 0;
+  var totalClassMins = 0, totalPracticeMins = 0, totalWorkoutMins = 0;
   classes.forEach(function(c){
     var m = exactMinutes(c.s, c.e) * c.days.length;
-    if(entryKind(c) === 'practice') totalPracticeMins += m; else totalClassMins += m;
+    var k = entryKind(c);
+    if(k === 'practice') totalPracticeMins += m;
+    else if(k === 'workout') totalWorkoutMins += m;
+    else totalClassMins += m;
   });
   var workTotal = planTotal(S.planHours.school);
   var weekEl = document.getElementById('classWeek');
@@ -2064,7 +2133,7 @@ function renderSchedule(){
       var pair = planDayTime('school', i);
       var lines = '';
       dayClasses.forEach(function(c){
-        lines += '<div class="class-week-line">' + entryMarker(c) + ' ' + esc(c.name) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
+        lines += '<div class="class-week-line" data-class-edit="' + esc(c.id) + '" title="Tap to edit">' + entryMarker(c) + ' ' + esc(c.name) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
           ' · ' + fmtMinutes(exactMinutes(c.s, c.e)) + '</div>';
       });
       if(pair.s && pair.e){
@@ -2076,8 +2145,7 @@ function renderSchedule(){
         });
         var hitKinds = [];
         hits.forEach(function(c){ if(hitKinds.indexOf(entryKind(c)) === -1) hitKinds.push(entryKind(c)); });
-        var hitText = hitKinds.length > 1 ? ' — overlaps a class + a practice'
-          : (hitKinds[0] === 'practice' ? ' — overlaps a practice' : ' — overlaps a class');
+        var hitText = ' — overlaps ' + hitKinds.map(function(k){ return 'a ' + k; }).join(' + ');
         lines += '<div class="class-week-line work' + (hits.length ? ' conflict' : '') + '">' +
           (hits.length ? '⚠️ ' : '💼 ') + 'Work ' + esc(fmtTime(pair.s)) + ' – ' + esc(fmtTime(pair.e)) +
           ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? hitText : '') + '</div>';
@@ -2093,12 +2161,13 @@ function renderSchedule(){
   var sumEl = document.getElementById('classSummary');
   if(sumEl){
     var totals = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Practice: ' + fmtMinutes(totalPracticeMins) +
+      ' / week · Workouts: ' + fmtMinutes(totalWorkoutMins) +
       ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
     if(conflicts.length){
       sumEl.innerHTML = esc(totals) + '<br>' +
         conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
     } else {
-      sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes and practices. ✅';
+      sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes, practices and workouts. ✅';
     }
   }
   renderSuggest();
@@ -2128,7 +2197,7 @@ function renderSuggest(){
     }
   }
   var busyNote = document.getElementById('suggestBusyNote');
-  if(busyNote) busyNote.textContent = 'Busy-day guard: if a day\u2019s classes + practice add up to ' +
+  if(busyNote) busyNote.textContent = 'Busy-day guard: if a day\u2019s classes, practice + workouts add up to ' +
     suggestBusyThresholdHrs() + '+ hrs, Suggest won\u2019t put work on it — that day stays yours.';
   var prevEl = document.getElementById('suggestPreview');
   if(!prevEl) return;
@@ -2142,7 +2211,7 @@ function renderSuggest(){
       if(info.state === 'sunday') offHtml = '<span class="suggest-off">off — rest day</span>';
       else if(info.state === 'meet') offHtml = '<span class="suggest-off">off — meet day</span>';
       else if(info.state === 'busy') offHtml = '<span class="suggest-busy">🚫 no work — busy day (' +
-        esc(fmtMinutes(info.scheduledMinutes)) + ' of class + practice)</span>';
+        esc(fmtMinutes(info.scheduledMinutes)) + ' of classes, practice + workouts)</span>';
     }
     html += '<div class="suggest-line"><span class="suggest-day">' + PLAN_DAYS[i] + '</span>' +
       (dy ? '<span>' + esc(fmtTime(dy.s)) + ' – ' + esc(fmtTime(dy.e)) + ' · ' + fmtHrsExact(dy.paid) + ' paid hrs</span>'
@@ -2182,16 +2251,19 @@ function applySuggestion(){
 function bindSchedule(){
   var chipsEl = document.getElementById('classDayChips');
   if(!chipsEl) return;
-  /* v2.9.0: Class / Practice toggle — flips the draft's kind; the
-     name field, button label and saved entry all follow it */
-  var kindEl = document.getElementById('classKindChips');
-  if(kindEl) kindEl.addEventListener('click', function(e){
+  /* v2.11.0: schedule tabs — the open tab fixes the kind of the
+     entry being added and filters the list. Switching tabs cancels
+     any in-progress edit cleanly; saved entries are never touched. */
+  var tabsEl = document.getElementById('schedTabs');
+  if(tabsEl) tabsEl.addEventListener('click', function(e){
     var t = e.target;
-    var chip = t.closest ? t.closest('[data-class-kind]') : null;
+    var chip = t.closest ? t.closest('[data-sched-tab]') : null;
     if(!chip) return;
-    var k = chip.dataset.classKind;
-    if(k !== 'class' && k !== 'practice') return;
-    classDraft.kind = k;
+    var k = chip.dataset.schedTab;
+    if(SCHED_KINDS.indexOf(k) === -1 || k === schedTab()) return;
+    S.planHours.schedTab = k;
+    resetClassForm(); /* draft now belongs to the new tab; edit cleared */
+    save();
     renderSchedule();
   });
   chipsEl.addEventListener('click', function(e){
@@ -2221,47 +2293,53 @@ function bindSchedule(){
   document.getElementById('classAddBtn').addEventListener('click', function(){
     var note = document.getElementById('classNote');
     var name = String(classDraft.name || '').trim();
-    var kind = classDraft.kind === 'practice' ? 'practice' : 'class';
-    if(!name){ note.textContent = kind === 'practice' ? 'Give the practice a name first.' : 'Give the class a name first.'; return; }
-    if(!classDraft.days.length){ note.textContent = 'Pick at least one day.'; return; }
+    /* v2.11.0: the kind is fixed by the open tab */
+    var kind = schedTab();
+    var tabDef = schedTabDef(kind);
+    if(!name){ note.textContent = tabDef.giveName; return; }
+    if(!classDraft.days || !classDraft.days.length){ note.textContent = 'Pick at least one day.'; return; }
     var pair = normTimePair({ s: classDraft.s, e: classDraft.e });
     if(!pair.s || !pair.e){ note.textContent = 'Set a start and an end time.'; return; }
     if(!Array.isArray(S.classes)) S.classes = [];
     var days = classDraft.days.slice().sort(function(a, b){ return a - b; });
     var existing = classEditingId ? classById(classEditingId) : null;
+    var wasEdit = !!existing;
     if(existing){
       existing.kind = kind;
       existing.name = name; existing.days = days; existing.s = pair.s; existing.e = pair.e;
     } else {
       S.classes.push({ id: newClassId(), kind: kind, name: name, days: days, s: pair.s, e: pair.e });
     }
-    /* tag those days in the school plan — 'class' for a class,
-       'practice' for a practice (add-only, never removed — deleting
-       an entry leaves the tags alone) */
-    var tagKey = kind === 'practice' ? 'practice' : 'class';
+    /* tag those days in the school plan with the entry's own kind —
+       'class', 'practice' or 'workout' (add-only, never removed —
+       deleting an entry leaves the tags alone) */
     days.forEach(function(d){
       var tags = S.planHours.schoolTags[d];
-      if(Array.isArray(tags) && tags.indexOf(tagKey) === -1) tags.push(tagKey);
+      if(Array.isArray(tags) && tags.indexOf(kind) === -1) tags.push(kind);
     });
     suggestPreviewData = null; /* entries changed — any preview is stale */
     save();
-    resetClassForm();
+    resetClassForm(); /* form clears, stays on the same tab */
     renderPlanHours(true);
     renderSchedule();
+    /* add-another flow: confirm the add and invite the next one */
+    var note2 = document.getElementById('classNote');
+    if(note2) note2.textContent = wasEdit ? (name + ' updated.') : ('Added ' + name + ' — add another, or switch tabs.');
+  });
+  /* v2.11.0: "＋ Add another …" under the list — back to the form */
+  var anotherBtn = document.getElementById('classAddAnother');
+  if(anotherBtn) anotherBtn.addEventListener('click', function(){
+    var nameEl2 = document.getElementById('classNameInput');
+    if(nameEl2){
+      if(nameEl2.scrollIntoView) nameEl2.scrollIntoView({ block: 'center' });
+      nameEl2.focus();
+    }
   });
   document.getElementById('classList').addEventListener('click', function(e){
     var t = e.target;
     var editBtn = t.closest ? t.closest('[data-class-edit]') : null;
     if(editBtn){
-      var c = classById(editBtn.dataset.classEdit);
-      if(!c) return;
-      classEditingId = c.id;
-      classDraft = { kind: entryKind(c), name: c.name, days: c.days.slice(), s: c.s, e: c.e };
-      document.getElementById('classNameInput').value = c.name;
-      document.getElementById('classStart').value = c.s;
-      document.getElementById('classEnd').value = c.e;
-      document.getElementById('classNote').textContent = '';
-      renderSchedule();
+      startClassEdit(classById(editBtn.dataset.classEdit));
       return;
     }
     var delBtn = t.closest ? t.closest('[data-class-del]') : null;
@@ -2273,6 +2351,13 @@ function bindSchedule(){
       save();
       renderSchedule();
     }
+  });
+  /* v2.11.0: tapping an entry line in the week view edits it too */
+  var weekEl2 = document.getElementById('classWeek');
+  if(weekEl2) weekEl2.addEventListener('click', function(e){
+    var t = e.target;
+    var line = t.closest ? t.closest('[data-class-edit]') : null;
+    if(line) startClassEdit(classById(line.dataset.classEdit));
   });
   /* v2.8.0: suggest-target chips + the Suggest button */
   var sugChips = document.getElementById('suggestTargets');
@@ -2304,7 +2389,7 @@ function bindSchedule(){
     if(!getClasses().length){
       suggestPreviewData = null;
       renderSuggest();
-      if(note) note.textContent = 'Add at least one class or practice first so I know what to work around.';
+      if(note) note.textContent = 'Add at least one class, practice or workout first so I know what to work around.';
       return;
     }
     var tgt = suggestTargetHrs();
@@ -3600,6 +3685,8 @@ function bind(){
     if(S.planHours && [12, 16, 20].indexOf(S.planHours.suggestTarget) === -1) S.planHours.suggestTarget = 16;
     /* v2.10.0: …or the busy-day guard cutoff */
     if(S.planHours && [4, 5, 6].indexOf(S.planHours.busyThresholdHrs) === -1) S.planHours.busyThresholdHrs = 5;
+    /* v2.11.0: …or the schedule builder tab */
+    if(S.planHours && ['class', 'practice', 'workout'].indexOf(S.planHours.schedTab) === -1) S.planHours.schedTab = 'class';
     if(S.employerKey === undefined) S.employerKey = 'custom';
     if(!S.stocks) S.stocks = [];
     if(!S.syncUsed) S.syncUsed = [];

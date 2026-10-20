@@ -900,3 +900,15 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .suggest-busy-label{display:flex;align-items:center;font-weight:650;
   font-size:.95rem;color:var(--ink)}
 .suggest-busy{color:#f0b35e;font-weight:650}
+
+/* ================================================================
+   v2.11.0 — schedule tabs (Classes / Practices / Workouts), the
+   add-another button, the workout kind pill, and tappable week-view
+   entry lines. Same Sovereign language; tabs reuse .btn-chip
+   (incl. its gold .active state), all targets ≥44px.
+   ================================================================ */
+.sched-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.sched-tab{min-height:44px;padding:8px 18px}
+.class-add-another{min-height:44px;margin-top:10px}
+.class-kind-pill.workout{background:rgba(212,175,106,.3)}
+.class-week-line[data-class-edit]{cursor:pointer}
