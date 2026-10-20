@@ -1,8 +1,10 @@
 {
-  "version": "2.4.4",
-  "updated": "2026-10-19",
+  "version": "2.5.0",
+  "updated": "2026-10-20",
   "notify": true,
   "notes": [
-    "Donut center: \"YOU'LL HAVE LEFT\" replaced with a smaller \"REMAINING\" label."
+    "NEW Possible Hours tab: plan the hours you COULD work each day around classes and track, and see what that week pays \u2014 school weeks and break weeks saved separately.",
+    "One-tap scenarios (Light 12h, Typical 16h, Max 20h, Break week 28h) with a side-by-side compare and how fast each pace reaches your savings goal.",
+    "Athlete guardrails: school weeks over ~20 hrs and single days over 8 hrs get a friendly heads-up about sleep and recovery."
   ]
 }

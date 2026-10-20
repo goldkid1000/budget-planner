@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "v": "2.5.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "NEW Possible Hours tab: a what-if week planner for students whose hours change with classes and track. Set the hours you could work each day (Mon–Sun) and see the week's gross and take-home using the exact same pay-stub math as the Paycheck tab.",
+        "School weeks and break weeks each keep their own saved plan — flip the toggle and both are remembered on your device.",
+        "One-tap scenarios — Light 12h, Typical 16h, Max 20h, Break week 28h — plus a compare strip showing weekly/monthly take-home and how fast each pace reaches your savings goal.",
+        "Athlete guardrails: school weeks over ~20 hrs get a gentle warning about sleep and recovery, and any single day over 8 hrs is flagged."
+      ]
+    },
+    {
       "v": "2.4.4",
       "date": "Oct 19, 2026",
       "notes": [

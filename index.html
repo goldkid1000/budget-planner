@@ -37,6 +37,7 @@
     <nav class="nav">
       <button class="nav-btn active" data-view="budget" type="button">📊 Budget</button>
       <button class="nav-btn" data-view="paycheck" type="button">🧾 Paycheck</button>
+      <button class="nav-btn" data-view="hours" type="button">🕐 Possible Hours</button>
       <button class="nav-btn" data-view="mymoney" type="button">🏦 My Money</button>
       <button class="nav-btn" data-view="bills" type="button">🧾 Bills</button>
       <button class="nav-btn" data-view="discounts" type="button">🎓 Discounts</button>
@@ -346,6 +347,57 @@
       </div>
     </section>
 
+    <!-- ================= POSSIBLE HOURS ================= -->
+    <section class="view" id="view-hours">
+      <h2>🕐 Possible hours</h2>
+      <div class="card">
+        <h3>Plan a week that fits school &amp; track</h3>
+        <div class="tip-presets" role="group" aria-label="School weeks or break weeks">
+          <button class="btn-chip active" id="planTermSchool" type="button">School weeks</button>
+          <button class="btn-chip" id="planTermBreak" type="button">Break weeks</button>
+        </div>
+        <p class="hint">Your real hours live on the Paycheck tab. This is a what-if planner: set the hours you <em>could</em> work each day around classes and practice, and see what that week pays — using the same pay-stub math as your paycheck. School weeks and break weeks each keep their own plan.</p>
+        <div id="planDays"></div>
+        <p class="result-line plan-total-line">Total: <strong id="planTotalOut">0 hrs / week</strong></p>
+        <div id="planWarn"></div>
+      </div>
+
+      <div class="card">
+        <h3>What that week pays</h3>
+        <div class="plan-pay-grid">
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Take-home / week</p>
+            <p class="plan-pay-num" id="planNetWeek">$0</p>
+          </div>
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Gross / week</p>
+            <p class="plan-pay-num" id="planGrossWeek">$0</p>
+          </div>
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Per payday (weekly)</p>
+            <p class="plan-pay-num" id="planNetPayday">$0</p>
+          </div>
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Take-home / month (avg)</p>
+            <p class="plan-pay-num" id="planNetMonth">$0</p>
+          </div>
+        </div>
+        <p class="explain" id="planPayNote"></p>
+      </div>
+
+      <div class="card">
+        <h3>Quick scenarios</h3>
+        <p class="hint">One tap fills the planner. Compare shows what each pace means for your savings goal.</p>
+        <div class="tip-presets" role="group" aria-label="Preset scenarios">
+          <button class="btn-chip" id="planPresetLight" type="button">Light · 12h</button>
+          <button class="btn-chip" id="planPresetTypical" type="button">Typical · 16h</button>
+          <button class="btn-chip" id="planPresetMax" type="button">Max · 20h</button>
+          <button class="btn-chip" id="planPresetBreak" type="button">Break week · 28h</button>
+        </div>
+        <div id="planCompare"></div>
+      </div>
+    </section>
+
     <!-- ================= MY MONEY ================= -->
     <section class="view" id="view-mymoney">
       <h2>My money</h2>
@@ -642,6 +694,7 @@
 <nav class="bottomnav" aria-label="Sections">
   <button class="nav-btn active" data-view="budget" type="button">📊<span>Budget</span></button>
   <button class="nav-btn" data-view="paycheck" type="button">🧾<span>Paycheck</span></button>
+  <button class="nav-btn" data-view="hours" type="button">🕐<span>Hours</span></button>
   <button class="nav-btn" data-view="mymoney" type="button">🏦<span>My Money</span></button>
   <button class="nav-btn" data-view="bills" type="button">🧾<span>Bills</span></button>
   <button class="nav-btn" data-view="discounts" type="button">🎓<span>Discounts</span></button>

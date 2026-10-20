@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.4.4';
+var APP_VERSION = '2.5.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -432,7 +432,12 @@ var DEFAULTS = {
   stocks: [],
   syncUsed: [],
   earn: {},
-  earnAdded: 0
+  earnAdded: 0,
+  /* v2.5.0: Possible Hours planner — two saved weeks (school / break),
+     7 numbers each, Mon..Sun hours he COULD work (what-if, not actuals) */
+  planHours: { term: 'school',
+               school: [0, 0, 0, 0, 0, 0, 0],
+               break:  [0, 0, 0, 0, 0, 0, 0] }
 };
 
 var STUDENT = [
@@ -465,6 +470,16 @@ if(!S.ded) S.ded = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0
 /* v2.3.0: Earn tab state */
 if(!S.earn || typeof S.earn !== 'object') S.earn = {};
 if(S.earnAdded === undefined || S.earnAdded === null) S.earnAdded = 0;
+/* v2.5.0: Possible Hours planner state — backfill + normalize to 7 days */
+if(!S.planHours || !Array.isArray(S.planHours.school) || !Array.isArray(S.planHours.break)){
+  S.planHours = JSON.parse(JSON.stringify(DEFAULTS.planHours));
+}
+if(S.planHours.term !== 'break') S.planHours.term = 'school';
+['school', 'break'].forEach(function(t){
+  var a = S.planHours[t].slice(0, 7);
+  while(a.length < 7) a.push(0);
+  S.planHours[t] = a.map(function(v){ var n = num(v); return n > 0 ? n : 0; });
+});
 /* v1.2.0: the old single FICA % splits into Social Security + Medicare at the
    statutory 6.2 / 1.45 ratio, so old saved rates keep working. The old
    gross/net "calibration" is gone — the per-line pay-stub profile replaces it. */
@@ -568,6 +583,172 @@ function currentPaycheck(){
      estimate — the stub numbers are the real ones. */
   if(!S.stubSaved) return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq, { stateCode: S.stateCode || 'NY' });
   return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq);
+}
+
+/* ---------- v2.5.0: Possible Hours planner ----------
+   A what-if week: hours he COULD work each day around school and track.
+   Pay previews run through the SAME calcPaycheck pipeline as the real
+   Paycheck tab (same rate, same deduction profile, same estimate/stub
+   mode) — forced to weekly, since the planner is a single week. */
+var PLAN_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+var PLAN_DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+/* one-tap scenarios: arrays are Mon..Sun. Sundays stay 0 in every preset. */
+var PLAN_PRESETS = {
+  light:   { label: 'Light',   term: 'school', days: [3, 0, 3, 0, 3, 3, 0] },
+  typical: { label: 'Typical', term: 'school', days: [4, 0, 4, 0, 4, 4, 0] },
+  max:     { label: 'Max',     term: 'school', days: [4, 4, 4, 4, 4, 0, 0] },
+  breakwk: { label: 'Break week', term: 'break', days: [6, 6, 6, 6, 4, 0, 0] }
+};
+function planScenarioPaycheck(hours){
+  if(!S.stubSaved) return calcPaycheck(hours, S.rate, S.ded, 'weekly', { stateCode: S.stateCode || 'NY' });
+  return calcPaycheck(hours, S.rate, S.ded, 'weekly');
+}
+function planTotal(days){
+  return days.reduce(function(a, v){ return a + num(v); }, 0);
+}
+function planTermDays(){
+  return S.planHours[S.planHours.term === 'break' ? 'break' : 'school'];
+}
+function fmtPlanHrs(h){
+  var n = Math.round(num(h) * 10) / 10;
+  return (n % 1 === 0 ? String(n) : n.toFixed(1)) + 'h';
+}
+/* months-to-goal line for one scenario, reusing the Budget tab's own
+   projection. Monthly leftover swaps the current paycheck for the
+   scenario's monthly take-home; bills + planned spending stay his real
+   ones. No goal set → fall back to the monthly surplus itself. */
+function planGoalLine(hours){
+  var p = planScenarioPaycheck(hours);
+  var monthlyNet = round2(p.net * 52 / 12);
+  var leftover = round2(monthlyNet - unpaidBillsTotal() - plannedSpend());
+  if(!(num(S.goal) > 0)){
+    return 'Surplus ≈ ' + money(leftover) + '/mo after your bills + planned spending';
+  }
+  var proj = calcGoalProjection(S.goal, S.saved, leftover, S.rate, p.effRate);
+  if(proj.status === 'reached') return 'Goal already reached 🎉';
+  if(proj.status === 'date') return 'Hits ' + money0(S.goal) + ' in ≈ ' + proj.months + ' mo · ' + proj.dateStr;
+  if(proj.status === 'far') return 'Goal would take 50+ yrs at this pace';
+  return 'Not saving yet at this pace — short ' + money(proj.shortfall) + '/mo';
+}
+function renderPlanHours(rebuildDays){
+  var schoolBtn = document.getElementById('planTermSchool');
+  if(!schoolBtn) return;
+  var term = S.planHours.term === 'break' ? 'break' : 'school';
+  var days = S.planHours[term];
+  schoolBtn.classList.toggle('active', term === 'school');
+  document.getElementById('planTermBreak').classList.toggle('active', term === 'break');
+
+  /* day rows — skip the rebuild while a slider is being dragged */
+  var daysEl = document.getElementById('planDays');
+  var dragging = daysEl.contains(document.activeElement) && document.activeElement.type === 'range';
+  if(rebuildDays && !dragging){
+    daysEl.innerHTML = '';
+    PLAN_DAYS.forEach(function(name, i){
+      var row = document.createElement('div');
+      row.className = 'plan-day' + (num(days[i]) > 8 ? ' over' : '');
+      row.innerHTML =
+        '<span class="plan-day-name">' + name + '</span>' +
+        '<button class="plan-step" type="button" data-plan-dec="' + i + '" aria-label="Fewer hours ' + PLAN_DAY_FULL[i] + '">−</button>' +
+        '<input type="range" min="0" max="10" step="0.5" value="' + num(days[i]) + '" data-plan-range="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours">' +
+        '<button class="plan-step" type="button" data-plan-inc="' + i + '" aria-label="More hours ' + PLAN_DAY_FULL[i] + '">+</button>' +
+        '<span class="plan-day-val" id="planDayVal' + i + '">' + fmtPlanHrs(days[i]) + '</span>';
+      daysEl.appendChild(row);
+    });
+  } else {
+    /* light update: values + over-8 flags only */
+    days.forEach(function(v, i){
+      var val = document.getElementById('planDayVal' + i);
+      if(val) val.textContent = fmtPlanHrs(v);
+      var row = val ? val.closest('.plan-day') : null;
+      if(row) row.classList.toggle('over', num(v) > 8);
+    });
+  }
+
+  /* totals + pay preview */
+  var total = planTotal(days);
+  document.getElementById('planTotalOut').textContent = fmtPlanHrs(total) + ' / week';
+  var p = planScenarioPaycheck(total);
+  var monthlyNet = round2(p.net * 52 / 12);
+  document.getElementById('planNetWeek').textContent = money(p.net);
+  document.getElementById('planGrossWeek').textContent = money(p.weeklyGross);
+  document.getElementById('planNetPayday').textContent = money(p.net);
+  document.getElementById('planNetMonth').textContent = money(monthlyNet);
+  var note = document.getElementById('planPayNote');
+  if(!(num(S.rate) > 0)){
+    note.textContent = 'Set your hourly rate on the Paycheck tab and these previews fill in with your real rate and deductions.';
+  } else {
+    note.textContent = 'Same math as your Paycheck tab at ' + money(S.rate) + '/hr' +
+      (p.estimateUsed ? ' (taxes estimated from the 2025 brackets — enter a pay stub there for exact numbers)' : ' (using your saved pay-stub deductions)') +
+      '. Monthly is the weekly take-home × 52 ÷ 12.';
+  }
+
+  /* athlete guardrails */
+  var warn = document.getElementById('planWarn');
+  var msgs = [];
+  if(term === 'school' && total > 20){
+    msgs.push('🏃 <strong>' + fmtPlanHrs(total) + ' in a school week is heavy for track season</strong> — that pace eats into sleep and recovery. Around 20 hrs is the ceiling that still protects your training.');
+  }
+  var heavy = [];
+  days.forEach(function(v, i){ if(num(v) > 8) heavy.push(PLAN_DAY_FULL[i] + ' (' + fmtPlanHrs(v) + ')'); });
+  if(heavy.length){
+    msgs.push('⚠️ Long day' + (heavy.length > 1 ? 's' : '') + ' over 8 hrs: ' + heavy.join(', ') + ' — a single shift that long is rough on a practice day.');
+  }
+  warn.innerHTML = msgs.length ? '<div class="warning plan-warning">' + msgs.join('<br>') + '</div>' : '';
+
+  /* compare strip: the three school paces side by side */
+  var cmp = document.getElementById('planCompare');
+  cmp.innerHTML = '';
+  ['light', 'typical', 'max'].forEach(function(key){
+    var preset = PLAN_PRESETS[key];
+    var hrs = planTotal(preset.days);
+    var pp = planScenarioPaycheck(hrs);
+    var row = document.createElement('div');
+    row.className = 'plan-compare-row';
+    row.innerHTML =
+      '<div class="plan-compare-head"><strong>' + preset.label + ' · ' + fmtPlanHrs(hrs) + '/wk</strong>' +
+      '<span class="plan-compare-net">' + money(pp.net) + ' /wk</span></div>' +
+      '<div class="plan-compare-sub">' + money(round2(pp.net * 52 / 12)) + ' take-home/mo · ' + planGoalLine(hrs) + '</div>';
+    cmp.appendChild(row);
+  });
+}
+function bindPlanHours(){
+  var daysEl = document.getElementById('planDays');
+  if(!daysEl) return;
+  function setDay(i, v){
+    var days = planTermDays();
+    v = Math.max(0, Math.min(10, Math.round(num(v) * 2) / 2));
+    days[i] = v;
+    save();
+    var slider = daysEl.querySelector('[data-plan-range="' + i + '"]');
+    if(slider && document.activeElement !== slider) slider.value = v;
+    renderPlanHours(false);
+  }
+  daysEl.addEventListener('input', function(e){
+    var t = e.target;
+    if(t.dataset.planRange !== undefined) setDay(+t.dataset.planRange, t.value);
+  });
+  daysEl.addEventListener('click', function(e){
+    var t = e.target;
+    var days = planTermDays();
+    if(t.dataset.planDec !== undefined) setDay(+t.dataset.planDec, num(days[+t.dataset.planDec]) - 0.5);
+    if(t.dataset.planInc !== undefined) setDay(+t.dataset.planInc, num(days[+t.dataset.planInc]) + 0.5);
+  });
+  function setTerm(term){
+    S.planHours.term = term; save(); renderPlanHours(true);
+  }
+  document.getElementById('planTermSchool').addEventListener('click', function(){ setTerm('school'); });
+  document.getElementById('planTermBreak').addEventListener('click', function(){ setTerm('break'); });
+  Object.keys(PLAN_PRESETS).forEach(function(key){
+    var btnId = key === 'breakwk' ? 'planPresetBreak' : 'planPreset' + key.charAt(0).toUpperCase() + key.slice(1);
+    var btn = document.getElementById(btnId);
+    if(!btn) return;
+    btn.addEventListener('click', function(){
+      var preset = PLAN_PRESETS[key];
+      S.planHours.term = preset.term;
+      S.planHours[preset.term] = preset.days.slice();
+      save(); renderPlanHours(true);
+    });
+  });
 }
 
 /* Money the user HAS right now. If they typed a number in the Budget tab,
@@ -675,6 +856,7 @@ function renderAll(){
   renderBudget(); renderPaycheck(); renderMyMoney(); renderBills();
   renderDiscountsStatic(); renderDiscountCalc(); renderCashbackEst();
   renderCalculators(); renderWatchlist(); renderStocks(); renderEarn();
+  renderPlanHours(true);
 }
 
 function renderBudget(){
@@ -1454,6 +1636,7 @@ function bind(){
     b.addEventListener('click', function(){ switchView(b.dataset.view); });
   });
   bindEarn();
+  bindPlanHours();
   document.getElementById('clearAllBtn').addEventListener('click', function(){
     if(confirm('Clear all your numbers? Everything you typed will be reset to the starting values.')){
       try{ localStorage.removeItem(KEY); }catch(e){}

@@ -680,3 +680,43 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   .btn-primary{min-height:48px}
   .field input,.field select,.add-row input,.add-row select{min-height:46px}
 }
+
+/* ================================================================
+   v2.5.0 — Possible Hours planner. Same Sovereign language:
+   hairline gold, serif money numerals, calm charcoal cards.
+   ================================================================ */
+.plan-day{display:flex;align-items:center;gap:10px;padding:9px 2px;
+  border-bottom:1px solid var(--line-soft);min-height:56px}
+.plan-day:last-of-type{border-bottom:none}
+.plan-day-name{width:38px;flex-shrink:0;font-weight:700;font-size:.95rem}
+.plan-day input[type=range]{flex:1;min-width:0}
+.plan-day-val{width:44px;flex-shrink:0;text-align:right;font-weight:700;
+  font-family:Georgia,'Times New Roman',serif;font-size:1.02rem}
+.plan-day.over .plan-day-val{color:var(--amber-hi,#e8c47c)}
+.plan-step{width:44px;height:44px;flex-shrink:0;border-radius:50%;
+  border:1px solid var(--input-line);background:var(--card2);color:var(--ink);
+  font-size:1.3rem;font-weight:700;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0}
+.plan-step:active{border-color:var(--green);background:var(--green-soft)}
+.plan-total-line{font-size:1.05rem;margin-top:14px}
+.plan-total-line strong,.plan-pay-num,.plan-compare-net{
+  font-family:Georgia,'Times New Roman',serif}
+.plan-warning{margin-top:12px}
+.plan-pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px}
+.plan-pay-cell{background:rgba(212,175,106,.05);border:1px solid var(--line-soft);
+  border-radius:12px;padding:12px 14px}
+.plan-pay-label{margin:0 0 2px;font-size:.78rem;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+.plan-pay-num{margin:0;font-size:1.45rem;font-weight:700;color:#fbf3df}
+.plan-compare-row{padding:12px 2px;border-bottom:1px solid var(--line-soft)}
+.plan-compare-row:last-child{border-bottom:none}
+.plan-compare-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.plan-compare-head strong{font-size:1rem}
+.plan-compare-net{font-weight:700;font-size:1.05rem;color:var(--green-hi,#f2ddab);white-space:nowrap}
+.plan-compare-sub{font-size:.86rem;color:var(--muted);margin-top:2px}
+/* 9 tabs in the phone tab bar */
+@media (max-width:600px){
+  .bottomnav .nav-btn{font-size:.92rem;padding:8px 1px}
+  .bottomnav .nav-btn span{font-size:.52rem}
+  .plan-pay-grid{grid-template-columns:1fr 1fr}
+}
