@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "v": "2.8.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "NEW ✨ Suggest my work hours in the Class Schedule: pick a weekly target — Light 12h, Typical 16h, or Max 20h — and the app fits work shifts around your classes for you.",
+        "Every shift keeps 30 minutes of breathing room before and after each class, Sundays and meet days stay off, and shifts run 2–6 hours between 7:00 AM and 10:00 PM.",
+        "You preview the whole suggested week first — if your classes only leave room for less than the target, it tells you. Nothing changes until you tap Apply, which drops the week into your school planner with real start/end times you can still edit day by day."
+      ]
+    },
+    {
       "v": "2.7.0",
       "date": "Oct 20, 2026",
       "notify": true,

@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.7.0';
+var APP_VERSION = '2.8.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -63,6 +63,108 @@ function fmtMinutes(mins){
 function fmtHrsExact(h){
   var v = Number(h); if(!isFinite(v)) v = 0;
   return String(Math.round(v * 100) / 100);
+}
+/* minutes since midnight -> "HH:MM" */
+function minsToHHMM(mins){
+  var m = Math.round(num0(mins));
+  if(m < 0) m = 0; if(m > 1439) m = 1439;
+  var h = Math.floor(m / 60), r = m % 60;
+  return (h < 10 ? '0' : '') + h + ':' + (r < 10 ? '0' : '') + r;
+}
+/* v2.8.0: "Suggest my work hours" — pure week planner. Fits work
+   shifts around classes inside a 07:00–22:00 window: Sundays and
+   Meet-tagged days stay off, every class keeps a 30-minute buffer on
+   both sides, shifts run 2–6 hrs in 30-min steps placed at the start
+   of the day's longest free stretch, and two passes spread the paid
+   target across Mon–Sat (up to 4 hrs each first, then top up to each
+   day's capacity). Deterministic — no clock, no randomness — so the
+   same week always gets the same suggestion.
+   classes: [{ days:[Mon=0..Sun=6], s:'HH:MM', e:'HH:MM' }];
+   schoolTags: [[tag,...] ×7]. Returns { days: [{s,e,paid}|null ×7],
+   totalPaid, capacity (hrs), shortfall (hrs vs the target). */
+function suggestWorkWeek(classes, schoolTags, targetHours){
+  var WIN_S = 420, WIN_E = 1320, BUF = 30, STEP = 30;
+  var MIN_LEN = 120, MAX_LEN = 360, PASS1_CAP = 240;
+  var targetMin = Math.max(0, Math.round(num0(targetHours) * 60 / STEP) * STEP);
+  var list = Array.isArray(classes) ? classes : [];
+  var tags = Array.isArray(schoolTags) ? schoolTags : [];
+  var caps = [], starts = [];
+  for(var d = 0; d < 7; d++){
+    caps.push(0); starts.push(-1);
+    if(d === 6) continue; /* Sundays always off */
+    var dayTags = Array.isArray(tags[d]) ? tags[d] : [];
+    if(dayTags.indexOf('meet') >= 0) continue; /* Meet days off */
+    /* this day's class blocks in minutes (overnight rolls, ends
+       capped at the window end so a late class can't leak past 22:00) */
+    var busy = [];
+    list.forEach(function(c){
+      if(!c || !Array.isArray(c.days) || c.days.indexOf(d) === -1) return;
+      var s = toMinutes(c.s), e = toMinutes(c.e);
+      if(e <= s) e += 1440;
+      if(e > WIN_E) e = WIN_E;
+      if(s < e) busy.push([s, e]);
+    });
+    busy.sort(function(a, b){ return a[0] - b[0] || a[1] - b[1]; });
+    var merged = [];
+    busy.forEach(function(b){
+      var last = merged[merged.length - 1];
+      if(last && b[0] <= last[1]){ if(b[1] > last[1]) last[1] = b[1]; }
+      else merged.push([b[0], b[1]]);
+    });
+    /* buffer both sides: work starts ≥30 min after a class ends and
+       ends ≥30 min before the next one starts */
+    var blocked = merged.map(function(b){
+      return [Math.max(WIN_S, b[0] - BUF), Math.min(WIN_E, b[1] + BUF)];
+    });
+    /* free intervals = window minus blocked; the shift takes the
+       longest one and starts at its start */
+    var free = [], cur = WIN_S;
+    blocked.forEach(function(b){
+      if(b[0] > cur) free.push([cur, b[0]]);
+      if(b[1] > cur) cur = b[1];
+    });
+    if(cur < WIN_E) free.push([cur, WIN_E]);
+    var bestStart = -1, bestLen = 0;
+    free.forEach(function(f){
+      var len = Math.floor((f[1] - f[0]) / STEP) * STEP;
+      if(len > bestLen){ bestLen = len; bestStart = f[0]; }
+    });
+    if(bestLen >= MIN_LEN){
+      caps[d] = Math.min(MAX_LEN, bestLen);
+      starts[d] = bestStart;
+    }
+  }
+  var capacityMin = 0;
+  caps.forEach(function(c){ capacityMin += c; });
+  /* Pass 1: up to 4h per workable day. Pass 2: top up to capacity. */
+  var alloc = [0, 0, 0, 0, 0, 0, 0], remaining = targetMin;
+  for(var p = 0; p < 2 && remaining > 0; p++){
+    for(var i = 0; i < 6 && remaining > 0; i++){
+      if(caps[i] <= 0) continue;
+      var room = (p === 0 ? Math.min(PASS1_CAP, caps[i]) : caps[i]) - alloc[i];
+      if(room <= 0) continue;
+      var give = Math.min(room, remaining);
+      alloc[i] += give; remaining -= give;
+    }
+  }
+  /* paid hours for a block, same meal rule as calcShiftPaidHours with
+     defaultMeal (30 min unpaid over 6 hrs) — unreachable at the 6-hr
+     cap, but coded so the rule stays consistent everywhere */
+  function paidFor(lenMin){
+    var meal = lenMin > 360 ? 30 : 0;
+    var paid = lenMin - meal;
+    return paid > 0 ? paid / 60 : 0;
+  }
+  var days = [], totalPaid = 0;
+  for(var j = 0; j < 7; j++){
+    if(alloc[j] > 0){
+      var paid = paidFor(alloc[j]);
+      days.push({ s: minsToHHMM(starts[j]), e: minsToHHMM(starts[j] + alloc[j]), paid: paid });
+      totalPaid += paid;
+    } else days.push(null);
+  }
+  return { days: days, totalPaid: totalPaid, capacity: capacityMin / 60,
+           shortfall: Math.max(0, num0(targetHours) - totalPaid) };
 }
 /* compare dotted version strings: -1 if a<b, 0 if equal, 1 if a>b */
 function compareVersions(a, b){
@@ -472,7 +574,11 @@ var DEFAULTS = {
                   When both are set, the day's hours fill from the shift
                   length with the Paycheck tab's meal rule. */
                schoolTimes: [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}],
-               breakTimes:  [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}] },
+               breakTimes:  [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}],
+               /* v2.8.0: ✨ Suggest-my-work-hours weekly target (paid
+                  hrs) — one of 12 / 16 / 20, picked with chips in the
+                  Class Schedule card */
+               suggestTarget: 16 },
   /* v2.6.1: Work Log — weeks he ACTUALLY worked, saved to look back on.
      Entries: { id, week (Monday 'YYYY-MM-DD'), days [7], times [7 {s,e}],
      total, gross, net } — pay frozen at save time via planScenarioPaycheck. */
@@ -576,6 +682,8 @@ function normWeekTimes(v){
   var ph = S.planHours;
   ph.schoolTimes = normWeekTimes(ph.schoolTimes);
   ph.breakTimes = normWeekTimes(ph.breakTimes);
+  /* v2.8.0: suggest-my-work-hours target — 12, 16 or 20, else 16 */
+  if([12, 16, 20].indexOf(ph.suggestTarget) === -1) ph.suggestTarget = 16;
   if(!ph.breakCal.times || typeof ph.breakCal.times !== 'object' || Array.isArray(ph.breakCal.times)) ph.breakCal.times = {};
   Object.keys(ph.breakCal.times).forEach(function(k){ ph.breakCal.times[k] = normTimePair(ph.breakCal.times[k]); });
   if(!Array.isArray(S.workLog)) S.workLog = [];
@@ -1784,6 +1892,14 @@ function bindWorkLog(){
    the editing id live in module vars; only saved classes persist. */
 var classDraft = { name: '', days: [], s: '08:00', e: '08:50' };
 var classEditingId = null;
+/* v2.8.0: the pending work-hours suggestion preview ({ target, result }
+   from suggestWorkWeek) — module state only, never saved; it's stale
+   the moment the classes or the target change, so those paths clear it */
+var suggestPreviewData = null;
+function suggestTargetHrs(){
+  var t = num(S.planHours && S.planHours.suggestTarget, 16);
+  return [12, 16, 20].indexOf(t) >= 0 ? t : 16;
+}
 function getClasses(){ return Array.isArray(S.classes) ? S.classes : []; }
 function classById(id){
   var list = getClasses();
@@ -1900,6 +2016,61 @@ function renderSchedule(){
       sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes. ✅';
     }
   }
+  renderSuggest();
+}
+/* v2.8.0: ✨ Suggest my work hours — target chips + preview. The
+   preview is a proposal only: nothing in the school plan changes
+   until Apply is tapped, and Apply says so right in the preview. */
+function renderSuggest(){
+  var chipsEl = document.getElementById('suggestTargets');
+  if(chipsEl){
+    var chips = chipsEl.querySelectorAll('[data-suggest-target]');
+    for(var ci = 0; ci < chips.length; ci++){
+      var on = +chips[ci].dataset.suggestTarget === suggestTargetHrs();
+      chips[ci].classList.toggle('active', on);
+      chips[ci].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+  var prevEl = document.getElementById('suggestPreview');
+  if(!prevEl) return;
+  if(!suggestPreviewData){ prevEl.innerHTML = ''; return; }
+  var res = suggestPreviewData.result, tgt = suggestPreviewData.target;
+  var html = '';
+  res.days.forEach(function(dy, i){
+    html += '<div class="suggest-line"><span class="suggest-day">' + PLAN_DAYS[i] + '</span>' +
+      (dy ? '<span>' + esc(fmtTime(dy.s)) + ' – ' + esc(fmtTime(dy.e)) + ' · ' + fmtHrsExact(dy.paid) + ' paid hrs</span>'
+          : '<span class="suggest-off">off</span>') + '</div>';
+  });
+  html += '<p class="suggest-total">Total: <strong>' + fmtHrsExact(res.totalPaid) + ' paid hrs</strong> (target ' + tgt + 'h)</p>';
+  if(res.shortfall > 0){
+    html += '<p class="suggest-warn">Your classes only leave room for ~' + fmtHrsExact(res.totalPaid) +
+      ' paid hrs — short of the ' + tgt + 'h target.</p>';
+  }
+  html += '<p class="hint">Applying replaces your current school-week plan — the hours and the shift times. You can still edit any day in the planner afterwards.</p>' +
+    '<div class="bk-actions">' +
+    '<button class="btn-primary" type="button" id="suggestApply">Apply to my school plan</button>' +
+    '<button class="btn-chip" type="button" id="suggestDiscard">Discard</button></div>';
+  prevEl.innerHTML = html;
+  document.getElementById('suggestApply').addEventListener('click', applySuggestion);
+  document.getElementById('suggestDiscard').addEventListener('click', function(){
+    suggestPreviewData = null;
+    renderSuggest();
+  });
+}
+function applySuggestion(){
+  if(!suggestPreviewData) return;
+  var res = suggestPreviewData.result;
+  S.planHours.term = 'school';
+  res.days.forEach(function(dy, i){
+    if(dy){ S.planHours.school[i] = dy.paid; S.planHours.schoolTimes[i] = { s: dy.s, e: dy.e }; }
+    else { S.planHours.school[i] = 0; S.planHours.schoolTimes[i] = { s: '', e: '' }; }
+  });
+  suggestPreviewData = null;
+  save();
+  renderPlanHours(true);
+  renderSchedule();
+  var note = document.getElementById('suggestNote');
+  if(note) note.textContent = 'Suggested week applied to your school plan.';
 }
 function bindSchedule(){
   var chipsEl = document.getElementById('classDayChips');
@@ -1949,6 +2120,7 @@ function bindSchedule(){
       var tags = S.planHours.schoolTags[d];
       if(Array.isArray(tags) && tags.indexOf('class') === -1) tags.push('class');
     });
+    suggestPreviewData = null; /* classes changed — any preview is stale */
     save();
     resetClassForm();
     renderPlanHours(true);
@@ -1974,9 +2146,37 @@ function bindSchedule(){
       var id = delBtn.dataset.classDel;
       S.classes = getClasses().filter(function(c){ return c.id !== id; });
       if(classEditingId === id) resetClassForm();
+      suggestPreviewData = null; /* classes changed — preview is stale */
       save();
       renderSchedule();
     }
+  });
+  /* v2.8.0: suggest-target chips + the Suggest button */
+  var sugChips = document.getElementById('suggestTargets');
+  if(sugChips) sugChips.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t.dataset || t.dataset.suggestTarget === undefined) return;
+    var v = +t.dataset.suggestTarget;
+    if([12, 16, 20].indexOf(v) === -1) return;
+    S.planHours.suggestTarget = v;
+    suggestPreviewData = null; /* a different target makes the preview stale */
+    save();
+    renderSuggest();
+  });
+  var sugBtn = document.getElementById('suggestBtn');
+  if(sugBtn) sugBtn.addEventListener('click', function(){
+    var note = document.getElementById('suggestNote');
+    if(!getClasses().length){
+      suggestPreviewData = null;
+      renderSuggest();
+      if(note) note.textContent = 'Add at least one class first so I know what to work around.';
+      return;
+    }
+    var tgt = suggestTargetHrs();
+    suggestPreviewData = { target: tgt,
+      result: suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt) };
+    if(note) note.textContent = '';
+    renderSuggest();
   });
 }
 
@@ -3261,6 +3461,8 @@ function bind(){
     S = pl.state;
     /* v2.7.0: imported state may predate the Class Schedule */
     S.classes = normClasses(S.classes);
+    /* v2.8.0: …or the suggest-my-work-hours target */
+    if(S.planHours && [12, 16, 20].indexOf(S.planHours.suggestTarget) === -1) S.planHours.suggestTarget = 16;
     if(S.employerKey === undefined) S.employerKey = 'custom';
     if(!S.stocks) S.stocks = [];
     if(!S.syncUsed) S.syncUsed = [];

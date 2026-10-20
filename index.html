@@ -398,6 +398,22 @@
         </div>
         <p class="hint" id="classNote"></p>
         <div id="classList"></div>
+        <!-- v2.8.0: ✨ Suggest my work hours — pick a target and the app
+             fits shifts around the classes above (30 min of breathing
+             room around each class, Sundays + meet days off). Preview
+             first; nothing changes until Apply is tapped. -->
+        <div class="suggest-box">
+          <h4 class="bk-saved-head">✨ Suggest my work hours</h4>
+          <p class="hint">Pick a weekly target and I'll fit work shifts around your classes — 30 minutes of breathing room before and after each class, Sundays and meet days off, shifts of 2–6 hours between 7:00 AM and 10:00 PM. You'll see the whole week before anything changes.</p>
+          <div class="tip-presets" id="suggestTargets" role="group" aria-label="Weekly work target in paid hours">
+            <button class="btn-chip" type="button" data-suggest-target="12" aria-pressed="false">Light · 12h</button>
+            <button class="btn-chip" type="button" data-suggest-target="16" aria-pressed="false">Typical · 16h</button>
+            <button class="btn-chip" type="button" data-suggest-target="20" aria-pressed="false">Max · 20h</button>
+          </div>
+          <button class="btn-primary" id="suggestBtn" type="button">✨ Suggest my work hours</button>
+          <p class="hint" id="suggestNote"></p>
+          <div id="suggestPreview"></div>
+        </div>
         <h4 class="bk-saved-head">Your week — classes + work</h4>
         <div id="classWeek"></div>
         <div class="class-summary" id="classSummary"></div>
