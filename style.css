@@ -825,3 +825,32 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .wl-entry-sum{font-weight:700;font-family:Georgia,'Times New Roman',serif;
   color:var(--green-hi,#f2ddab);white-space:nowrap;font-size:.95rem}
 .wl-entry-detail{font-size:.87rem;color:var(--muted);line-height:1.55;padding:2px 0 8px}
+
+/* ================================================================
+   v2.7.0 — Class Schedule: day toggle chips, saved-class rows,
+   classes + work week view with overlap flags. Sovereign language.
+   ================================================================ */
+.class-days{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px}
+.class-day-chip{min-height:44px;min-width:52px;padding:6px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(212,175,106,.35);background:transparent;color:var(--muted);
+  font-size:.88rem;font-weight:650}
+.class-day-chip.active{background:linear-gradient(135deg,#a67c3d,#d4af6a);color:#241a0b;
+  border-color:transparent;box-shadow:0 2px 10px rgba(212,175,106,.3)}
+.class-times{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.class-preview{margin:10px 0 0;font-size:.95rem;font-weight:650}
+.class-row{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:10px 2px;border-bottom:1px solid var(--line-soft)}
+.class-row:last-of-type{border-bottom:none}
+.class-row-info{min-width:0}
+.class-row-sub{font-size:.85rem;color:var(--muted);margin-top:1px}
+.class-row-actions{display:flex;gap:8px;flex-shrink:0}
+.class-week-day{padding:8px 2px;border-bottom:1px solid var(--line-soft)}
+.class-week-day:last-of-type{border-bottom:none}
+.class-week-name{font-weight:700;font-family:Georgia,'Times New Roman',serif;font-size:.98rem}
+.class-week-line{font-size:.9rem;line-height:1.5;margin:2px 0 0 12px}
+.class-week-line.work{color:var(--muted)}
+.class-week-line.none{color:var(--muted)}
+.class-week-line.conflict{color:#f0b35e;font-weight:650}
+.class-summary{margin-top:12px;font-size:.92rem;line-height:1.55;
+  background:var(--card2);border:1px solid var(--line-soft);border-radius:12px;padding:10px 12px}
+.class-summary:empty{display:none}

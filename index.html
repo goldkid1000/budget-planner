@@ -368,6 +368,41 @@
         <div id="planWarn"></div>
       </div>
 
+      <!-- v2.7.0: Class Schedule — add every class (as many as he has)
+           with its days + start/end; the week view lines classes up
+           against the planned school-week work shifts and flags
+           overlaps. Times are exact to the minute. -->
+      <div class="card" id="classCard">
+        <h3>🎓 Class schedule</h3>
+        <p class="hint">Add every class you have — as many as you need — with the days it meets and its start and end times. Times are exact to the minute: a class from 8:00 to 8:50 is 50 minutes (0.83 hrs), never rounded. The week view below lines your classes up against your planned work shifts from the school-week planner and flags any overlap, so you can schedule work around school.</p>
+        <label class="field">Class name
+          <input id="classNameInput" type="text" placeholder="e.g. BIO 304" autocomplete="off">
+        </label>
+        <div class="class-days" id="classDayChips" role="group" aria-label="Days this class meets">
+          <button class="class-day-chip" type="button" data-class-day="0" aria-pressed="false">Mon</button>
+          <button class="class-day-chip" type="button" data-class-day="1" aria-pressed="false">Tue</button>
+          <button class="class-day-chip" type="button" data-class-day="2" aria-pressed="false">Wed</button>
+          <button class="class-day-chip" type="button" data-class-day="3" aria-pressed="false">Thu</button>
+          <button class="class-day-chip" type="button" data-class-day="4" aria-pressed="false">Fri</button>
+          <button class="class-day-chip" type="button" data-class-day="5" aria-pressed="false">Sat</button>
+          <button class="class-day-chip" type="button" data-class-day="6" aria-pressed="false">Sun</button>
+        </div>
+        <div class="class-times">
+          <label class="plan-time-field">Start <input type="time" id="classStart" value="08:00" aria-label="Class start time"></label>
+          <label class="plan-time-field">End <input type="time" id="classEnd" value="08:50" aria-label="Class end time"></label>
+        </div>
+        <p class="class-preview" id="classPreview"></p>
+        <div class="bk-actions">
+          <button class="btn-primary" id="classAddBtn" type="button">Add class</button>
+          <button class="btn-chip" id="classCancelEdit" type="button" hidden>Cancel edit</button>
+        </div>
+        <p class="hint" id="classNote"></p>
+        <div id="classList"></div>
+        <h4 class="bk-saved-head">Your week — classes + work</h4>
+        <div id="classWeek"></div>
+        <div class="class-summary" id="classSummary"></div>
+      </div>
+
       <!-- v2.6.0: Break Calendar — pick the break's start + return dates,
            tap the days he can work, whole-break pay week by week. -->
       <div class="card" id="breakCalCard" hidden>
@@ -389,7 +424,7 @@
         <div id="bkCalWrap"></div>
         <div class="bk-editor" id="bkEditor" hidden>
           <span class="bk-editor-label" id="bkEditorLabel"></span>
-          <span class="plan-hrs-wrap bk-hrs-wrap"><input class="plan-hrs bk-hrs-input" id="bkHrsInput" type="number" inputmode="decimal" min="0" max="12" step="0.25" value="0" aria-label="Hours for the selected day — type a number"><span class="plan-hrs-unit">hrs</span></span>
+          <span class="plan-hrs-wrap bk-hrs-wrap"><input class="plan-hrs bk-hrs-input" id="bkHrsInput" type="number" inputmode="decimal" min="0" max="12" step="0.01" value="0" aria-label="Hours for the selected day — type a number"><span class="plan-hrs-unit">hrs</span></span>
           <button class="plan-times-btn" id="bkTimesBtn" type="button" aria-expanded="false">＋ times</button>
           <div class="bk-editor-times" id="bkTimesRow" hidden>
             <label class="plan-time-field">Start <input type="time" id="bkStartTime" aria-label="Selected day shift start"></label>

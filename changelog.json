@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "v": "2.7.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "Exact times fixed: durations are now figured to the minute — a class or shift from 8:00 to 8:50 AM shows 50 min (0.83 hrs) instead of rounding down to 0.75 hrs. Hours you type keep their exact value too (0–12, to the minute).",
+        "NEW Class Schedule in the Hours tab: add as many classes as you have — a name, the days it meets, and its start and end times — and edit or delete any of them whenever your schedule changes.",
+        "Week view: your classes and your planned school-week work shifts side by side for the whole week, with ⚠️ overlap warnings whenever a work shift runs into a class, plus your total class time and planned work hours per week.",
+        "Adding a class also tags those days as Class days in the planner above, so your plan and your schedule stay in sync."
+      ]
+    },
+    {
       "v": "2.6.1",
       "date": "Oct 20, 2026",
       "notify": true,

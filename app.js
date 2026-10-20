@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.6.1';
+var APP_VERSION = '2.7.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -42,6 +42,27 @@ function defaultBreak(){ return 15; }
 function fmtHrs(h){
   var v = Number(h); if(!isFinite(v)) v = 0;
   return (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+}
+/* v2.7.0: exact durations — integer minutes between two "HH:MM" times
+   (overnight rolls past midnight, same rule as calcShiftHours) */
+function exactMinutes(startStr, endStr){
+  var s = toMinutes(startStr), e = toMinutes(endStr);
+  if(e <= s) e += 1440;
+  return e - s;
+}
+/* "50 min" / "1 hr" / "1 hr 20 min" / "2 hrs" */
+function fmtMinutes(mins){
+  var m = Math.round(num0(mins));
+  if(m < 0) m = 0;
+  var h = Math.floor(m / 60), r = m % 60;
+  if(h === 0) return m + ' min';
+  var hs = h + (h === 1 ? ' hr' : ' hrs');
+  return r === 0 ? hs : hs + ' ' + r + ' min';
+}
+/* exact hours, 2 decimals trimmed: 0.83, 4.5, 7.5 */
+function fmtHrsExact(h){
+  var v = Number(h); if(!isFinite(v)) v = 0;
+  return String(Math.round(v * 100) / 100);
 }
 /* compare dotted version strings: -1 if a<b, 0 if equal, 1 if a>b */
 function compareVersions(a, b){
@@ -458,7 +479,12 @@ var DEFAULTS = {
   workLog: [],
   wlDraft: { week: '',
              days: [0, 0, 0, 0, 0, 0, 0],
-             times: [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}] }
+             times: [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}] },
+  /* v2.7.0: Class Schedule — every class he takes, planned against
+     work. Entries: { id, name, days [Mon=0..Sun=6], s, e ('HH:MM') }.
+     Class durations are exact to the minute — the meal deduction is a
+     paid-work rule and never applies to a class. */
+  classes: []
 };
 
 var STUDENT = [
@@ -570,6 +596,33 @@ function normWeekTimes(v){
   S.wlDraft.days = dd;
   S.wlDraft.times = normWeekTimes(S.wlDraft.times);
 })();
+/* v2.7.0: Class Schedule backfill + normalize. Malformed entries are
+   dropped, days deduped + sorted, times must be real HH:MM pairs. */
+function newClassId(){
+  return 'cl' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+}
+function normClasses(v){
+  if(!Array.isArray(v)) return [];
+  var out = [];
+  v.forEach(function(c){
+    if(!c || typeof c !== 'object') return;
+    var name = typeof c.name === 'string' ? c.name.trim() : '';
+    if(!name) return;
+    var days = [];
+    (Array.isArray(c.days) ? c.days : []).forEach(function(d){
+      var n = parseInt(d, 10);
+      if(isFinite(n) && n >= 0 && n <= 6 && days.indexOf(n) === -1) days.push(n);
+    });
+    if(!days.length) return;
+    days.sort(function(a, b){ return a - b; });
+    var pair = normTimePair({ s: c.s, e: c.e });
+    if(!pair.s || !pair.e) return;
+    out.push({ id: (typeof c.id === 'string' && c.id) ? c.id : newClassId(),
+               name: name, days: days, s: pair.s, e: pair.e });
+  });
+  return out;
+}
+S.classes = normClasses(S.classes);
 /* v1.2.0: the old single FICA % splits into Social Security + Medicare at the
    statutory 6.2 / 1.45 ratio, so old saved rates keep working. The old
    gross/net "calibration" is gone — the per-line pay-stub profile replaces it. */
@@ -704,8 +757,10 @@ function fmtPlanHrs(h){
   return (n % 1 === 0 ? String(n) : n.toFixed(1)) + 'h';
 }
 /* ---------- v2.6.1: type-in hours + optional shift times ----------
-   Hours are typed, not dragged: fields accept 0–12 in quarter-hour
-   steps, clamped + rounded on commit. Optional start/end times per
+   Hours are typed, not dragged: fields accept 0–12, clamped on
+   commit. v2.7.0: rounding is to the MINUTE, not the quarter hour —
+   the old quarter-hour rounding turned a 50-minute class (8:00–8:50)
+   into 0.75 hrs when the real answer is 0.83. Optional start/end times per
    day fill the hours from the shift length using the Paycheck tab's
    own rule — calcShiftPaidHours with defaultMeal (30 min unpaid meal
    when the shift runs over 6 hrs; the 15-min breaks are paid, so they
@@ -715,7 +770,7 @@ function planClampHrs(v){
   var n = num(v);
   if(n < 0) n = 0;
   if(n > 12) n = 12;
-  return Math.round(n * 4) / 4;
+  return Math.round(n * 60) / 60;
 }
 function fmtHrsInput(v){
   var n = Math.round(num(v) * 100) / 100;
@@ -741,9 +796,11 @@ function planDayTime(term, i){
 function planTimesNoteFor(pair, hoursVal){
   if(pair && pair.s && pair.e){
     var meal = defaultMeal(pair.s, pair.e);
-    return fmtHrs(calcShiftHours(pair.s, pair.e)) + ' hr shift' +
+    var dur = exactMinutes(pair.s, pair.e);
+    var paid = planClampHrs(calcShiftPaidHours(pair.s, pair.e, meal));
+    return fmtMinutes(dur) + ' (' + fmtHrsExact(dur / 60) + ' hrs)' +
       (meal > 0 ? ' − ' + meal + ' min meal (unpaid)' : ' · no meal break') +
-      ' → ' + fmtHrs(planClampHrs(calcShiftPaidHours(pair.s, pair.e, meal))) + ' paid hrs filled in. Typing hours above overrides.';
+      ' → ' + fmtHrsExact(paid) + ' paid hrs filled in. Typing hours above overrides.';
   }
   if(pair && (pair.s || pair.e)) return 'Add the other time too and the hours fill in from the shift.';
   return 'Optional — set a start and an end and the hours fill in automatically (30 min meal off shifts over 6 hrs, same as the Paycheck tab).';
@@ -1192,7 +1249,7 @@ function planDayRowHTML(term, i, hrsVal){
   var open = !!planTimesExpanded[term + i];
   return '<span class="plan-day-name">' + PLAN_DAYS[i] + '</span>' +
     '<button class="plan-step" type="button" data-plan-dec="' + i + '" aria-label="Fewer hours ' + PLAN_DAY_FULL[i] + '">−</button>' +
-    '<span class="plan-hrs-wrap"><input class="plan-hrs" type="number" inputmode="decimal" min="0" max="12" step="0.25" value="' + fmtHrsInput(hrsVal) + '" data-plan-hrs="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours — type a number"><span class="plan-hrs-unit">hrs</span></span>' +
+    '<span class="plan-hrs-wrap"><input class="plan-hrs" type="number" inputmode="decimal" min="0" max="12" step="0.01" value="' + fmtHrsInput(hrsVal) + '" data-plan-hrs="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours — type a number"><span class="plan-hrs-unit">hrs</span></span>' +
     '<button class="plan-step" type="button" data-plan-inc="' + i + '" aria-label="More hours ' + PLAN_DAY_FULL[i] + '">+</button>' +
     '<button class="plan-times-btn' + (hasT ? ' has' : '') + (open ? ' open' : '') + '" type="button" data-plan-times="' + i + '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Shift times for ' + PLAN_DAY_FULL[i] + '">' +
       (hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times') + '</button>';
@@ -1337,6 +1394,10 @@ function renderPlanHours(rebuildDays){
       '<div class="plan-compare-sub">' + money(round2(pp.net * 52 / 12)) + ' take-home/mo · ' + planGoalLine(hrs) + '</div>';
     cmp.appendChild(row);
   });
+
+  /* v2.7.0: keep the Class Schedule week view in step with the plan —
+     safe during typing: renderSchedule never rewrites form values */
+  renderSchedule();
 }
 function bindPlanHours(){
   var daysEl = document.getElementById('planDays');
@@ -1579,7 +1640,7 @@ function renderWorkLog(rebuildRows){
       row.innerHTML =
         '<span class="plan-day-name">' + name + '</span>' +
         '<button class="plan-step" type="button" data-wl-dec="' + i + '" aria-label="Fewer hours ' + PLAN_DAY_FULL[i] + '">−</button>' +
-        '<span class="plan-hrs-wrap"><input class="plan-hrs" type="number" inputmode="decimal" min="0" max="12" step="0.25" value="' + fmtHrsInput(draft.days[i]) + '" data-wl-hrs="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours worked — type a number"><span class="plan-hrs-unit">hrs</span></span>' +
+        '<span class="plan-hrs-wrap"><input class="plan-hrs" type="number" inputmode="decimal" min="0" max="12" step="0.01" value="' + fmtHrsInput(draft.days[i]) + '" data-wl-hrs="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours worked — type a number"><span class="plan-hrs-unit">hrs</span></span>' +
         '<button class="plan-step" type="button" data-wl-inc="' + i + '" aria-label="More hours ' + PLAN_DAY_FULL[i] + '">+</button>' +
         '<button class="plan-times-btn' + (hasT ? ' has' : '') + (open ? ' open' : '') + '" type="button" data-wl-times="' + i + '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Shift times for ' + PLAN_DAY_FULL[i] + '">' +
           (hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times') + '</button>';
@@ -1714,6 +1775,211 @@ function bindWorkLog(){
   });
 }
 
+/* ---------- v2.7.0: Class Schedule ----------
+   Every class he takes (unlimited — add as many as he has), each with
+   the days it meets and exact start/end times, lined up against the
+   SCHOOL work plan in a week view that flags overlaps. Class time is
+   exact to the minute and never gets a meal deduction — the 30-min
+   meal rule belongs to paid work shifts only. The add/edit draft and
+   the editing id live in module vars; only saved classes persist. */
+var classDraft = { name: '', days: [], s: '08:00', e: '08:50' };
+var classEditingId = null;
+function getClasses(){ return Array.isArray(S.classes) ? S.classes : []; }
+function classById(id){
+  var list = getClasses();
+  for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i];
+  return null;
+}
+/* minute-based overlap between two 'HH:MM' ranges (overnight rolls) */
+function timesOverlap(s1, e1, s2, e2){
+  var a1 = toMinutes(s1), b1 = toMinutes(e1); if(b1 <= a1) b1 += 1440;
+  var a2 = toMinutes(s2), b2 = toMinutes(e2); if(b2 <= a2) b2 += 1440;
+  return a1 < b2 && a2 < b1;
+}
+function classPreviewText(){
+  if(classDraft.s && classDraft.e){
+    var mins = exactMinutes(classDraft.s, classDraft.e);
+    return fmtTime(classDraft.s) + ' – ' + fmtTime(classDraft.e) + ' · ' +
+           fmtMinutes(mins) + ' (' + fmtHrsExact(mins / 60) + ' hrs)';
+  }
+  return 'Set a start and an end time to see the exact length.';
+}
+function resetClassForm(){
+  classDraft = { name: '', days: [], s: '08:00', e: '08:50' };
+  classEditingId = null;
+  var n = document.getElementById('classNameInput'); if(n) n.value = '';
+  var st = document.getElementById('classStart'); if(st) st.value = '08:00';
+  var en = document.getElementById('classEnd'); if(en) en.value = '08:50';
+  var note = document.getElementById('classNote'); if(note) note.textContent = '';
+}
+function renderSchedule(){
+  var listEl = document.getElementById('classList');
+  if(!listEl) return;
+  /* form chrome only — the name/time input VALUES are never rewritten
+     here, so typing in the form is never clobbered by a re-render */
+  var chipsEl = document.getElementById('classDayChips');
+  if(chipsEl){
+    var chips = chipsEl.querySelectorAll('[data-class-day]');
+    for(var ci = 0; ci < chips.length; ci++){
+      var on = classDraft.days.indexOf(+chips[ci].dataset.classDay) >= 0;
+      chips[ci].classList.toggle('active', on);
+      chips[ci].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+  var prev = document.getElementById('classPreview');
+  if(prev) prev.textContent = classPreviewText();
+  var addBtn = document.getElementById('classAddBtn');
+  if(addBtn) addBtn.textContent = classEditingId ? 'Save changes' : 'Add class';
+  var cancelBtn = document.getElementById('classCancelEdit');
+  if(cancelBtn) cancelBtn.hidden = !classEditingId;
+
+  /* saved classes, one row each */
+  var classes = getClasses();
+  if(!classes.length){
+    listEl.innerHTML = '<p class="hint">No classes yet — add your first one above and your week fills in below.</p>';
+  } else {
+    var html = '';
+    classes.forEach(function(c){
+      var mins = exactMinutes(c.s, c.e);
+      var daysStr = c.days.map(function(d){ return PLAN_DAYS[d]; }).join('/');
+      html += '<div class="class-row">' +
+        '<div class="class-row-info"><strong>' + esc(c.name) + '</strong>' +
+        '<div class="class-row-sub">' + esc(daysStr) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
+        ' · ' + fmtMinutes(mins) + ' (' + fmtHrsExact(mins / 60) + ' hrs)</div></div>' +
+        '<div class="class-row-actions">' +
+        '<button class="btn-mini bk-mini" type="button" data-class-edit="' + esc(c.id) + '">Edit</button>' +
+        '<button class="btn-mini danger bk-mini" type="button" data-class-del="' + esc(c.id) + '">Delete</button>' +
+        '</div></div>';
+    });
+    listEl.innerHTML = html;
+  }
+
+  /* week view: classes vs the school work plan, day by day */
+  var conflicts = [];
+  var totalClassMins = 0;
+  classes.forEach(function(c){ totalClassMins += exactMinutes(c.s, c.e) * c.days.length; });
+  var workTotal = planTotal(S.planHours.school);
+  var weekEl = document.getElementById('classWeek');
+  if(weekEl){
+    var wHtml = '';
+    for(var i = 0; i < 7; i++){
+      var dayClasses = classes.filter(function(c){ return c.days.indexOf(i) >= 0; })
+        .slice().sort(function(a, b){ return a.s < b.s ? -1 : (a.s > b.s ? 1 : 0); });
+      var pair = planDayTime('school', i);
+      var lines = '';
+      dayClasses.forEach(function(c){
+        lines += '<div class="class-week-line">🎓 ' + esc(c.name) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
+          ' · ' + fmtMinutes(exactMinutes(c.s, c.e)) + '</div>';
+      });
+      if(pair.s && pair.e){
+        var paid = calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e));
+        var hits = dayClasses.filter(function(c){ return timesOverlap(pair.s, pair.e, c.s, c.e); });
+        hits.forEach(function(c){
+          conflicts.push(PLAN_DAYS[i] + ': Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
+            ' overlaps ' + c.name + ' (' + fmtTime(c.s) + ' – ' + fmtTime(c.e) + ')');
+        });
+        lines += '<div class="class-week-line work' + (hits.length ? ' conflict' : '') + '">' +
+          (hits.length ? '⚠️ ' : '💼 ') + 'Work ' + esc(fmtTime(pair.s)) + ' – ' + esc(fmtTime(pair.e)) +
+          ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? ' — overlaps a class' : '') + '</div>';
+      } else if(num(S.planHours.school[i]) > 0){
+        lines += '<div class="class-week-line work">💼 Work · ' + fmtHrsExact(num(S.planHours.school[i])) +
+          ' hrs planned (no times set — add them in the planner above to check overlaps)</div>';
+      }
+      wHtml += '<div class="class-week-day"><span class="class-week-name">' + PLAN_DAY_FULL[i] + '</span>' +
+        (lines || '<div class="class-week-line none">Nothing scheduled</div>') + '</div>';
+    }
+    weekEl.innerHTML = wHtml;
+  }
+  var sumEl = document.getElementById('classSummary');
+  if(sumEl){
+    var totals = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
+    if(conflicts.length){
+      sumEl.innerHTML = esc(totals) + '<br>' +
+        conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
+    } else {
+      sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes. ✅';
+    }
+  }
+}
+function bindSchedule(){
+  var chipsEl = document.getElementById('classDayChips');
+  if(!chipsEl) return;
+  chipsEl.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t.dataset || t.dataset.classDay === undefined) return;
+    var d = +t.dataset.classDay;
+    var ix = classDraft.days.indexOf(d);
+    if(ix >= 0) classDraft.days.splice(ix, 1); else classDraft.days.push(d);
+    classDraft.days.sort(function(a, b){ return a - b; });
+    renderSchedule();
+  });
+  var nameEl = document.getElementById('classNameInput');
+  /* typing updates the draft only — no re-render, focus stays put */
+  nameEl.addEventListener('input', function(){ classDraft.name = nameEl.value; });
+  var sEl = document.getElementById('classStart'), eEl = document.getElementById('classEnd');
+  function onTime(){
+    classDraft.s = sEl.value || '';
+    classDraft.e = eEl.value || '';
+    var prev = document.getElementById('classPreview');
+    if(prev) prev.textContent = classPreviewText();
+  }
+  sEl.addEventListener('input', onTime); sEl.addEventListener('change', onTime);
+  eEl.addEventListener('input', onTime); eEl.addEventListener('change', onTime);
+  document.getElementById('classCancelEdit').addEventListener('click', function(){
+    resetClassForm(); renderSchedule();
+  });
+  document.getElementById('classAddBtn').addEventListener('click', function(){
+    var note = document.getElementById('classNote');
+    var name = String(classDraft.name || '').trim();
+    if(!name){ note.textContent = 'Give the class a name first.'; return; }
+    if(!classDraft.days.length){ note.textContent = 'Pick at least one day.'; return; }
+    var pair = normTimePair({ s: classDraft.s, e: classDraft.e });
+    if(!pair.s || !pair.e){ note.textContent = 'Set a start and an end time.'; return; }
+    if(!Array.isArray(S.classes)) S.classes = [];
+    var days = classDraft.days.slice().sort(function(a, b){ return a - b; });
+    var existing = classEditingId ? classById(classEditingId) : null;
+    if(existing){
+      existing.name = name; existing.days = days; existing.s = pair.s; existing.e = pair.e;
+    } else {
+      S.classes.push({ id: newClassId(), name: name, days: days, s: pair.s, e: pair.e });
+    }
+    /* tag those days as Class days in the school plan (add-only,
+       never removed — deleting a class leaves the tags alone) */
+    days.forEach(function(d){
+      var tags = S.planHours.schoolTags[d];
+      if(Array.isArray(tags) && tags.indexOf('class') === -1) tags.push('class');
+    });
+    save();
+    resetClassForm();
+    renderPlanHours(true);
+    renderSchedule();
+  });
+  document.getElementById('classList').addEventListener('click', function(e){
+    var t = e.target;
+    var editBtn = t.closest ? t.closest('[data-class-edit]') : null;
+    if(editBtn){
+      var c = classById(editBtn.dataset.classEdit);
+      if(!c) return;
+      classEditingId = c.id;
+      classDraft = { name: c.name, days: c.days.slice(), s: c.s, e: c.e };
+      document.getElementById('classNameInput').value = c.name;
+      document.getElementById('classStart').value = c.s;
+      document.getElementById('classEnd').value = c.e;
+      document.getElementById('classNote').textContent = '';
+      renderSchedule();
+      return;
+    }
+    var delBtn = t.closest ? t.closest('[data-class-del]') : null;
+    if(delBtn){
+      var id = delBtn.dataset.classDel;
+      S.classes = getClasses().filter(function(c){ return c.id !== id; });
+      if(classEditingId === id) resetClassForm();
+      save();
+      renderSchedule();
+    }
+  });
+}
+
 /* Money the user HAS right now. If they typed a number in the Budget tab,
    that wins. Otherwise it follows the My Money balances (typed or imported).
    Blank (null) until anything is entered — fresh visitors start at $0. */
@@ -1821,6 +2087,7 @@ function renderAll(){
   renderCalculators(); renderWatchlist(); renderStocks(); renderEarn();
   renderPlanHours(true);
   renderWorkLog(true);
+  renderSchedule();
 }
 
 function renderBudget(){
@@ -2602,6 +2869,7 @@ function bind(){
   bindEarn();
   bindPlanHours();
   bindWorkLog();
+  bindSchedule();
   document.getElementById('clearAllBtn').addEventListener('click', function(){
     if(confirm('Clear all your numbers? Everything you typed will be reset to the starting values.')){
       try{ localStorage.removeItem(KEY); }catch(e){}
@@ -2991,6 +3259,8 @@ function bind(){
     }
     if(!window.confirm('Replace everything on this device with the synced data?')) return;
     S = pl.state;
+    /* v2.7.0: imported state may predate the Class Schedule */
+    S.classes = normClasses(S.classes);
     if(S.employerKey === undefined) S.employerKey = 'custom';
     if(!S.stocks) S.stocks = [];
     if(!S.syncUsed) S.syncUsed = [];
