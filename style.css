@@ -964,3 +964,20 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .wl-pay-row span:first-child{min-width:0;overflow-wrap:anywhere}
 /* the week view now lives in the app's standard expand/collapse box */
 .sched-week-details{margin:16px 0 4px}
+
+/* ================================================================
+   v2.14.0 — Suggest preview pay block + typeable target + planner
+   shortcut. The pay block reuses the Work Log's .wl-pay classes so
+   the two breakdowns look identical; only the frame + heading and
+   the custom-target field are new here.
+   ================================================================ */
+.suggest-pay{margin-top:12px}
+.suggest-pay-head{margin:0 0 6px;font-weight:700;font-size:.95rem;
+  font-family:Georgia,'Times New Roman',serif;color:var(--green-hi,#f2ddab)}
+.suggest-target-custom{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+  margin:10px 0 2px;font-size:.92rem;font-weight:650;min-height:44px}
+.suggest-target-field{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-weight:400}
+#suggestTargetInput{width:92px;min-height:44px;padding:9px 11px;font-size:1rem;
+  border:1px solid var(--input-line);border-radius:10px;background:var(--input-bg);
+  color:var(--ink);font-variant-numeric:tabular-nums}
+#planFromScheduleBtn{min-height:48px}

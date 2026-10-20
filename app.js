@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.13.0';
+var APP_VERSION = '2.14.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -71,6 +71,18 @@ function minsToHHMM(mins){
   var h = Math.floor(m / 60), r = m % 60;
   return (h < 10 ? '0' : '') + h + ':' + (r < 10 ? '0' : '') + r;
 }
+/* v2.14.0: the ✨ Suggest weekly target is typeable, not just the
+   12 / 16 / 20 chips — any value from 2 to 30 paid hrs, rounded to
+   the nearest half hour. Returns null for anything unusable so
+   callers fall back to the last valid target (default 16). */
+function normSuggestTarget(v){
+  var n = parseFloat(v);
+  if(!isFinite(n)) return null;
+  n = Math.round(n * 2) / 2;
+  if(n < 2) n = 2;
+  if(n > 30) n = 30;
+  return n;
+}
 /* v2.8.0: "Suggest my work hours" — pure week planner. Fits work
    shifts around his schedule inside a 07:00–22:00 window: Sundays and
    Meet-tagged days stay off, every entry keeps a 30-minute buffer on
@@ -85,12 +97,16 @@ function minsToHHMM(mins){
    (4 / 5 / 6, default 5). A day whose merged scheduled load
    (classes, practices + workouts) reaches the cutoff is BUSY:
    no work is suggested on it.
+   v2.14.0: a day with NOTHING scheduled at all starts its shift
+   at 10:00 instead of the 07:00 window open (EMPTY_DAY_START) —
+   days with entries keep start-of-longest-free-interval.
    classes: [{ days:[Mon=0..Sun=6], s:'HH:MM', e:'HH:MM' }];
    schoolTags: [[tag,...] ×7]. Returns { days: [{s,e,paid}|null ×7],
    totalPaid, capacity (hrs), shortfall (hrs vs the target),
    dayInfo: [{ state, scheduledMinutes } ×7] }. */
 function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
   var WIN_S = 420, WIN_E = 1320, BUF = 30, STEP = 30;
+  var EMPTY_DAY_START = 600; /* v2.14.0: 10:00 for entry-free days */
   var MIN_LEN = 120, MAX_LEN = 360, PASS1_CAP = 240;
   var targetMin = Math.max(0, Math.round(num0(targetHours) * 60 / STEP) * STEP);
   var threshHrs = [4, 5, 6].indexOf(+busyThresholdHrs) >= 0 ? +busyThresholdHrs : 5;
@@ -133,7 +149,8 @@ function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
     if(schedMin[d] >= threshMin){ dayStates[d] = 'busy'; continue; } /* busy-day guard */
     /* this day's blocks, ends capped at the window end so a late
        class can't leak past 22:00 */
-    var merged = dayBlocks(d).map(function(b){
+    var rawBlocks = dayBlocks(d);
+    var merged = rawBlocks.map(function(b){
       return [b[0], Math.min(b[1], WIN_E)];
     }).filter(function(b){ return b[0] < b[1]; });
     /* buffer both sides: work starts ≥30 min after a class ends and
@@ -157,6 +174,10 @@ function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
     if(bestLen >= MIN_LEN){
       caps[d] = Math.min(MAX_LEN, bestLen);
       starts[d] = bestStart;
+      /* v2.14.0: a day with no entries at all (its free interval is
+         the whole window) starts at 10:00, not 07:00 — an empty
+         Saturday shouldn't default to a 7 AM shift */
+      if(rawBlocks.length === 0) starts[d] = EMPTY_DAY_START;
     }
   }
   var capacityMin = 0;
@@ -633,8 +654,9 @@ var DEFAULTS = {
                schoolTimes: [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}],
                breakTimes:  [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}],
                /* v2.8.0: ✨ Suggest-my-work-hours weekly target (paid
-                  hrs) — one of 12 / 16 / 20, picked with chips in the
-                  Class Schedule card */
+                  hrs) — picked with chips in the Class Schedule card.
+                  v2.14.0: also typeable — any 2–30 hrs in half-hour
+                  steps (normSuggestTarget), not just 12 / 16 / 20 */
                suggestTarget: 16,
                /* v2.10.0: busy-day guard cutoff (scheduled hrs of
                   class + practice at/above which Suggest puts no
@@ -747,8 +769,10 @@ function normWeekTimes(v){
   var ph = S.planHours;
   ph.schoolTimes = normWeekTimes(ph.schoolTimes);
   ph.breakTimes = normWeekTimes(ph.breakTimes);
-  /* v2.8.0: suggest-my-work-hours target — 12, 16 or 20, else 16 */
-  if([12, 16, 20].indexOf(ph.suggestTarget) === -1) ph.suggestTarget = 16;
+  /* v2.8.0: suggest-my-work-hours target. v2.14.0: any 2–30 hrs in
+     half-hour steps (typed or chipped); unusable → default 16 */
+  var nst = normSuggestTarget(ph.suggestTarget);
+  ph.suggestTarget = nst === null ? 16 : nst;
   /* v2.10.0: busy-day guard cutoff — 4, 5 or 6, else 5 */
   if([4, 5, 6].indexOf(ph.busyThresholdHrs) === -1) ph.busyThresholdHrs = 5;
   /* v2.11.0: schedule builder tab — class / practice / workout */
@@ -1590,6 +1614,16 @@ function renderPlanHours(rebuildDays){
 function bindPlanHours(){
   var daysEl = document.getElementById('planDays');
   if(!daysEl) return;
+  /* v2.14.0: "✨ Plan from my schedule" — jumps from the planner to
+     the Suggest box in the schedule card and runs a fresh preview
+     with the current target (the shared runSuggest handler; with an
+     empty schedule it lands on the honest add-something note) */
+  var planBtn = document.getElementById('planFromScheduleBtn');
+  if(planBtn) planBtn.addEventListener('click', function(){
+    var box = document.getElementById('suggestBox') || document.getElementById('suggestBtn');
+    if(box && box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+    runSuggest();
+  });
   function setDay(i, v){
     var days = planTermDays();
     days[i] = planClampHrs(v);
@@ -2096,8 +2130,25 @@ function entryKindLabel(c){ return entryKind(c) === 'practice' ? 'Practice' : (e
    the moment the classes or the target change, so those paths clear it */
 var suggestPreviewData = null;
 function suggestTargetHrs(){
-  var t = num(S.planHours && S.planHours.suggestTarget, 16);
-  return [12, 16, 20].indexOf(t) >= 0 ? t : 16;
+  var t = normSuggestTarget(S.planHours && S.planHours.suggestTarget);
+  return t === null ? 16 : t;
+}
+/* v2.14.0: run a fresh ✨ Suggest preview with the current target —
+   shared by the Suggest button and the planner's "Plan from my
+   schedule" shortcut, so both produce the identical preview */
+function runSuggest(){
+  var note = document.getElementById('suggestNote');
+  if(!getClasses().length){
+    suggestPreviewData = null;
+    renderSuggest();
+    if(note) note.textContent = 'Add at least one class, practice or workout first so I know what to work around.';
+    return;
+  }
+  var tgt = suggestTargetHrs();
+  suggestPreviewData = { target: tgt,
+    result: suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt, suggestBusyThresholdHrs()) };
+  if(note) note.textContent = '';
+  renderSuggest();
 }
 /* v2.10.0: busy-day guard cutoff — scheduled hrs at/above which a
    day gets no suggested work */
@@ -2293,6 +2344,10 @@ function renderSuggest(){
       chips[ci].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
+  /* v2.14.0: the typeable target mirrors the saved value — except
+     while it's focused, so re-renders never fight his typing */
+  var tgtInput = document.getElementById('suggestTargetInput');
+  if(tgtInput && document.activeElement !== tgtInput) tgtInput.value = suggestTargetHrs();
   /* v2.10.0: busy-day cutoff chips + the explainer line, which
      always names the current cutoff */
   var busyEl = document.getElementById('suggestBusyThreshold');
@@ -2330,6 +2385,31 @@ function renderSuggest(){
     html += '<p class="suggest-warn">Your classes and practices only leave room for ~' + fmtHrsExact(res.totalPaid) +
       ' paid hrs — short of the ' + tgt + 'h target.</p>';
   }
+  /* v2.14.0: 💵 This plan pays — the full real pay for the plan's
+     ACTUAL paid hrs, from the same wlPayBreakdown the Work Log
+     uses: gross, every tax/deduction line, total taken, net, and
+     about per month. Rendered with the Work Log's pay classes so
+     the two breakdowns always look identical. */
+  var bd = wlPayBreakdown(res.totalPaid);
+  function sgPayRow(label, amt, cls){
+    return '<div class="wl-pay-row' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span><span>' + amt + '</span></div>';
+  }
+  html += '<div class="wl-pay suggest-pay"><p class="suggest-pay-head">💵 This plan pays</p>' +
+    sgPayRow('Gross pay', money(bd.gross), 'wl-pay-grossrow');
+  if(num(bd.otHrs) > 0.001){
+    html += '<p class="wl-pay-ot">Includes ' + fmtHrs(bd.otHrs) + ' hrs overtime at 1.5× (overtime added ' + money(bd.otAmt) + ' of gross).</p>';
+  }
+  html += '<p class="wl-pay-sec">Taxes</p>';
+  bd.taxes.forEach(function(l){ html += sgPayRow(l.label, '−' + money(l.amt)); });
+  html += sgPayRow('Taxes total', money(bd.taxesTotal), 'wl-pay-sub');
+  html += '<p class="wl-pay-sec">Deductions</p>';
+  bd.deductions.forEach(function(l){ html += sgPayRow(l.label, '−' + money(l.amt)); });
+  html += sgPayRow('Deductions total', money(bd.dedTotal), 'wl-pay-sub');
+  html += sgPayRow('Total taken', money(bd.totalTaken), 'wl-pay-taken');
+  html += sgPayRow('Net pay — take-home', money(bd.net), 'wl-pay-net');
+  html += sgPayRow('Take-home / month (avg)', '≈ ' + money0(bd.net * 52 / 12), 'wl-pay-sub');
+  if(bd.estimate) html += '<p class="hint wl-pay-note">Estimated from tax tables — set up your pay stub in the Paycheck tab for exact numbers.</p>';
+  html += '</div>';
   html += '<p class="hint">Applying replaces your current school-week plan — the hours and the shift times. You can still edit any day in the planner afterwards.</p>' +
     '<div class="bk-actions">' +
     '<button class="btn-primary" type="button" id="suggestApply">Apply to my school plan</button>' +
@@ -2492,18 +2572,17 @@ function bindSchedule(){
     renderSuggest();
   });
   var sugBtn = document.getElementById('suggestBtn');
-  if(sugBtn) sugBtn.addEventListener('click', function(){
-    var note = document.getElementById('suggestNote');
-    if(!getClasses().length){
-      suggestPreviewData = null;
-      renderSuggest();
-      if(note) note.textContent = 'Add at least one class, practice or workout first so I know what to work around.';
-      return;
-    }
-    var tgt = suggestTargetHrs();
-    suggestPreviewData = { target: tgt,
-      result: suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt, suggestBusyThresholdHrs()) };
-    if(note) note.textContent = '';
+  if(sugBtn) sugBtn.addEventListener('click', runSuggest);
+  /* v2.14.0: typeable target — committing the field (blur / Enter)
+     normalizes it: 2–30 hrs, half-hour steps. Garbage snaps back to
+     the last valid target instead of saving nonsense. */
+  var sugInput = document.getElementById('suggestTargetInput');
+  if(sugInput) sugInput.addEventListener('change', function(){
+    var v = normSuggestTarget(sugInput.value);
+    if(v === null){ sugInput.value = suggestTargetHrs(); return; }
+    S.planHours.suggestTarget = v;
+    suggestPreviewData = null; /* a different target makes the preview stale */
+    save();
     renderSuggest();
   });
 }
@@ -3789,8 +3868,12 @@ function bind(){
     S = pl.state;
     /* v2.7.0: imported state may predate the Class Schedule */
     S.classes = normClasses(S.classes);
-    /* v2.8.0: …or the suggest-my-work-hours target */
-    if(S.planHours && [12, 16, 20].indexOf(S.planHours.suggestTarget) === -1) S.planHours.suggestTarget = 16;
+    /* v2.8.0: …or the suggest-my-work-hours target (v2.14.0: any
+       2–30 hrs in half-hour steps; unusable → default 16) */
+    if(S.planHours){
+      var inst = normSuggestTarget(S.planHours.suggestTarget);
+      S.planHours.suggestTarget = inst === null ? 16 : inst;
+    }
     /* v2.10.0: …or the busy-day guard cutoff */
     if(S.planHours && [4, 5, 6].indexOf(S.planHours.busyThresholdHrs) === -1) S.planHours.busyThresholdHrs = 5;
     /* v2.11.0: …or the schedule builder tab */

@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "v": "2.14.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "Planning now runs off your class schedule end to end: the ✨ Suggest preview shows the full real pay for the plan — gross, every tax and deduction taken, your take-home, and about per month — using the same pay-stub math as your paycheck.",
+        "You can type your own target hours (like 22) next to the 12/16/20 chips, and a new “✨ Plan from my schedule” button in the planner jumps you straight to the suggestions.",
+        "Free days start at a friendlier time: a day with nothing scheduled — like Saturday — now starts its suggested shift at 10:00 AM instead of 7:00 AM."
+      ]
+    },
+    {
       "v": "2.13.0",
       "date": "Oct 20, 2026",
       "notify": true,

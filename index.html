@@ -399,14 +399,18 @@
              v2.9.0: practices count as busy time too.
              v2.10.0: busy-day guard — a day whose classes + practice
              reach the cutoff gets "🚫 no work" instead of a shift. -->
-        <div class="suggest-box">
+        <div class="suggest-box" id="suggestBox">
           <h4 class="bk-saved-head">✨ Suggest my work hours</h4>
-          <p class="hint">Pick a weekly target and I'll fit work shifts around your classes, practices and workouts — 30 minutes of breathing room before and after each one, Sundays and meet days off, shifts of 2–6 hours between 7:00 AM and 10:00 PM. You'll see the whole week before anything changes.</p>
+          <p class="hint">Pick a weekly target — tap a chip or type your own hours (like 22) — and I'll fit work shifts around your classes, practices and workouts: 30 minutes of breathing room before and after each one, Sundays and meet days off, shifts of 2–6 hours between 7:00 AM and 10:00 PM. A day with nothing on it starts at 10:00 AM. You'll see the whole week — and exactly what it pays — before anything changes.</p>
           <div class="tip-presets" id="suggestTargets" role="group" aria-label="Weekly work target in paid hours">
             <button class="btn-chip" type="button" data-suggest-target="12" aria-pressed="false">Light · 12h</button>
             <button class="btn-chip" type="button" data-suggest-target="16" aria-pressed="false">Typical · 16h</button>
             <button class="btn-chip" type="button" data-suggest-target="20" aria-pressed="false">Max · 20h</button>
           </div>
+          <!-- v2.14.0: typeable target — any 2–30 hrs, half-hour steps -->
+          <label class="suggest-target-custom">Or type your own target
+            <span class="suggest-target-field"><input id="suggestTargetInput" type="number" inputmode="decimal" step="0.5" min="2" max="30" value="16" aria-label="Custom weekly target in paid hours"> hrs / week</span>
+          </label>
           <p class="hint" id="suggestBusyNote">Busy-day guard: if a day's classes, practice + workouts add up to 5+ hrs, Suggest won't put work on it — that day stays yours.</p>
           <div class="tip-presets" id="suggestBusyThreshold" role="group" aria-label="Busy day cutoff in scheduled hours">
             <span class="suggest-busy-label">Busy day = no work at</span>
@@ -437,6 +441,9 @@
           <button class="btn-chip" id="planTypeExam" type="button">Exam Week</button>
         </div>
         <p class="hint">Your real hours live on the Paycheck tab. This is a what-if planner: type the hours you <em>could</em> work each day around classes and practice, and see what that week pays — using the same pay-stub math as your paycheck. Tap <strong>＋ times</strong> on a day to set a shift's start and end instead — the hours fill in on their own (30 min meal off shifts over 6 hrs, just like the Paycheck tab). School weeks and break weeks each keep their own plan. In school weeks, tag each day (Class / Practice / Meet) so you plan work around your real load — a Meet day starts at 0 hrs.</p>
+        <div class="bk-actions">
+          <button class="btn-primary" id="planFromScheduleBtn" type="button">✨ Plan from my schedule</button>
+        </div>
         <div id="planDays"></div>
         <p class="result-line plan-total-line">Total: <strong id="planTotalOut">0 hrs / week</strong></p>
         <p class="plan-load-line" id="planLoadLine"></p>
