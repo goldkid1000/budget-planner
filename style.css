@@ -912,3 +912,25 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .class-add-another{min-height:44px;margin-top:10px}
 .class-kind-pill.workout{background:rgba(212,175,106,.3)}
 .class-week-line[data-class-edit]{cursor:pointer}
+
+/* ================================================================
+   v2.12.0 — Work Log pay breakdowns: the 💵 Pay toggle inside an
+   expanded week, the stub-style line rows, and the totals strip
+   cells (gross / taken) joining "Your records". Same Sovereign
+   language; the toggle reuses .btn-chip (≥44px).
+   ================================================================ */
+.wl-pay-btn{min-height:44px;margin-top:8px}
+.wl-pay{margin-top:10px;border:1px solid var(--line-soft);border-radius:12px;
+  padding:10px 12px;background:rgba(212,175,106,.05)}
+.wl-pay-row{display:flex;justify-content:space-between;gap:14px;
+  padding:3px 0;font-size:.9rem;color:var(--ink)}
+.wl-pay-row span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.wl-pay-grossrow{font-weight:700;font-size:.95rem}
+.wl-pay-sec{margin:10px 0 2px;font-weight:700;font-size:.78rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--gold-hi,#f2ddab)}
+.wl-pay-sub{border-top:1px solid var(--line-soft);margin-top:4px;padding-top:5px;font-weight:650}
+.wl-pay-taken{border-top:1px solid var(--line-soft);margin-top:6px;padding-top:6px;font-weight:700}
+.wl-pay-net{border-top:2px solid rgba(212,175,106,.55);margin-top:6px;
+  padding-top:7px;font-weight:800;font-size:1rem}
+.wl-pay-ot{margin:4px 0 0;font-size:.83rem;color:var(--muted);line-height:1.45}
+.wl-pay-note{margin:8px 0 0}

@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.11.0';
+var APP_VERSION = '2.12.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -372,6 +372,31 @@ function deriveDedFromStub(gross, lines){
            membership: round2(lines.membership), stockContrib: round2(lines.stockContrib),
            stockPurch: round2(lines.stockPurch) };
 }
+/* v2.12.0: sanitize a Work Log week's stored pay breakdown (built by
+   wlPayBreakdown in the app section from one calcPaycheck run). Returns
+   null for anything unusable so the renderer can fall back to computing
+   the breakdown live from the week's logged hours. */
+function wlNormPay(v){
+  if(!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  function lines(a){
+    if(!Array.isArray(a) || !a.length) return null;
+    var out = [];
+    for(var i = 0; i < a.length; i++){
+      var l = a[i];
+      if(!l || typeof l.label !== 'string' || !l.label) return null;
+      out.push({ label: l.label, amt: round2(num0(l.amt)) });
+    }
+    return out;
+  }
+  var taxes = lines(v.taxes), deductions = lines(v.deductions);
+  if(!taxes || !deductions) return null;
+  return { gross: round2(num0(v.gross)), regHrs: num0(v.regHrs),
+           otHrs: num0(v.otHrs), otAmt: round2(num0(v.otAmt)),
+           taxes: taxes, taxesTotal: round2(num0(v.taxesTotal)),
+           deductions: deductions, dedTotal: round2(num0(v.dedTotal)),
+           totalTaken: round2(num0(v.totalTaken)), net: round2(num0(v.net)),
+           estimate: !!v.estimate };
+}
 /* savings-goal projection from the monthly leftover (take-home − unpaid
    bills − planned spending). Never invents a date when leftover <= 0.
    Returns { status: 'reached' | 'date' | 'far' | 'short', toGo, months,
@@ -543,7 +568,7 @@ function syncDecode(code){
 
 if (typeof module !== 'undefined' && module.exports){
   module.exports = { round2: round2, money: money, money0: money0, calcPaycheck: calcPaycheck,
-    deriveDedFromStub: deriveDedFromStub,
+    deriveDedFromStub: deriveDedFromStub, wlNormPay: wlNormPay,
     calcShiftHours: calcShiftHours, calcShiftPaidHours: calcShiftPaidHours, defaultMeal: defaultMeal,
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
     calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip,
@@ -739,7 +764,9 @@ function normWeekTimes(v){
     return { id: w.id || ('wl' + w.week), week: w.week, days: days,
              times: normWeekTimes(w.times),
              total: num(w.total) || days.reduce(function(a, v){ return a + v; }, 0),
-             gross: num(w.gross), net: num(w.net) };
+             gross: num(w.gross), net: num(w.net),
+             /* v2.12.0: the week's full pay breakdown, when saved */
+             pay: wlNormPay(w.pay) };
   });
   if(!S.wlDraft || typeof S.wlDraft !== 'object') S.wlDraft = JSON.parse(JSON.stringify(DEFAULTS.wlDraft));
   if(typeof S.wlDraft.week !== 'string') S.wlDraft.week = '';
@@ -1704,8 +1731,48 @@ function bindPlanHours(){
    worked, week by week, so he can look back: most hours in a week,
    averages, totals. Pay is computed once at save time through the
    same planScenarioPaycheck (calcPaycheck) as everything else and
-   stored with the entry — later rate changes never rewrite history. */
-var wlTimesExpanded = {}, wlOpenEntry = null;
+   stored with the entry — later rate changes never rewrite history.
+   v2.12.0: each entry also stores the FULL pay breakdown from that
+   same single run (gross, every tax/deduction line, total taken,
+   net), shown under a "💵 Pay" toggle in the week's detail, and
+   "Your records" totals gross + taken across all logged weeks.
+   Because the breakdown, the row's gross and the row's net all come
+   out of the one run, they can never disagree. Weeks logged before
+   v2.12.0 have no stored breakdown — theirs is computed live from
+   the logged hours through the identical path. */
+var wlTimesExpanded = {}, wlOpenEntry = null, wlPayOpen = {};
+/* the full pay picture for one week's paid hours, from the SAME
+   planScenarioPaycheck (calcPaycheck) path as the Paycheck tab and
+   the planner preview — line names/order mirror the Paycheck tab. */
+function wlPayBreakdown(hours){
+  var p = planScenarioPaycheck(hours);
+  var st = STATE_TAX_2025[S.stateCode || 'NY'];
+  var stateName = st ? st.name : (NO_TAX_STATE_NAMES[S.stateCode || 'NY'] || 'this state');
+  return { gross: p.weeklyGross, regHrs: p.regHrs, otHrs: p.otHrs, otAmt: p.otAmt,
+    taxes: [
+      { label: 'Social Security', amt: p.ssAmt },
+      { label: 'Medicare', amt: p.medicareAmt },
+      { label: 'Federal tax', amt: p.fedAmt },
+      { label: stateName + ' state tax', amt: p.nyAmt },
+      { label: 'NY FLI', amt: p.fliAmt }
+    ],
+    taxesTotal: p.taxesTotal,
+    deductions: [
+      { label: '401K', amt: p.k401Amt },
+      { label: 'Membership fee (W+)', amt: p.memberAmt },
+      { label: 'Company stock contribution', amt: p.stockContribAmt },
+      { label: 'Stock purchase', amt: p.stockPurchAmt }
+    ],
+    dedTotal: p.dedTotal, totalTaken: p.totalDed, net: p.net,
+    estimate: !!p.estimateUsed };
+}
+/* an entry's breakdown: the one stored at save time when present,
+   else computed live from its logged (paid) hours — same path either
+   way, so the numbers always match the engine exactly. */
+function wlEntryPay(w){
+  var stored = wlNormPay(w && w.pay);
+  return stored || wlPayBreakdown(num(w && w.total));
+}
 function wlMondayStr(d){
   var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   return bkFmtDate(bkAddDays(x, -bkDowIdx(x)));
@@ -1741,11 +1808,13 @@ function wlSaveWeek(){
   var note = document.getElementById('wlNote');
   var week = wlDraftWeek();
   var total = wlDraftTotal();
-  var p = planScenarioPaycheck(total);
+  /* one calcPaycheck run feeds the row's gross, the row's net AND
+     the stored breakdown — they can never disagree (v2.12.0) */
+  var bd = wlPayBreakdown(total);
   var entry = { id: 'wl' + week, week: week,
                 days: S.wlDraft.days.slice(),
                 times: JSON.parse(JSON.stringify(S.wlDraft.times)),
-                total: total, gross: p.weeklyGross, net: p.net };
+                total: total, gross: bd.gross, net: bd.net, pay: bd };
   var ix = -1;
   S.workLog.forEach(function(w, i){ if(w.week === week) ix = i; });
   var updated = ix >= 0;
@@ -1756,7 +1825,7 @@ function wlSaveWeek(){
   wlOpenEntry = entry.id;
   save(); renderWorkLog(true);
   if(note) note.textContent = (updated ? 'Updated' : 'Logged') + ' the week of ' + bkDayLabel(bkParseDate(week), true) +
-    ' — ' + fmtPlanHrs(total) + ', ' + money(p.net) + ' take-home.';
+    ' — ' + fmtPlanHrs(total) + ', ' + money(bd.net) + ' take-home.';
 }
 function wlCopyPlan(){
   S.wlDraft.days = S.planHours.school.slice();
@@ -1769,17 +1838,22 @@ function wlCopyPlan(){
 function wlDelete(id){
   S.workLog = S.workLog.filter(function(w){ return w.id !== id; });
   if(wlOpenEntry === id) wlOpenEntry = null;
+  delete wlPayOpen[id];
   save(); renderWorkLog(true);
 }
 function wlStats(){
   var n = S.workLog.length;
   if(!n) return null;
-  var totH = 0, totNet = 0, best = null;
+  var totH = 0, totGross = 0, totTaken = 0, totNet = 0, best = null;
   S.workLog.forEach(function(w){
-    totH += num(w.total); totNet += num(w.net);
+    /* v2.12.0: money totals sum the per-week breakdowns (the stored
+       ones — for saved weeks bd.net IS w.net, same single run) */
+    var bd = wlEntryPay(w);
+    totH += num(w.total); totGross += bd.gross; totTaken += bd.totalTaken; totNet += bd.net;
     if(!best || num(w.total) > num(best.total)) best = w;
   });
-  return { count: n, totalHours: totH, totalNet: totNet,
+  return { count: n, totalHours: totH, totalGross: round2(totGross),
+           totalTaken: round2(totTaken), totalNet: round2(totNet),
            avg: Math.round((totH / n) * 10) / 10, best: best };
 }
 function renderWorkLog(rebuildRows){
@@ -1852,6 +1926,8 @@ function renderWorkLog(rebuildRows){
       '<div class="plan-pay-cell"><p class="plan-pay-label">Most hours in a week</p><p class="plan-pay-num">' + fmtPlanHrs(st.best.total) + '</p><p class="wl-stat-sub">week of ' + (bd ? bkDayLabel(bd, false) : st.best.week) + '</p></div>' +
       '<div class="plan-pay-cell"><p class="plan-pay-label">Average / week</p><p class="plan-pay-num">' + fmtPlanHrs(st.avg) + '</p><p class="wl-stat-sub">across ' + st.count + ' logged week' + (st.count === 1 ? '' : 's') + '</p></div>' +
       '<div class="plan-pay-cell"><p class="plan-pay-label">Total hours logged</p><p class="plan-pay-num">' + fmtPlanHrs(st.totalHours) + '</p><p class="wl-stat-sub">' + st.count + ' week' + (st.count === 1 ? '' : 's') + ' on record</p></div>' +
+      '<div class="plan-pay-cell"><p class="plan-pay-label">Total gross logged</p><p class="plan-pay-num">' + money(st.totalGross) + '</p><p class="wl-stat-sub">before anything was taken out</p></div>' +
+      '<div class="plan-pay-cell"><p class="plan-pay-label">Total taken</p><p class="plan-pay-num">' + money(st.totalTaken) + '</p><p class="wl-stat-sub">taxes + deductions, all weeks</p></div>' +
       '<div class="plan-pay-cell"><p class="plan-pay-label">Total take-home logged</p><p class="plan-pay-num">' + money(st.totalNet) + '</p><p class="wl-stat-sub">at the rates when each week was saved</p></div>' +
       '</div>';
   }
@@ -1879,7 +1955,32 @@ function renderWorkLog(rebuildRows){
         parts.push(lbl);
       }
       html += '<div class="wl-entry-detail">' + esc(parts.join(' · ')) +
-        '<br>Gross ' + money(w.gross) + ' · take-home ' + money(w.net) + ' — figured with your pay-stub math when this week was saved.</div>';
+        '<br>Gross ' + money(w.gross) + ' · take-home ' + money(w.net) + ' — figured with your pay-stub math when this week was saved.';
+      /* v2.12.0: the full pay picture for this week, same engine */
+      var payOpen = !!wlPayOpen[w.id];
+      html += '<br><button class="btn-chip wl-pay-btn" type="button" data-wl-pay="' + esc(w.id) + '" aria-expanded="' + (payOpen ? 'true' : 'false') + '">💵 Pay breakdown ' + (payOpen ? '▴' : '▾') + '</button>';
+      if(payOpen){
+        var bd = wlEntryPay(w);
+        function payRow(label, amt, cls){
+          return '<div class="wl-pay-row' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span><span>' + amt + '</span></div>';
+        }
+        html += '<div class="wl-pay">' +
+          payRow('Gross pay', money(bd.gross), 'wl-pay-grossrow');
+        if(num(bd.otHrs) > 0.001){
+          html += '<p class="wl-pay-ot">Includes ' + fmtHrs(bd.otHrs) + ' hrs overtime at 1.5× (overtime added ' + money(bd.otAmt) + ' of gross).</p>';
+        }
+        html += '<p class="wl-pay-sec">Taxes</p>';
+        bd.taxes.forEach(function(l){ html += payRow(l.label, '−' + money(l.amt)); });
+        html += payRow('Taxes total', money(bd.taxesTotal), 'wl-pay-sub');
+        html += '<p class="wl-pay-sec">Deductions</p>';
+        bd.deductions.forEach(function(l){ html += payRow(l.label, '−' + money(l.amt)); });
+        html += payRow('Deductions total', money(bd.dedTotal), 'wl-pay-sub');
+        html += payRow('Total taken', money(bd.totalTaken), 'wl-pay-taken');
+        html += payRow('Net pay — take-home', money(bd.net), 'wl-pay-net');
+        if(bd.estimate) html += '<p class="hint wl-pay-note">Estimated from tax tables — set up your pay stub in the Paycheck tab for exact numbers.</p>';
+        html += '</div>';
+      }
+      html += '</div>';
     }
     html += '</div>';
   });
@@ -1928,6 +2029,13 @@ function bindWorkLog(){
     var t = e.target;
     var del = t.closest ? t.closest('[data-wl-del]') : null;
     if(del){ wlDelete(del.dataset.wlDel); return; }
+    var pay = t.closest ? t.closest('[data-wl-pay]') : null;
+    if(pay){
+      var pid = pay.dataset.wlPay;
+      wlPayOpen[pid] = !wlPayOpen[pid];
+      renderWorkLog(false);
+      return;
+    }
     var exp = t.closest ? t.closest('[data-wl-expand]') : null;
     if(exp){
       wlOpenEntry = wlOpenEntry === exp.dataset.wlExpand ? null : exp.dataset.wlExpand;
