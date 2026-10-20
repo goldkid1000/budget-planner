@@ -892,3 +892,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   vertical-align:1px}
 .class-kind-pill.practice{background:rgba(212,175,106,.16)}
+
+/* ================================================================
+   v2.10.0 — busy-day guard: cutoff chip row label + the 🚫 reason
+   line in the suggestion preview.
+   ================================================================ */
+.suggest-busy-label{display:flex;align-items:center;font-weight:650;
+  font-size:.95rem;color:var(--ink)}
+.suggest-busy{color:#f0b35e;font-weight:650}

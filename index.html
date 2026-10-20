@@ -410,7 +410,9 @@
              fits shifts around the classes above (30 min of breathing
              room around each class, Sundays + meet days off). Preview
              first; nothing changes until Apply is tapped.
-             v2.9.0: practices count as busy time too. -->
+             v2.9.0: practices count as busy time too.
+             v2.10.0: busy-day guard — a day whose classes + practice
+             reach the cutoff gets "🚫 no work" instead of a shift. -->
         <div class="suggest-box">
           <h4 class="bk-saved-head">✨ Suggest my work hours</h4>
           <p class="hint">Pick a weekly target and I'll fit work shifts around your classes and practices — 30 minutes of breathing room before and after each one, Sundays and meet days off, shifts of 2–6 hours between 7:00 AM and 10:00 PM. You'll see the whole week before anything changes.</p>
@@ -418,6 +420,13 @@
             <button class="btn-chip" type="button" data-suggest-target="12" aria-pressed="false">Light · 12h</button>
             <button class="btn-chip" type="button" data-suggest-target="16" aria-pressed="false">Typical · 16h</button>
             <button class="btn-chip" type="button" data-suggest-target="20" aria-pressed="false">Max · 20h</button>
+          </div>
+          <p class="hint" id="suggestBusyNote">Busy-day guard: if a day's classes + practice add up to 5+ hrs, Suggest won't put work on it — that day stays yours.</p>
+          <div class="tip-presets" id="suggestBusyThreshold" role="group" aria-label="Busy day cutoff in scheduled hours">
+            <span class="suggest-busy-label">Busy day = no work at</span>
+            <button class="btn-chip" type="button" data-suggest-busy="4" aria-pressed="false">4h</button>
+            <button class="btn-chip" type="button" data-suggest-busy="5" aria-pressed="false">5h</button>
+            <button class="btn-chip" type="button" data-suggest-busy="6" aria-pressed="false">6h</button>
           </div>
           <button class="btn-primary" id="suggestBtn" type="button">✨ Suggest my work hours</button>
           <p class="hint" id="suggestNote"></p>

@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "v": "2.10.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "NEW 🚫 Busy-day guard: if a day's classes + practice add up to 5+ hrs, ✨ Suggest my work hours now says \"no work\" for that day and puts the hours on your other days instead.",
+        "You can change the cutoff to 4h or 6h in the Suggest section — look for \"Busy day = no work at\". Days at or over the cutoff show why right in the preview: \"🚫 no work — busy day (5 hrs 30 min of class + practice)\".",
+        "The preview now says why every off day is off — \"off — rest day\" on Sundays, \"off — meet day\" on meet days. The guard only affects Suggest: your manual planner stays fully yours."
+      ]
+    },
+    {
       "v": "2.9.0",
       "date": "Oct 20, 2026",
       "notify": true,

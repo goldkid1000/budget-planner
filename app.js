@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.9.0';
+var APP_VERSION = '2.10.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -81,38 +81,60 @@ function minsToHHMM(mins){
    same week always gets the same suggestion.
    v2.9.0: the entries are classes AND practices (any timed schedule
    entry blocks time the same way — kind never reaches this function).
+   v2.10.0: busy-day guard — a 4th argument, busyThresholdHrs
+   (4 / 5 / 6, default 5). A day whose merged class + practice load
+   reaches the cutoff is BUSY: no work is suggested on it.
    classes: [{ days:[Mon=0..Sun=6], s:'HH:MM', e:'HH:MM' }];
    schoolTags: [[tag,...] ×7]. Returns { days: [{s,e,paid}|null ×7],
-   totalPaid, capacity (hrs), shortfall (hrs vs the target). */
-function suggestWorkWeek(classes, schoolTags, targetHours){
+   totalPaid, capacity (hrs), shortfall (hrs vs the target),
+   dayInfo: [{ state, scheduledMinutes } ×7] }. */
+function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
   var WIN_S = 420, WIN_E = 1320, BUF = 30, STEP = 30;
   var MIN_LEN = 120, MAX_LEN = 360, PASS1_CAP = 240;
   var targetMin = Math.max(0, Math.round(num0(targetHours) * 60 / STEP) * STEP);
+  var threshHrs = [4, 5, 6].indexOf(+busyThresholdHrs) >= 0 ? +busyThresholdHrs : 5;
+  var threshMin = threshHrs * 60;
   var list = Array.isArray(classes) ? classes : [];
   var tags = Array.isArray(schoolTags) ? schoolTags : [];
-  var caps = [], starts = [];
-  for(var d = 0; d < 7; d++){
-    caps.push(0); starts.push(-1);
-    if(d === 6) continue; /* Sundays always off */
-    var dayTags = Array.isArray(tags[d]) ? tags[d] : [];
-    if(dayTags.indexOf('meet') >= 0) continue; /* Meet days off */
-    /* this day's class blocks in minutes (overnight rolls, ends
-       capped at the window end so a late class can't leak past 22:00) */
-    var busy = [];
+  /* v2.10.0: scheduled load per day — every entry that day with
+     overlapping blocks merged; NO buffer and NO window cap for this
+     measurement, so a 7–9 PM practice counts its full 2 hours. */
+  function dayBlocks(d){
+    var blocks = [];
     list.forEach(function(c){
       if(!c || !Array.isArray(c.days) || c.days.indexOf(d) === -1) return;
       var s = toMinutes(c.s), e = toMinutes(c.e);
       if(e <= s) e += 1440;
-      if(e > WIN_E) e = WIN_E;
-      if(s < e) busy.push([s, e]);
+      if(s < e) blocks.push([s, e]);
     });
-    busy.sort(function(a, b){ return a[0] - b[0] || a[1] - b[1]; });
+    blocks.sort(function(a, b){ return a[0] - b[0] || a[1] - b[1]; });
     var merged = [];
-    busy.forEach(function(b){
+    blocks.forEach(function(b){
       var last = merged[merged.length - 1];
       if(last && b[0] <= last[1]){ if(b[1] > last[1]) last[1] = b[1]; }
       else merged.push([b[0], b[1]]);
     });
+    return merged;
+  }
+  var schedMin = [], dayStates = [];
+  for(var sd = 0; sd < 7; sd++){
+    var sm = 0;
+    dayBlocks(sd).forEach(function(b){ sm += b[1] - b[0]; });
+    schedMin.push(sm);
+    dayStates.push('off');
+  }
+  var caps = [], starts = [];
+  for(var d = 0; d < 7; d++){
+    caps.push(0); starts.push(-1);
+    if(d === 6){ dayStates[d] = 'sunday'; continue; } /* Sundays always off */
+    var dayTags = Array.isArray(tags[d]) ? tags[d] : [];
+    if(dayTags.indexOf('meet') >= 0){ dayStates[d] = 'meet'; continue; } /* Meet days off */
+    if(schedMin[d] >= threshMin){ dayStates[d] = 'busy'; continue; } /* busy-day guard */
+    /* this day's blocks, ends capped at the window end so a late
+       class can't leak past 22:00 */
+    var merged = dayBlocks(d).map(function(b){
+      return [b[0], Math.min(b[1], WIN_E)];
+    }).filter(function(b){ return b[0] < b[1]; });
     /* buffer both sides: work starts ≥30 min after a class ends and
        ends ≥30 min before the next one starts */
     var blocked = merged.map(function(b){
@@ -165,8 +187,14 @@ function suggestWorkWeek(classes, schoolTags, targetHours){
       totalPaid += paid;
     } else days.push(null);
   }
+  var dayInfo = [];
+  for(var k = 0; k < 7; k++){
+    if(alloc[k] > 0) dayStates[k] = 'work';
+    dayInfo.push({ state: dayStates[k], scheduledMinutes: schedMin[k] });
+  }
   return { days: days, totalPaid: totalPaid, capacity: capacityMin / 60,
-           shortfall: Math.max(0, num0(targetHours) - totalPaid) };
+           shortfall: Math.max(0, num0(targetHours) - totalPaid),
+           dayInfo: dayInfo };
 }
 /* compare dotted version strings: -1 if a<b, 0 if equal, 1 if a>b */
 function compareVersions(a, b){
@@ -580,7 +608,11 @@ var DEFAULTS = {
                /* v2.8.0: ✨ Suggest-my-work-hours weekly target (paid
                   hrs) — one of 12 / 16 / 20, picked with chips in the
                   Class Schedule card */
-               suggestTarget: 16 },
+               suggestTarget: 16,
+               /* v2.10.0: busy-day guard cutoff (scheduled hrs of
+                  class + practice at/above which Suggest puts no
+                  work on that day) — one of 4 / 5 / 6 */
+               busyThresholdHrs: 5 },
   /* v2.6.1: Work Log — weeks he ACTUALLY worked, saved to look back on.
      Entries: { id, week (Monday 'YYYY-MM-DD'), days [7], times [7 {s,e}],
      total, gross, net } — pay frozen at save time via planScenarioPaycheck. */
@@ -686,6 +718,8 @@ function normWeekTimes(v){
   ph.breakTimes = normWeekTimes(ph.breakTimes);
   /* v2.8.0: suggest-my-work-hours target — 12, 16 or 20, else 16 */
   if([12, 16, 20].indexOf(ph.suggestTarget) === -1) ph.suggestTarget = 16;
+  /* v2.10.0: busy-day guard cutoff — 4, 5 or 6, else 5 */
+  if([4, 5, 6].indexOf(ph.busyThresholdHrs) === -1) ph.busyThresholdHrs = 5;
   if(!ph.breakCal.times || typeof ph.breakCal.times !== 'object' || Array.isArray(ph.breakCal.times)) ph.breakCal.times = {};
   Object.keys(ph.breakCal.times).forEach(function(k){ ph.breakCal.times[k] = normTimePair(ph.breakCal.times[k]); });
   if(!Array.isArray(S.workLog)) S.workLog = [];
@@ -1918,6 +1952,12 @@ function suggestTargetHrs(){
   var t = num(S.planHours && S.planHours.suggestTarget, 16);
   return [12, 16, 20].indexOf(t) >= 0 ? t : 16;
 }
+/* v2.10.0: busy-day guard cutoff — scheduled hrs at/above which a
+   day gets no suggested work */
+function suggestBusyThresholdHrs(){
+  var t = num(S.planHours && S.planHours.busyThresholdHrs, 5);
+  return [4, 5, 6].indexOf(t) >= 0 ? t : 5;
+}
 function getClasses(){ return Array.isArray(S.classes) ? S.classes : []; }
 function classById(id){
   var list = getClasses();
@@ -2076,15 +2116,37 @@ function renderSuggest(){
       chips[ci].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
+  /* v2.10.0: busy-day cutoff chips + the explainer line, which
+     always names the current cutoff */
+  var busyEl = document.getElementById('suggestBusyThreshold');
+  if(busyEl){
+    var bChips = busyEl.querySelectorAll('[data-suggest-busy]');
+    for(var bi = 0; bi < bChips.length; bi++){
+      var bOn = +bChips[bi].dataset.suggestBusy === suggestBusyThresholdHrs();
+      bChips[bi].classList.toggle('active', bOn);
+      bChips[bi].setAttribute('aria-pressed', bOn ? 'true' : 'false');
+    }
+  }
+  var busyNote = document.getElementById('suggestBusyNote');
+  if(busyNote) busyNote.textContent = 'Busy-day guard: if a day\u2019s classes + practice add up to ' +
+    suggestBusyThresholdHrs() + '+ hrs, Suggest won\u2019t put work on it — that day stays yours.';
   var prevEl = document.getElementById('suggestPreview');
   if(!prevEl) return;
   if(!suggestPreviewData){ prevEl.innerHTML = ''; return; }
   var res = suggestPreviewData.result, tgt = suggestPreviewData.target;
   var html = '';
   res.days.forEach(function(dy, i){
+    var offHtml = '<span class="suggest-off">off</span>';
+    if(!dy && res.dayInfo && res.dayInfo[i]){
+      var info = res.dayInfo[i];
+      if(info.state === 'sunday') offHtml = '<span class="suggest-off">off — rest day</span>';
+      else if(info.state === 'meet') offHtml = '<span class="suggest-off">off — meet day</span>';
+      else if(info.state === 'busy') offHtml = '<span class="suggest-busy">🚫 no work — busy day (' +
+        esc(fmtMinutes(info.scheduledMinutes)) + ' of class + practice)</span>';
+    }
     html += '<div class="suggest-line"><span class="suggest-day">' + PLAN_DAYS[i] + '</span>' +
       (dy ? '<span>' + esc(fmtTime(dy.s)) + ' – ' + esc(fmtTime(dy.e)) + ' · ' + fmtHrsExact(dy.paid) + ' paid hrs</span>'
-          : '<span class="suggest-off">off</span>') + '</div>';
+          : offHtml) + '</div>';
   });
   html += '<p class="suggest-total">Total: <strong>' + fmtHrsExact(res.totalPaid) + ' paid hrs</strong> (target ' + tgt + 'h)</p>';
   if(res.shortfall > 0){
@@ -2224,6 +2286,18 @@ function bindSchedule(){
     save();
     renderSuggest();
   });
+  /* v2.10.0: busy-day cutoff chips */
+  var busyChips = document.getElementById('suggestBusyThreshold');
+  if(busyChips) busyChips.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t.dataset || t.dataset.suggestBusy === undefined) return;
+    var bv = +t.dataset.suggestBusy;
+    if([4, 5, 6].indexOf(bv) === -1) return;
+    S.planHours.busyThresholdHrs = bv;
+    suggestPreviewData = null; /* a different cutoff makes the preview stale */
+    save();
+    renderSuggest();
+  });
   var sugBtn = document.getElementById('suggestBtn');
   if(sugBtn) sugBtn.addEventListener('click', function(){
     var note = document.getElementById('suggestNote');
@@ -2235,7 +2309,7 @@ function bindSchedule(){
     }
     var tgt = suggestTargetHrs();
     suggestPreviewData = { target: tgt,
-      result: suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt) };
+      result: suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt, suggestBusyThresholdHrs()) };
     if(note) note.textContent = '';
     renderSuggest();
   });
@@ -3524,6 +3598,8 @@ function bind(){
     S.classes = normClasses(S.classes);
     /* v2.8.0: …or the suggest-my-work-hours target */
     if(S.planHours && [12, 16, 20].indexOf(S.planHours.suggestTarget) === -1) S.planHours.suggestTarget = 16;
+    /* v2.10.0: …or the busy-day guard cutoff */
+    if(S.planHours && [4, 5, 6].indexOf(S.planHours.busyThresholdHrs) === -1) S.planHours.busyThresholdHrs = 5;
     if(S.employerKey === undefined) S.employerKey = 'custom';
     if(!S.stocks) S.stocks = [];
     if(!S.syncUsed) S.syncUsed = [];
