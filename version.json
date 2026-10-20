@@ -1,10 +1,1 @@
-{
-  "version": "2.5.0",
-  "updated": "2026-10-20",
-  "notify": true,
-  "notes": [
-    "NEW Possible Hours tab: plan the hours you COULD work each day around classes and track, and see what that week pays \u2014 school weeks and break weeks saved separately.",
-    "One-tap scenarios (Light 12h, Typical 16h, Max 20h, Break week 28h) with a side-by-side compare and how fast each pace reaches your savings goal.",
-    "Athlete guardrails: school weeks over ~20 hrs and single days over 8 hrs get a friendly heads-up about sleep and recovery."
-  ]
-}
+{"notes":["NEW Break Calendar in Possible Hours: pick when your break starts and when you're back, tap the days you can work, and see the whole break's pay — figured week by week with your real pay-stub math. Save as many breaks as you like.","School weeks got smarter: one-tap Normal Week, Meet Week, and Exam Week templates for the planner.","Tag each school day Class, Practice, or Meet and plan work around your real load — a Meet day starts at 0 hrs, and a load summary line keeps the week in view."],"notify":true,"updated":"2026-10-20","version":"2.6.0"}

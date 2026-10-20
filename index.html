@@ -356,10 +356,50 @@
           <button class="btn-chip active" id="planTermSchool" type="button">School weeks</button>
           <button class="btn-chip" id="planTermBreak" type="button">Break weeks</button>
         </div>
-        <p class="hint">Your real hours live on the Paycheck tab. This is a what-if planner: set the hours you <em>could</em> work each day around classes and practice, and see what that week pays — using the same pay-stub math as your paycheck. School weeks and break weeks each keep their own plan.</p>
+        <div class="tip-presets" id="planWeekTypes" role="group" aria-label="School week type">
+          <button class="btn-chip" id="planTypeNormal" type="button">Normal Week</button>
+          <button class="btn-chip" id="planTypeMeet" type="button">Meet Week</button>
+          <button class="btn-chip" id="planTypeExam" type="button">Exam Week</button>
+        </div>
+        <p class="hint">Your real hours live on the Paycheck tab. This is a what-if planner: set the hours you <em>could</em> work each day around classes and practice, and see what that week pays — using the same pay-stub math as your paycheck. School weeks and break weeks each keep their own plan. In school weeks, tag each day (Class / Practice / Meet) so you plan work around your real load — a Meet day starts at 0 hrs.</p>
         <div id="planDays"></div>
         <p class="result-line plan-total-line">Total: <strong id="planTotalOut">0 hrs / week</strong></p>
+        <p class="plan-load-line" id="planLoadLine"></p>
         <div id="planWarn"></div>
+      </div>
+
+      <!-- v2.6.0: Break Calendar — pick the break's start + return dates,
+           tap the days he can work, whole-break pay week by week. -->
+      <div class="card" id="breakCalCard" hidden>
+        <h3>📅 Break calendar</h3>
+        <p class="hint">Pick when your break starts and when you're back, then tap the days you can work. Days start filled from your break-week pattern above (Sundays off) — tap a day to switch it on or off, and use the steppers to fine-tune a selected day's hours. Pay is figured week by week with the same pay-stub math as your paycheck.</p>
+        <label class="field">Break name
+          <input id="bkName" type="text" maxlength="40" placeholder="e.g. Winter Break" autocomplete="off">
+        </label>
+        <div class="bk-dates">
+          <label class="field">Break starts
+            <input id="bkStart" type="date">
+          </label>
+          <label class="field">Back / break ends
+            <input id="bkEnd" type="date">
+          </label>
+        </div>
+        <p class="hint" id="bkRangeHint">Choose a start and end date to lay out your break.</p>
+        <div id="bkCalWrap"></div>
+        <div class="bk-editor" id="bkEditor" hidden>
+          <span class="bk-editor-label" id="bkEditorLabel"></span>
+          <button class="plan-step" id="bkDec" type="button" aria-label="Fewer hours on the selected day">−</button>
+          <span class="bk-editor-val" id="bkEditorVal">0h</span>
+          <button class="plan-step" id="bkInc" type="button" aria-label="More hours on the selected day">+</button>
+        </div>
+        <div id="bkSummary"></div>
+        <div id="bkWeeks"></div>
+        <div class="bk-actions">
+          <button class="btn-primary" id="bkSave" type="button">Save this break</button>
+          <button class="btn-chip" id="bkNew" type="button">Start a new break</button>
+        </div>
+        <p class="hint" id="bkSaveNote"></p>
+        <div id="bkSaved"></div>
       </div>
 
       <div class="card">

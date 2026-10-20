@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "v": "2.6.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "NEW Break Calendar in the Possible Hours tab: choose when your school break starts and when you return, and every day in between becomes a tappable calendar cell. Days start filled from your break-week pattern (Sundays off); tap to switch a day on or off and fine-tune its hours with steppers.",
+        "Whole-break pay estimate: total work days, total hours, gross and take-home for the entire break — figured week by week through the same pay-stub math as the Paycheck tab, with a per-week breakdown when a break spans multiple weeks.",
+        "Save multiple breaks by name (Winter Break, Spring Break…) and load or delete them anytime — everything stays on your device.",
+        "School weeks improved: one-tap Normal Week / Meet Week / Exam Week templates (Meet Week lightens Friday for travel and zeroes Saturday), Class / Practice / Meet tags on each day that persist with the plan, and a one-line load summary — Work Xh · Practice days: N · Meet: day."
+      ]
+    },
+    {
       "v": "2.5.0",
       "date": "Oct 20, 2026",
       "notify": true,

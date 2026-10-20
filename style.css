@@ -720,3 +720,49 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   .bottomnav .nav-btn span{font-size:.52rem}
   .plan-pay-grid{grid-template-columns:1fr 1fr}
 }
+
+/* ================================================================
+   v2.6.0 — school week types + day tags, Break Calendar.
+   Same Sovereign language: hairline gold, serif numerals.
+   ================================================================ */
+.plan-day-block{border-bottom:1px solid var(--line-soft)}
+.plan-day-block:last-of-type{border-bottom:none}
+.plan-day-block .plan-day{border-bottom:none}
+.plan-day-tags{display:flex;gap:6px;flex-wrap:wrap;padding:0 2px 10px 48px}
+.plan-tag{min-height:44px;padding:6px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(212,175,106,.35);background:transparent;color:var(--muted);
+  font-size:.85rem;font-weight:650}
+.plan-tag.active{background:linear-gradient(135deg,#a67c3d,#d4af6a);color:#241a0b;
+  border-color:transparent;box-shadow:0 2px 10px rgba(212,175,106,.3)}
+.plan-load-line{margin:4px 0 0;font-size:.92rem;color:var(--muted)}
+.bk-dates{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bk-dates .field{margin-bottom:6px}
+.bk-months{font-family:Georgia,'Times New Roman',serif;font-weight:700;
+  font-size:1.05rem;margin:12px 0 4px;color:#fbf3df}
+.bk-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.bk-dow{text-align:center;font-size:.72rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.1em;padding:4px 0}
+.bk-cell{min-height:52px;border:1px solid var(--line-soft);background:var(--card2);
+  border-radius:10px;color:var(--ink);cursor:pointer;padding:3px 0;font:inherit;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.bk-cell .bk-num{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:1rem;line-height:1.1}
+.bk-cell .bk-hrs{font-size:.68rem;color:var(--muted);line-height:1}
+.bk-cell.on{background:linear-gradient(135deg,rgba(212,175,106,.3),rgba(212,175,106,.12));
+  border-color:rgba(212,175,106,.55)}
+.bk-cell.on .bk-hrs{color:var(--gold-hi,#f2ddab);font-weight:700}
+.bk-cell.sel{outline:2px solid #d4af6a;outline-offset:1px}
+.bk-cell.empty{border:none;background:transparent;cursor:default}
+.bk-editor{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+.bk-editor-label{font-weight:700;font-family:Georgia,'Times New Roman',serif;font-size:1.02rem}
+.bk-editor-val{min-width:44px;text-align:center;font-weight:700;
+  font-family:Georgia,'Times New Roman',serif;font-size:1.05rem}
+.bk-sum-grid{margin-top:16px}
+.bk-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.bk-saved-head{margin:18px 0 4px;font-size:1rem}
+.bk-saved-row{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:10px 2px;border-bottom:1px solid var(--line-soft)}
+.bk-saved-row:last-of-type{border-bottom:none}
+.bk-saved-info{min-width:0}
+.bk-saved-sub{font-size:.85rem;color:var(--muted);margin-top:1px}
+.bk-saved-actions{display:flex;gap:8px;flex-shrink:0}
+.bk-mini{min-height:44px;padding:8px 14px;display:inline-flex;align-items:center}
