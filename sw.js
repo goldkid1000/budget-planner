@@ -3,7 +3,7 @@
    see the newest version. Offline, navigations fall back to the cached shell. */
 'use strict';
 
-var CACHE = 'budget-planner-v2.12.0';
+var CACHE = 'budget-planner-v2.13.0';
 var SHELL = [
   './',
   'index.html',

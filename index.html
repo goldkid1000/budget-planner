@@ -53,7 +53,7 @@
 
     <!-- ================= BUDGET ================= -->
     <section class="view active" id="view-budget">
-      <h2>Your budget this month</h2>
+      <h2>📊 Your budget this month</h2>
 
       <div class="install-row" id="installRow">
         <button class="btn-primary" id="installBtn" type="button">Install app</button>
@@ -64,16 +64,6 @@
         <p><strong>iPhone:</strong> tap Share, then “Add to Home Screen”.</p>
         <p><strong>PC:</strong> open your browser menu, then “Install” (or “Install Budget Planner”).</p>
         <button class="btn-mini" id="installHelpClose" type="button">Got it</button>
-      </div>
-
-      <div class="card">
-        <label class="field">Money I have right now
-          <input id="startingMoneyInput" type="number" min="0" step="0.01" placeholder="0.00">
-        </label>
-        <p class="explain" id="budgetHaveLine">You have $0 right now.</p>
-        <p class="explain" id="startingMoneySource"></p>
-        <button class="btn-mini" id="clearStartingMoneyBtn" type="button" hidden>Clear — follow my balances</button>
-        <p class="explain" id="startingMoneyPrompt">Put how much money you have and your budget will go off that. Leave it blank and it follows the balances in My Money.</p>
       </div>
 
       <div class="card donut-card">
@@ -99,6 +89,16 @@
         <p class="warning" id="overBudgetWarn" hidden>⚠️ You're planning to spend more than you have + your paychecks. Trim a category, or leave some spending out of the plan.</p>
         <p class="hint">Income comes from your Paycheck tab. Change your hours or rate there and this updates.</p>
         <p class="hint" id="budgetUpdatedStamp"></p>
+      </div>
+
+      <div class="card">
+        <label class="field">Money I have right now
+          <input id="startingMoneyInput" type="number" min="0" step="0.01" placeholder="0.00">
+        </label>
+        <p class="explain" id="budgetHaveLine">You have $0 right now.</p>
+        <p class="explain" id="startingMoneySource"></p>
+        <button class="btn-mini" id="clearStartingMoneyBtn" type="button" hidden>Clear — follow my balances</button>
+        <p class="explain" id="startingMoneyPrompt">Put how much money you have and your budget will go off that. Leave it blank and it follows the balances in My Money.</p>
       </div>
 
       <div class="card">
@@ -129,9 +129,9 @@
 
     <!-- ================= PAYCHECK ================= -->
     <section class="view" id="view-paycheck">
-      <h2>Paycheck calculator</h2>
+      <h2>🧾 Paycheck calculator</h2>
       <div class="card">
-        <h3>Hours</h3>
+        <h3>🕐 Hours &amp; pay rate</h3>
         <div class="tip-presets" role="group" aria-label="Hours entry method">
           <button class="btn-chip active" id="hoursModeTotal" type="button">Total hours</button>
           <button class="btn-chip" id="hoursModeShifts" type="button">My shifts</button>
@@ -277,22 +277,6 @@
       </div>
 
       <div class="card">
-        <h3>Auto-detections</h3>
-        <label class="field">Payday weekday
-          <select id="paydayWeekday" aria-label="Payday weekday">
-            <option value="0">Sunday</option><option value="1">Monday</option>
-            <option value="2" selected>Tuesday</option><option value="3">Wednesday</option>
-            <option value="4">Thursday</option><option value="5">Friday</option>
-            <option value="6">Saturday</option>
-          </select>
-        </label>
-        <label class="field" id="lastPaydayWrap" hidden>Last payday date (for every-2-weeks pay)
-          <input id="lastPaydayInput" type="date" aria-label="Last payday date">
-        </label>
-        <div id="detectBox" aria-live="polite"></div>
-      </div>
-
-      <div class="card">
         <details class="details">
           <summary>Use my real pay stub</summary>
         <p>Enter each line from one real pay stub — gross pay and every line taken off. The app works out the rates from your stub and uses them from then on, so the breakdown matches your real paycheck.</p>
@@ -335,6 +319,22 @@
       </div>
 
       <div class="card">
+        <h3>🔎 Auto-detections</h3>
+        <label class="field">Payday weekday
+          <select id="paydayWeekday" aria-label="Payday weekday">
+            <option value="0">Sunday</option><option value="1">Monday</option>
+            <option value="2" selected>Tuesday</option><option value="3">Wednesday</option>
+            <option value="4">Thursday</option><option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </label>
+        <label class="field" id="lastPaydayWrap" hidden>Last payday date (for every-2-weeks pay)
+          <input id="lastPaydayInput" type="date" aria-label="Last payday date">
+        </label>
+        <div id="detectBox" aria-live="polite"></div>
+      </div>
+
+      <div class="card">
         <h3>What if…</h3>
         <label class="field">Extra hours per week
           <input id="extraHours" type="number" min="0" step="0.5" value="4">
@@ -350,24 +350,6 @@
     <!-- ================= POSSIBLE HOURS ================= -->
     <section class="view" id="view-hours">
       <h2>🕐 Possible hours</h2>
-      <div class="card">
-        <h3>Plan a week that fits school &amp; track</h3>
-        <div class="tip-presets" role="group" aria-label="School weeks or break weeks">
-          <button class="btn-chip active" id="planTermSchool" type="button">School weeks</button>
-          <button class="btn-chip" id="planTermBreak" type="button">Break weeks</button>
-        </div>
-        <div class="tip-presets" id="planWeekTypes" role="group" aria-label="School week type">
-          <button class="btn-chip" id="planTypeNormal" type="button">Normal Week</button>
-          <button class="btn-chip" id="planTypeMeet" type="button">Meet Week</button>
-          <button class="btn-chip" id="planTypeExam" type="button">Exam Week</button>
-        </div>
-        <p class="hint">Your real hours live on the Paycheck tab. This is a what-if planner: type the hours you <em>could</em> work each day around classes and practice, and see what that week pays — using the same pay-stub math as your paycheck. Tap <strong>＋ times</strong> on a day to set a shift's start and end instead — the hours fill in on their own (30 min meal off shifts over 6 hrs, just like the Paycheck tab). School weeks and break weeks each keep their own plan. In school weeks, tag each day (Class / Practice / Meet) so you plan work around your real load — a Meet day starts at 0 hrs.</p>
-        <div id="planDays"></div>
-        <p class="result-line plan-total-line">Total: <strong id="planTotalOut">0 hrs / week</strong></p>
-        <p class="plan-load-line" id="planLoadLine"></p>
-        <div id="planWarn"></div>
-      </div>
-
       <!-- v2.7.0: Class Schedule — add every class (as many as he has)
            with its days + start/end; the week view lines classes up
            against the planned school-week work shifts and flags
@@ -436,11 +418,65 @@
           <p class="hint" id="suggestNote"></p>
           <div id="suggestPreview"></div>
         </div>
-        <h4 class="bk-saved-head">Your week — classes, practices, workouts + work</h4>
-        <div id="classWeek"></div>
-        <div class="class-summary" id="classSummary"></div>
+        <details class="details sched-week-details">
+          <summary>🗓️ Your week — classes, practices, workouts + work</summary>
+          <div id="classWeek"></div>
+          <div class="class-summary" id="classSummary"></div>
+        </details>
       </div>
 
+      <div class="card">
+        <h3>🕐 Plan a week that fits school &amp; track</h3>
+        <div class="tip-presets" role="group" aria-label="School weeks or break weeks">
+          <button class="btn-chip active" id="planTermSchool" type="button">School weeks</button>
+          <button class="btn-chip" id="planTermBreak" type="button">Break weeks</button>
+        </div>
+        <div class="tip-presets" id="planWeekTypes" role="group" aria-label="School week type">
+          <button class="btn-chip" id="planTypeNormal" type="button">Normal Week</button>
+          <button class="btn-chip" id="planTypeMeet" type="button">Meet Week</button>
+          <button class="btn-chip" id="planTypeExam" type="button">Exam Week</button>
+        </div>
+        <p class="hint">Your real hours live on the Paycheck tab. This is a what-if planner: type the hours you <em>could</em> work each day around classes and practice, and see what that week pays — using the same pay-stub math as your paycheck. Tap <strong>＋ times</strong> on a day to set a shift's start and end instead — the hours fill in on their own (30 min meal off shifts over 6 hrs, just like the Paycheck tab). School weeks and break weeks each keep their own plan. In school weeks, tag each day (Class / Practice / Meet) so you plan work around your real load — a Meet day starts at 0 hrs.</p>
+        <div id="planDays"></div>
+        <p class="result-line plan-total-line">Total: <strong id="planTotalOut">0 hrs / week</strong></p>
+        <p class="plan-load-line" id="planLoadLine"></p>
+        <div id="planWarn"></div>
+      </div>
+
+      <div class="card">
+        <h3>💵 What that week pays</h3>
+        <div class="plan-pay-grid">
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Take-home / week</p>
+            <p class="plan-pay-num" id="planNetWeek">$0</p>
+          </div>
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Gross / week</p>
+            <p class="plan-pay-num" id="planGrossWeek">$0</p>
+          </div>
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Per payday (weekly)</p>
+            <p class="plan-pay-num" id="planNetPayday">$0</p>
+          </div>
+          <div class="plan-pay-cell">
+            <p class="plan-pay-label">Take-home / month (avg)</p>
+            <p class="plan-pay-num" id="planNetMonth">$0</p>
+          </div>
+        </div>
+        <p class="explain" id="planPayNote"></p>
+      </div>
+
+      <div class="card">
+        <h3>⚡ Quick scenarios</h3>
+        <p class="hint">One tap fills the planner. Compare shows what each pace means for your savings goal.</p>
+        <div class="tip-presets" role="group" aria-label="Preset scenarios">
+          <button class="btn-chip" id="planPresetLight" type="button">Light · 12h</button>
+          <button class="btn-chip" id="planPresetTypical" type="button">Typical · 16h</button>
+          <button class="btn-chip" id="planPresetMax" type="button">Max · 20h</button>
+          <button class="btn-chip" id="planPresetBreak" type="button">Break week · 28h</button>
+        </div>
+        <div id="planCompare"></div>
+      </div>
       <!-- v2.6.0: Break Calendar — pick the break's start + return dates,
            tap the days he can work, whole-break pay week by week. -->
       <div class="card" id="breakCalCard" hidden>
@@ -501,46 +537,13 @@
         <div id="wlList"></div>
       </div>
 
-      <div class="card">
-        <h3>What that week pays</h3>
-        <div class="plan-pay-grid">
-          <div class="plan-pay-cell">
-            <p class="plan-pay-label">Take-home / week</p>
-            <p class="plan-pay-num" id="planNetWeek">$0</p>
-          </div>
-          <div class="plan-pay-cell">
-            <p class="plan-pay-label">Gross / week</p>
-            <p class="plan-pay-num" id="planGrossWeek">$0</p>
-          </div>
-          <div class="plan-pay-cell">
-            <p class="plan-pay-label">Per payday (weekly)</p>
-            <p class="plan-pay-num" id="planNetPayday">$0</p>
-          </div>
-          <div class="plan-pay-cell">
-            <p class="plan-pay-label">Take-home / month (avg)</p>
-            <p class="plan-pay-num" id="planNetMonth">$0</p>
-          </div>
-        </div>
-        <p class="explain" id="planPayNote"></p>
-      </div>
-
-      <div class="card">
-        <h3>Quick scenarios</h3>
-        <p class="hint">One tap fills the planner. Compare shows what each pace means for your savings goal.</p>
-        <div class="tip-presets" role="group" aria-label="Preset scenarios">
-          <button class="btn-chip" id="planPresetLight" type="button">Light · 12h</button>
-          <button class="btn-chip" id="planPresetTypical" type="button">Typical · 16h</button>
-          <button class="btn-chip" id="planPresetMax" type="button">Max · 20h</button>
-          <button class="btn-chip" id="planPresetBreak" type="button">Break week · 28h</button>
-        </div>
-        <div id="planCompare"></div>
-      </div>
     </section>
 
     <!-- ================= MY MONEY ================= -->
     <section class="view" id="view-mymoney">
-      <h2>My money</h2>
+      <h2>🏦 My money</h2>
       <div class="card">
+        <h3>🏦 Your balances</h3>
         <p class="hint"><strong>This app doesn't log into your bank.</strong> No bank login, no passwords, nothing that could expose your account. Instead, bring in a bank statement — the app reads it right here on your device.</p>
         <button class="btn-primary" id="importToggleBtn" type="button">Import a bank statement (CSV)</button>
         <div class="import-panel" id="importPanel" hidden>
@@ -608,8 +611,9 @@
 
     <!-- ================= BILLS ================= -->
     <section class="view" id="view-bills">
-      <h2>Bills</h2>
+      <h2>🧾 Bills</h2>
       <div class="card">
+        <h3>🧾 Your bills</h3>
         <p class="hint">These are not live bank data. Tap a bill's name, amount, due date, or auto-pay box to change it.</p>
         <div class="add-row bill-add">
           <input id="billName" type="text" placeholder="Bill name" maxlength="60" aria-label="Bill name">
@@ -625,7 +629,7 @@
 
     <!-- ================= DISCOUNTS ================= -->
     <section class="view" id="view-discounts">
-      <h2>Discount Finder</h2>
+      <h2>🎓 Discount Finder</h2>
       <div class="card">
         <h3>🔍 Find a deal</h3>
         <p>Type a store or item. We'll open real searches — you check the pages yourself. This app never claims a code works.</p>
@@ -725,7 +729,7 @@
       <h2>📈 Stocks — learn &amp; paper-trade</h2>
       <p class="hint"><strong>Educational only — not financial advice.</strong> This is a learning tool: prices are ones you type in yourself, and nothing here moves real money. The app is not connected to any brokerage or bank.</p>
       <div class="card">
-        <h3>My watchlist</h3>
+        <h3>📋 My watchlist</h3>
         <p class="hint">Look up a stock price in your brokerage app or a finance site, then type it here. The app never fetches market data by itself.</p>
         <div class="add-row">
           <input id="stockSym" type="text" placeholder="Ticker (e.g. AAPL)" maxlength="10" aria-label="Stock ticker">
@@ -773,7 +777,7 @@
 
     <!-- ================= CALCULATORS ================= -->
     <section class="view" id="view-calculators">
-      <h2>Calculators</h2>
+      <h2>🧮 Calculators</h2>
 
       <div class="card">
         <h3>🍕 Split a bill</h3>

@@ -934,3 +934,33 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   padding-top:7px;font-weight:800;font-size:1rem}
 .wl-pay-ot{margin:4px 0 0;font-size:.83rem;color:var(--muted);line-height:1.45}
 .wl-pay-note{margin:8px 0 0}
+
+/* ================================================================
+   v2.13.0 — whole-app cleanup: one comfort system everywhere.
+   Same Sovereign language, same selectors — roomier targets,
+   tabular money figures, long labels wrap instead of pushing
+   the layout wide at 390px. Layout-only; nothing recalculates.
+   ================================================================ */
+/* every tappable control is a comfortable ≥44px target, any screen */
+.btn-mini{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.btn-chip{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.btn-danger{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.cat-row input[type=text],.cat-row input[type=number],
+.bill-row input[type=text],.bill-row input[type=number],.bill-row input[type=date]{min-height:44px}
+.check{min-height:44px}
+.radio-row label{min-height:44px}
+.details summary{min-height:44px;display:flex;align-items:center}
+.inline-num{min-height:44px}
+/* earn toggle: bigger hit area, identical switch face */
+.earn-switch{width:56px;height:44px}
+.earn-switch .track{inset:6px 2px}
+.earn-switch .thumb{top:10px;left:6px}
+/* tappable week-view entry lines get a full-height row */
+.class-week-line[data-class-edit]{min-height:44px;display:flex;align-items:center}
+/* money columns line up digit-for-digit */
+.result-box,.donut-summary,.suggest-line,.bk-saved-row,.plan-compare-head{font-variant-numeric:tabular-nums}
+/* long names/labels wrap inside their row instead of overflowing */
+.class-row-info,.bk-saved-info,.earn-name,.bill-name{min-width:0;overflow-wrap:anywhere}
+.wl-pay-row span:first-child{min-width:0;overflow-wrap:anywhere}
+/* the week view now lives in the app's standard expand/collapse box */
+.sched-week-details{margin:16px 0 4px}

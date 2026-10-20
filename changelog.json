@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "v": "2.13.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "Whole-app cleanup: everything tidied into comfortable, clearly-labeled cards so each thing is where you'd expect to find it — schedule, suggested hours, planner, break calendar and work log now sit in one clean order in the Hours tab, and the Budget summary leads its tab.",
+        "Roomier buttons and spacing everywhere: every tap target is a comfortable size, money figures line up neatly, and long names wrap instead of squeezing the layout on your phone.",
+        "Nothing about your numbers or how anything calculates has changed — same pay-stub math, same saved data, just a tidier app."
+      ]
+    },
+    {
       "v": "2.12.0",
       "date": "Oct 20, 2026",
       "notify": true,
