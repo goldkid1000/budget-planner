@@ -371,14 +371,22 @@
       <!-- v2.7.0: Class Schedule — add every class (as many as he has)
            with its days + start/end; the week view lines classes up
            against the planned school-week work shifts and flags
-           overlaps. Times are exact to the minute. -->
+           overlaps. Times are exact to the minute.
+           v2.9.0: practices are first-class entries too — the form's
+           Class/Practice toggle sets the entry kind, and both the
+           suggester and the overlap checker route around practices
+           exactly like classes. -->
       <div class="card" id="classCard">
-        <h3>🎓 Class schedule</h3>
-        <p class="hint">Add every class you have — as many as you need — with the days it meets and its start and end times. Times are exact to the minute: a class from 8:00 to 8:50 is 50 minutes (0.83 hrs), never rounded. The week view below lines your classes up against your planned work shifts from the school-week planner and flags any overlap, so you can schedule work around school.</p>
-        <label class="field">Class name
-          <input id="classNameInput" type="text" placeholder="e.g. BIO 304" autocomplete="off">
+        <h3>🎓 Class &amp; practice schedule</h3>
+        <p class="hint">Add every class and practice you have — as many as you need — each with the days it meets and its start and end times. Times are exact to the minute: a class from 8:00 to 8:50 is 50 minutes (0.83 hrs), never rounded. The week view below lines your classes and practices up against your planned work shifts from the school-week planner and flags any overlap, and ✨ Suggest my work hours routes around both — so add your practices here with their times (a Practice tag up in the planner has no times to work around).</p>
+        <div class="class-kind" id="classKindChips" role="group" aria-label="Class or practice">
+          <button class="btn-chip class-kind-chip" type="button" data-class-kind="class" aria-pressed="true">🎓 Class</button>
+          <button class="btn-chip class-kind-chip" type="button" data-class-kind="practice" aria-pressed="false">🏃 Practice</button>
+        </div>
+        <label class="field"><span id="classNameLabel">Class name</span>
+          <input id="classNameInput" type="text" placeholder="Class name — e.g. ENV 350" autocomplete="off">
         </label>
-        <div class="class-days" id="classDayChips" role="group" aria-label="Days this class meets">
+        <div class="class-days" id="classDayChips" role="group" aria-label="Days it meets">
           <button class="class-day-chip" type="button" data-class-day="0" aria-pressed="false">Mon</button>
           <button class="class-day-chip" type="button" data-class-day="1" aria-pressed="false">Tue</button>
           <button class="class-day-chip" type="button" data-class-day="2" aria-pressed="false">Wed</button>
@@ -388,8 +396,8 @@
           <button class="class-day-chip" type="button" data-class-day="6" aria-pressed="false">Sun</button>
         </div>
         <div class="class-times">
-          <label class="plan-time-field">Start <input type="time" id="classStart" value="08:00" aria-label="Class start time"></label>
-          <label class="plan-time-field">End <input type="time" id="classEnd" value="08:50" aria-label="Class end time"></label>
+          <label class="plan-time-field">Start <input type="time" id="classStart" value="08:00" aria-label="Start time"></label>
+          <label class="plan-time-field">End <input type="time" id="classEnd" value="08:50" aria-label="End time"></label>
         </div>
         <p class="class-preview" id="classPreview"></p>
         <div class="bk-actions">
@@ -401,10 +409,11 @@
         <!-- v2.8.0: ✨ Suggest my work hours — pick a target and the app
              fits shifts around the classes above (30 min of breathing
              room around each class, Sundays + meet days off). Preview
-             first; nothing changes until Apply is tapped. -->
+             first; nothing changes until Apply is tapped.
+             v2.9.0: practices count as busy time too. -->
         <div class="suggest-box">
           <h4 class="bk-saved-head">✨ Suggest my work hours</h4>
-          <p class="hint">Pick a weekly target and I'll fit work shifts around your classes — 30 minutes of breathing room before and after each class, Sundays and meet days off, shifts of 2–6 hours between 7:00 AM and 10:00 PM. You'll see the whole week before anything changes.</p>
+          <p class="hint">Pick a weekly target and I'll fit work shifts around your classes and practices — 30 minutes of breathing room before and after each one, Sundays and meet days off, shifts of 2–6 hours between 7:00 AM and 10:00 PM. You'll see the whole week before anything changes.</p>
           <div class="tip-presets" id="suggestTargets" role="group" aria-label="Weekly work target in paid hours">
             <button class="btn-chip" type="button" data-suggest-target="12" aria-pressed="false">Light · 12h</button>
             <button class="btn-chip" type="button" data-suggest-target="16" aria-pressed="false">Typical · 16h</button>
@@ -414,7 +423,7 @@
           <p class="hint" id="suggestNote"></p>
           <div id="suggestPreview"></div>
         </div>
-        <h4 class="bk-saved-head">Your week — classes + work</h4>
+        <h4 class="bk-saved-head">Your week — classes, practices + work</h4>
         <div id="classWeek"></div>
         <div class="class-summary" id="classSummary"></div>
       </div>

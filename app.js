@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.8.0';
+var APP_VERSION = '2.9.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -72,13 +72,15 @@ function minsToHHMM(mins){
   return (h < 10 ? '0' : '') + h + ':' + (r < 10 ? '0' : '') + r;
 }
 /* v2.8.0: "Suggest my work hours" — pure week planner. Fits work
-   shifts around classes inside a 07:00–22:00 window: Sundays and
-   Meet-tagged days stay off, every class keeps a 30-minute buffer on
+   shifts around his schedule inside a 07:00–22:00 window: Sundays and
+   Meet-tagged days stay off, every entry keeps a 30-minute buffer on
    both sides, shifts run 2–6 hrs in 30-min steps placed at the start
    of the day's longest free stretch, and two passes spread the paid
    target across Mon–Sat (up to 4 hrs each first, then top up to each
    day's capacity). Deterministic — no clock, no randomness — so the
    same week always gets the same suggestion.
+   v2.9.0: the entries are classes AND practices (any timed schedule
+   entry blocks time the same way — kind never reaches this function).
    classes: [{ days:[Mon=0..Sun=6], s:'HH:MM', e:'HH:MM' }];
    schoolTags: [[tag,...] ×7]. Returns { days: [{s,e,paid}|null ×7],
    totalPaid, capacity (hrs), shortfall (hrs vs the target). */
@@ -705,7 +707,12 @@ function normWeekTimes(v){
   S.wlDraft.times = normWeekTimes(S.wlDraft.times);
 })();
 /* v2.7.0: Class Schedule backfill + normalize. Malformed entries are
-   dropped, days deduped + sorted, times must be real HH:MM pairs. */
+   dropped, days deduped + sorted, times must be real HH:MM pairs.
+   v2.9.0: entries carry a kind — 'class' or 'practice'. Anything
+   missing or not exactly 'practice' becomes 'class', so schedules
+   saved before practices existed load unchanged. This one function
+   serves BOTH normalize paths: the load-time backfill below and the
+   sync-import guard. */
 function newClassId(){
   return 'cl' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
 }
@@ -726,6 +733,7 @@ function normClasses(v){
     var pair = normTimePair({ s: c.s, e: c.e });
     if(!pair.s || !pair.e) return;
     out.push({ id: (typeof c.id === 'string' && c.id) ? c.id : newClassId(),
+               kind: c.kind === 'practice' ? 'practice' : 'class',
                name: name, days: days, s: pair.s, e: pair.e });
   });
   return out;
@@ -1889,9 +1897,19 @@ function bindWorkLog(){
    SCHOOL work plan in a week view that flags overlaps. Class time is
    exact to the minute and never gets a meal deduction — the 30-min
    meal rule belongs to paid work shifts only. The add/edit draft and
-   the editing id live in module vars; only saved classes persist. */
-var classDraft = { name: '', days: [], s: '08:00', e: '08:50' };
+   the editing id live in module vars; only saved classes persist.
+   v2.9.0: entries are classes OR practices (entry.kind). Practices
+   are first-class timed entries: the suggester and the overlap
+   checker route around them exactly like classes. A bare 'practice'
+   day TAG in the planner carries no times, so on its own it blocks
+   nothing here — the copy says practices need times added here. */
+var classDraft = { kind: 'class', name: '', days: [], s: '08:00', e: '08:50' };
 var classEditingId = null;
+/* per-kind display bits: marker, capitalized label for pills/lines,
+   and the lowercase word for sentences ("overlaps a practice") */
+function entryKind(c){ return c && c.kind === 'practice' ? 'practice' : 'class'; }
+function entryMarker(c){ return entryKind(c) === 'practice' ? '🏃' : '🎓'; }
+function entryKindLabel(c){ return entryKind(c) === 'practice' ? 'Practice' : 'Class'; }
 /* v2.8.0: the pending work-hours suggestion preview ({ target, result }
    from suggestWorkWeek) — module state only, never saved; it's stale
    the moment the classes or the target change, so those paths clear it */
@@ -1921,7 +1939,7 @@ function classPreviewText(){
   return 'Set a start and an end time to see the exact length.';
 }
 function resetClassForm(){
-  classDraft = { name: '', days: [], s: '08:00', e: '08:50' };
+  classDraft = { kind: 'class', name: '', days: [], s: '08:00', e: '08:50' };
   classEditingId = null;
   var n = document.getElementById('classNameInput'); if(n) n.value = '';
   var st = document.getElementById('classStart'); if(st) st.value = '08:00';
@@ -1942,25 +1960,43 @@ function renderSchedule(){
       chips[ci].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
+  /* v2.9.0: Class/Practice toggle — highlight the draft's kind, and
+     the name field follows it (label + placeholder) */
+  var kindEl = document.getElementById('classKindChips');
+  if(kindEl){
+    var kChips = kindEl.querySelectorAll('[data-class-kind]');
+    for(var ki = 0; ki < kChips.length; ki++){
+      var kOn = kChips[ki].dataset.classKind === classDraft.kind;
+      kChips[ki].classList.toggle('active', kOn);
+      kChips[ki].setAttribute('aria-pressed', kOn ? 'true' : 'false');
+    }
+  }
+  var isPractice = classDraft.kind === 'practice';
+  var nameLabel = document.getElementById('classNameLabel');
+  if(nameLabel) nameLabel.textContent = isPractice ? 'Practice name' : 'Class name';
+  var nameInput = document.getElementById('classNameInput');
+  if(nameInput) nameInput.placeholder = isPractice ? 'Practice name — e.g. Track Practice' : 'Class name — e.g. ENV 350';
   var prev = document.getElementById('classPreview');
   if(prev) prev.textContent = classPreviewText();
   var addBtn = document.getElementById('classAddBtn');
-  if(addBtn) addBtn.textContent = classEditingId ? 'Save changes' : 'Add class';
+  if(addBtn) addBtn.textContent = classEditingId ? 'Save changes' : (isPractice ? 'Add practice' : 'Add class');
   var cancelBtn = document.getElementById('classCancelEdit');
   if(cancelBtn) cancelBtn.hidden = !classEditingId;
 
-  /* saved classes, one row each */
+  /* saved entries, one row each — classes and practices together,
+     each marked with its kind (🎓 Class / 🏃 Practice) */
   var classes = getClasses();
   if(!classes.length){
-    listEl.innerHTML = '<p class="hint">No classes yet — add your first one above and your week fills in below.</p>';
+    listEl.innerHTML = '<p class="hint">No classes or practices yet — add your first one above and your week fills in below.</p>';
   } else {
     var html = '';
     classes.forEach(function(c){
       var mins = exactMinutes(c.s, c.e);
       var daysStr = c.days.map(function(d){ return PLAN_DAYS[d]; }).join('/');
       html += '<div class="class-row">' +
-        '<div class="class-row-info"><strong>' + esc(c.name) + '</strong>' +
-        '<div class="class-row-sub">' + esc(daysStr) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
+        '<div class="class-row-info"><strong>' + entryMarker(c) + ' ' + esc(c.name) + '</strong>' +
+        '<div class="class-row-sub"><span class="class-kind-pill ' + entryKind(c) + '">' + entryKindLabel(c) + '</span> ' +
+        esc(daysStr) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
         ' · ' + fmtMinutes(mins) + ' (' + fmtHrsExact(mins / 60) + ' hrs)</div></div>' +
         '<div class="class-row-actions">' +
         '<button class="btn-mini bk-mini" type="button" data-class-edit="' + esc(c.id) + '">Edit</button>' +
@@ -1970,10 +2006,14 @@ function renderSchedule(){
     listEl.innerHTML = html;
   }
 
-  /* week view: classes vs the school work plan, day by day */
+  /* week view: classes + practices vs the school work plan, day by
+     day — the overlap check covers BOTH kinds (v2.9.0) */
   var conflicts = [];
-  var totalClassMins = 0;
-  classes.forEach(function(c){ totalClassMins += exactMinutes(c.s, c.e) * c.days.length; });
+  var totalClassMins = 0, totalPracticeMins = 0;
+  classes.forEach(function(c){
+    var m = exactMinutes(c.s, c.e) * c.days.length;
+    if(entryKind(c) === 'practice') totalPracticeMins += m; else totalClassMins += m;
+  });
   var workTotal = planTotal(S.planHours.school);
   var weekEl = document.getElementById('classWeek');
   if(weekEl){
@@ -1984,7 +2024,7 @@ function renderSchedule(){
       var pair = planDayTime('school', i);
       var lines = '';
       dayClasses.forEach(function(c){
-        lines += '<div class="class-week-line">🎓 ' + esc(c.name) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
+        lines += '<div class="class-week-line">' + entryMarker(c) + ' ' + esc(c.name) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
           ' · ' + fmtMinutes(exactMinutes(c.s, c.e)) + '</div>';
       });
       if(pair.s && pair.e){
@@ -1994,9 +2034,13 @@ function renderSchedule(){
           conflicts.push(PLAN_DAYS[i] + ': Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
             ' overlaps ' + c.name + ' (' + fmtTime(c.s) + ' – ' + fmtTime(c.e) + ')');
         });
+        var hitKinds = [];
+        hits.forEach(function(c){ if(hitKinds.indexOf(entryKind(c)) === -1) hitKinds.push(entryKind(c)); });
+        var hitText = hitKinds.length > 1 ? ' — overlaps a class + a practice'
+          : (hitKinds[0] === 'practice' ? ' — overlaps a practice' : ' — overlaps a class');
         lines += '<div class="class-week-line work' + (hits.length ? ' conflict' : '') + '">' +
           (hits.length ? '⚠️ ' : '💼 ') + 'Work ' + esc(fmtTime(pair.s)) + ' – ' + esc(fmtTime(pair.e)) +
-          ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? ' — overlaps a class' : '') + '</div>';
+          ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? hitText : '') + '</div>';
       } else if(num(S.planHours.school[i]) > 0){
         lines += '<div class="class-week-line work">💼 Work · ' + fmtHrsExact(num(S.planHours.school[i])) +
           ' hrs planned (no times set — add them in the planner above to check overlaps)</div>';
@@ -2008,12 +2052,13 @@ function renderSchedule(){
   }
   var sumEl = document.getElementById('classSummary');
   if(sumEl){
-    var totals = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
+    var totals = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Practice: ' + fmtMinutes(totalPracticeMins) +
+      ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
     if(conflicts.length){
       sumEl.innerHTML = esc(totals) + '<br>' +
         conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
     } else {
-      sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes. ✅';
+      sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes and practices. ✅';
     }
   }
   renderSuggest();
@@ -2043,7 +2088,7 @@ function renderSuggest(){
   });
   html += '<p class="suggest-total">Total: <strong>' + fmtHrsExact(res.totalPaid) + ' paid hrs</strong> (target ' + tgt + 'h)</p>';
   if(res.shortfall > 0){
-    html += '<p class="suggest-warn">Your classes only leave room for ~' + fmtHrsExact(res.totalPaid) +
+    html += '<p class="suggest-warn">Your classes and practices only leave room for ~' + fmtHrsExact(res.totalPaid) +
       ' paid hrs — short of the ' + tgt + 'h target.</p>';
   }
   html += '<p class="hint">Applying replaces your current school-week plan — the hours and the shift times. You can still edit any day in the planner afterwards.</p>' +
@@ -2075,6 +2120,18 @@ function applySuggestion(){
 function bindSchedule(){
   var chipsEl = document.getElementById('classDayChips');
   if(!chipsEl) return;
+  /* v2.9.0: Class / Practice toggle — flips the draft's kind; the
+     name field, button label and saved entry all follow it */
+  var kindEl = document.getElementById('classKindChips');
+  if(kindEl) kindEl.addEventListener('click', function(e){
+    var t = e.target;
+    var chip = t.closest ? t.closest('[data-class-kind]') : null;
+    if(!chip) return;
+    var k = chip.dataset.classKind;
+    if(k !== 'class' && k !== 'practice') return;
+    classDraft.kind = k;
+    renderSchedule();
+  });
   chipsEl.addEventListener('click', function(e){
     var t = e.target;
     if(!t.dataset || t.dataset.classDay === undefined) return;
@@ -2102,7 +2159,8 @@ function bindSchedule(){
   document.getElementById('classAddBtn').addEventListener('click', function(){
     var note = document.getElementById('classNote');
     var name = String(classDraft.name || '').trim();
-    if(!name){ note.textContent = 'Give the class a name first.'; return; }
+    var kind = classDraft.kind === 'practice' ? 'practice' : 'class';
+    if(!name){ note.textContent = kind === 'practice' ? 'Give the practice a name first.' : 'Give the class a name first.'; return; }
     if(!classDraft.days.length){ note.textContent = 'Pick at least one day.'; return; }
     var pair = normTimePair({ s: classDraft.s, e: classDraft.e });
     if(!pair.s || !pair.e){ note.textContent = 'Set a start and an end time.'; return; }
@@ -2110,17 +2168,20 @@ function bindSchedule(){
     var days = classDraft.days.slice().sort(function(a, b){ return a - b; });
     var existing = classEditingId ? classById(classEditingId) : null;
     if(existing){
+      existing.kind = kind;
       existing.name = name; existing.days = days; existing.s = pair.s; existing.e = pair.e;
     } else {
-      S.classes.push({ id: newClassId(), name: name, days: days, s: pair.s, e: pair.e });
+      S.classes.push({ id: newClassId(), kind: kind, name: name, days: days, s: pair.s, e: pair.e });
     }
-    /* tag those days as Class days in the school plan (add-only,
-       never removed — deleting a class leaves the tags alone) */
+    /* tag those days in the school plan — 'class' for a class,
+       'practice' for a practice (add-only, never removed — deleting
+       an entry leaves the tags alone) */
+    var tagKey = kind === 'practice' ? 'practice' : 'class';
     days.forEach(function(d){
       var tags = S.planHours.schoolTags[d];
-      if(Array.isArray(tags) && tags.indexOf('class') === -1) tags.push('class');
+      if(Array.isArray(tags) && tags.indexOf(tagKey) === -1) tags.push(tagKey);
     });
-    suggestPreviewData = null; /* classes changed — any preview is stale */
+    suggestPreviewData = null; /* entries changed — any preview is stale */
     save();
     resetClassForm();
     renderPlanHours(true);
@@ -2133,7 +2194,7 @@ function bindSchedule(){
       var c = classById(editBtn.dataset.classEdit);
       if(!c) return;
       classEditingId = c.id;
-      classDraft = { name: c.name, days: c.days.slice(), s: c.s, e: c.e };
+      classDraft = { kind: entryKind(c), name: c.name, days: c.days.slice(), s: c.s, e: c.e };
       document.getElementById('classNameInput').value = c.name;
       document.getElementById('classStart').value = c.s;
       document.getElementById('classEnd').value = c.e;
@@ -2169,7 +2230,7 @@ function bindSchedule(){
     if(!getClasses().length){
       suggestPreviewData = null;
       renderSuggest();
-      if(note) note.textContent = 'Add at least one class first so I know what to work around.';
+      if(note) note.textContent = 'Add at least one class or practice first so I know what to work around.';
       return;
     }
     var tgt = suggestTargetHrs();

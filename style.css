@@ -879,3 +879,16 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 #suggestPreview .bk-actions{margin-top:12px}
 #suggestPreview .bk-actions .btn-primary,
 #suggestPreview .bk-actions .btn-chip{min-height:48px}
+
+/* ================================================================
+   v2.9.0 — Class/Practice toggle on the schedule form + the kind
+   pill on saved-entry rows. Same Sovereign language; the chips
+   reuse .btn-chip (incl. its gold .active state), sized ≥44px.
+   ================================================================ */
+.class-kind{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.class-kind-chip{min-height:44px;padding:8px 18px}
+.class-kind-pill{display:inline-block;padding:1px 9px;border-radius:999px;
+  border:1px solid rgba(212,175,106,.55);color:var(--gold-hi,#f2ddab);
+  font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  vertical-align:1px}
+.class-kind-pill.practice{background:rgba(212,175,106,.16)}

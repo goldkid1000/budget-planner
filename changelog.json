@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "v": "2.9.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "Practices count too: the Class Schedule form now has a Class / Practice toggle — add your practices with their start and end times (e.g. Track Practice, Mon/Wed/Fri 3:30–5:30 PM) and they appear in your week with a 🏃 marker, right alongside your classes.",
+        "✨ Suggest my work hours now routes around your practices exactly like your classes — same 30 minutes of breathing room before and after — and the week view's ⚠️ overlap warnings check your planned work shifts against practices too.",
+        "The schedule summary splits your load by kind — Classes: X / week · Practice: Y / week · Work planned — and adding a practice tags those days as Practice days in the planner, same as classes always have.",
+        "Classes you already saved carry over untouched — anything without a kind is treated as a class, exactly as before."
+      ]
+    },
+    {
       "v": "2.8.0",
       "date": "Oct 20, 2026",
       "notify": true,
