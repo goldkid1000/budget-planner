@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.6.0';
+var APP_VERSION = '2.6.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -445,7 +445,20 @@ var DEFAULTS = {
                schoolTags: [[], [], [], [], [], [], []],
                weekType: 'normal',
                breakCal: { id: null, name: '', start: '', end: '', days: {}, selected: '' },
-               savedBreaks: [] }
+               savedBreaks: [],
+               /* v2.6.1: optional per-day shift times ({ s, e } 'HH:MM')
+                  for both plan weeks + per-date times in the calendar.
+                  When both are set, the day's hours fill from the shift
+                  length with the Paycheck tab's meal rule. */
+               schoolTimes: [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}],
+               breakTimes:  [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}] },
+  /* v2.6.1: Work Log — weeks he ACTUALLY worked, saved to look back on.
+     Entries: { id, week (Monday 'YYYY-MM-DD'), days [7], times [7 {s,e}],
+     total, gross, net } — pay frozen at save time via planScenarioPaycheck. */
+  workLog: [],
+  wlDraft: { week: '',
+             days: [0, 0, 0, 0, 0, 0, 0],
+             times: [{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''},{s:'',e:''}] }
 };
 
 var STUDENT = [
@@ -516,8 +529,46 @@ if(S.planHours.term !== 'break') S.planHours.term = 'school';
   }).map(function(b){
     return { id: b.id || ('bk' + String(b.start) + String(b.end)),
              name: typeof b.name === 'string' ? b.name : '',
-             start: b.start, end: b.end, days: b.days };
+             start: b.start, end: b.end, days: b.days,
+             times: (b.times && typeof b.times === 'object' && !Array.isArray(b.times)) ? b.times : {} };
   });
+})();
+/* v2.6.1: backfill per-day shift times (planner weeks + break calendar)
+   and the Work Log. Old saves without any of these load untouched —
+   times simply start blank and hours stay exactly as they were. */
+function normTimePair(v){
+  function ok(s){ return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s) ? s : ''; }
+  if(!v || typeof v !== 'object') return { s: '', e: '' };
+  return { s: ok(v.s), e: ok(v.e) };
+}
+function normWeekTimes(v){
+  var out = [];
+  for(var i = 0; i < 7; i++) out.push(normTimePair(Array.isArray(v) ? v[i] : null));
+  return out;
+}
+(function(){
+  var ph = S.planHours;
+  ph.schoolTimes = normWeekTimes(ph.schoolTimes);
+  ph.breakTimes = normWeekTimes(ph.breakTimes);
+  if(!ph.breakCal.times || typeof ph.breakCal.times !== 'object' || Array.isArray(ph.breakCal.times)) ph.breakCal.times = {};
+  Object.keys(ph.breakCal.times).forEach(function(k){ ph.breakCal.times[k] = normTimePair(ph.breakCal.times[k]); });
+  if(!Array.isArray(S.workLog)) S.workLog = [];
+  S.workLog = S.workLog.filter(function(w){
+    return w && typeof w.week === 'string' && Array.isArray(w.days);
+  }).map(function(w){
+    var days = [];
+    for(var i = 0; i < 7; i++){ var n = num(w.days[i]); days.push(n > 0 ? Math.min(12, n) : 0); }
+    return { id: w.id || ('wl' + w.week), week: w.week, days: days,
+             times: normWeekTimes(w.times),
+             total: num(w.total) || days.reduce(function(a, v){ return a + v; }, 0),
+             gross: num(w.gross), net: num(w.net) };
+  });
+  if(!S.wlDraft || typeof S.wlDraft !== 'object') S.wlDraft = JSON.parse(JSON.stringify(DEFAULTS.wlDraft));
+  if(typeof S.wlDraft.week !== 'string') S.wlDraft.week = '';
+  var dd = [];
+  for(var j = 0; j < 7; j++){ var dn = num((S.wlDraft.days || [])[j]); dd.push(dn > 0 ? Math.min(12, dn) : 0); }
+  S.wlDraft.days = dd;
+  S.wlDraft.times = normWeekTimes(S.wlDraft.times);
 })();
 /* v1.2.0: the old single FICA % splits into Social Security + Medicare at the
    statutory 6.2 / 1.45 ratio, so old saved rates keep working. The old
@@ -652,6 +703,58 @@ function fmtPlanHrs(h){
   var n = Math.round(num(h) * 10) / 10;
   return (n % 1 === 0 ? String(n) : n.toFixed(1)) + 'h';
 }
+/* ---------- v2.6.1: type-in hours + optional shift times ----------
+   Hours are typed, not dragged: fields accept 0–12 in quarter-hour
+   steps, clamped + rounded on commit. Optional start/end times per
+   day fill the hours from the shift length using the Paycheck tab's
+   own rule — calcShiftPaidHours with defaultMeal (30 min unpaid meal
+   when the shift runs over 6 hrs; the 15-min breaks are paid, so they
+   never come off). Times persist next to the hours; old plans without
+   times load exactly as before. */
+function planClampHrs(v){
+  var n = num(v);
+  if(n < 0) n = 0;
+  if(n > 12) n = 12;
+  return Math.round(n * 4) / 4;
+}
+function fmtHrsInput(v){
+  var n = Math.round(num(v) * 100) / 100;
+  return String(n);
+}
+function fmtTimeShort(t){
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+  if(!m) return '';
+  var h = +m[1], ap = h >= 12 ? 'p' : 'a';
+  var h12 = h % 12; if(h12 === 0) h12 = 12;
+  return h12 + (m[2] === '00' ? '' : ':' + m[2]) + ap;
+}
+function emptyWeekTimes(){
+  var out = [];
+  for(var i = 0; i < 7; i++) out.push({ s: '', e: '' });
+  return out;
+}
+function planTermKey(){ return S.planHours.term === 'break' ? 'break' : 'school'; }
+function planDayTime(term, i){
+  var arr = S.planHours[term + 'Times'];
+  return (arr && arr[i]) || { s: '', e: '' };
+}
+function planTimesNoteFor(pair, hoursVal){
+  if(pair && pair.s && pair.e){
+    var meal = defaultMeal(pair.s, pair.e);
+    return fmtHrs(calcShiftHours(pair.s, pair.e)) + ' hr shift' +
+      (meal > 0 ? ' − ' + meal + ' min meal (unpaid)' : ' · no meal break') +
+      ' → ' + fmtHrs(planClampHrs(calcShiftPaidHours(pair.s, pair.e, meal))) + ' paid hrs filled in. Typing hours above overrides.';
+  }
+  if(pair && (pair.s || pair.e)) return 'Add the other time too and the hours fill in from the shift.';
+  return 'Optional — set a start and an end and the hours fill in automatically (30 min meal off shifts over 6 hrs, same as the Paycheck tab).';
+}
+/* if both times are set, (re)fill the day's hours from the shift */
+function planFillFromTimes(term, i){
+  var pair = planDayTime(term, i);
+  if(pair.s && pair.e){
+    S.planHours[term][i] = planClampHrs(calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e)));
+  }
+}
 /* ---------- v2.6.0: school week types + day tags ----------
    One-tap templates for the school week, and per-day tags (Class /
    Practice / Meet) he toggles so work is planned AROUND his real load.
@@ -686,6 +789,7 @@ function applyWeekType(key){
   S.planHours.term = 'school';
   S.planHours.weekType = key;
   S.planHours.school = t.days.slice();
+  S.planHours.schoolTimes = emptyWeekTimes(); /* template hours aren't shift-derived */
   if(key === 'meet' && !planHasTag(5, 'meet')){
     /* Saturday is the meet: tag it (its hours are already 0 above) */
     S.planHours.schoolTags[5].push('meet');
@@ -699,7 +803,7 @@ function togglePlanTag(i, key){
   else {
     tags.push(key);
     /* a day tagged Meet starts at 0 work hours — still editable after */
-    if(key === 'meet') S.planHours.school[i] = 0;
+    if(key === 'meet'){ S.planHours.school[i] = 0; S.planHours.schoolTimes[i] = { s: '', e: '' }; }
   }
   save(); renderPlanHours(true);
 }
@@ -757,6 +861,32 @@ function bkDefaultHours(d){
   return num(S.planHours.break[bkDowIdx(d)]);
 }
 function bkDraft(){ return S.planHours.breakCal; }
+/* v2.6.1: countdown status for a break range, from local dates via the
+   same bk helpers — day-accurate across month boundaries and DST
+   (both endpoints are local midnights, the diff is rounded). Shown in
+   the card for the break being edited and as a short tag on every
+   saved break. Refreshed on every render; no ticking timer. */
+function bkCountdown(cal){
+  var start = bkParseDate(cal && cal.start), end = bkParseDate(cal && cal.end);
+  if(!start || !end || end < start) return null;
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  function daysTo(d){ return Math.round((d - today) / 86400000); }
+  if(today < start){
+    var n = daysTo(start);
+    return { kind: 'future',
+             text: '⏳ Starts in ' + n + (n === 1 ? ' day' : ' days') + (n <= 7 ? ' — ' + bkDayLabel(start, false) : ''),
+             short: 'starts in ' + n + (n === 1 ? ' day' : ' days') };
+  }
+  if(today <= end){
+    var left = daysTo(end);
+    return { kind: 'now',
+             text: left === 0 ? '🌴 Happening now — last day today' :
+                   '🌴 Happening now — ends in ' + left + (left === 1 ? ' day' : ' days'),
+             short: left === 0 ? 'ends today' : left + (left === 1 ? ' day' : ' days') + ' left' };
+  }
+  return { kind: 'past', text: 'Ended ' + bkDayLabel(end, false), short: 'done' };
+}
 /* fill any in-range date that has no entry yet with the pattern default,
    drop dates outside the range, clamp hours to 0–10 */
 function bkSyncDraftDays(){
@@ -768,11 +898,32 @@ function bkSyncDraftDays(){
     var k = bkFmtDate(d);
     keep[k] = (cal.days[k] === undefined || cal.days[k] === null)
       ? bkDefaultHours(d)
-      : Math.max(0, Math.min(10, num(cal.days[k])));
+      : planClampHrs(cal.days[k]);
   }
   cal.days = keep;
+  /* v2.6.1: keep only in-range per-date times, normalized */
+  var keepT = {};
+  Object.keys(cal.times || {}).forEach(function(k){
+    if(keep.hasOwnProperty(k)) keepT[k] = normTimePair(cal.times[k]);
+  });
+  cal.times = keepT;
   if(cal.selected && !keep.hasOwnProperty(cal.selected)) cal.selected = '';
   return true;
+}
+/* v2.6.1: the selected calendar day's optional shift times */
+var bkTimesOpen = false, bkLastSelected = '';
+function bkDayTime(ds){ return normTimePair((bkDraft().times || {})[ds]); }
+function bkSetDayTime(which, val){
+  var cal = bkDraft();
+  if(!cal.selected) return;
+  if(!cal.times) cal.times = {};
+  var pair = bkDayTime(cal.selected);
+  pair[which] = val || '';
+  cal.times[cal.selected] = pair;
+  if(pair.s && pair.e){
+    cal.days[cal.selected] = planClampHrs(calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e)));
+  }
+  save(); renderBreakCal();
 }
 /* totals for one break-shaped object ({ start, end, days }): work days,
    hours, gross + net — net summed week by week through calcPaycheck */
@@ -819,10 +970,15 @@ function bkTapDay(ds){
   }
   save(); renderBreakCal();
 }
-function bkStepSelected(delta){
+/* v2.6.1: typed hours for the selected calendar day (was steppers) */
+function bkSetSelectedHours(raw){
   var cal = bkDraft();
   if(!cal.selected) return;
-  cal.days[cal.selected] = Math.max(0, Math.min(10, Math.round((num(cal.days[cal.selected]) + delta) * 2) / 2));
+  var str = String(raw === undefined || raw === null ? '' : raw).trim();
+  if(str === ''){ cal.days[cal.selected] = 0; save(); renderBreakCal(); return; }
+  var v = parseFloat(str);
+  if(!isFinite(v)) return; /* invalid — the field resets on blur/commit */
+  cal.days[cal.selected] = planClampHrs(v);
   save(); renderBreakCal();
 }
 function bkSaveBreak(){
@@ -837,7 +993,8 @@ function bkSaveBreak(){
     'Break ' + bkShortLabel(start) + ' – ' + bkShortLabel(end);
   var entry = { id: cal.id || ('bk' + Date.now()), name: name,
                 start: cal.start, end: cal.end,
-                days: JSON.parse(JSON.stringify(cal.days)) };
+                days: JSON.parse(JSON.stringify(cal.days)),
+                times: JSON.parse(JSON.stringify(cal.times || {})) };
   var ix = -1;
   S.planHours.savedBreaks.forEach(function(b, i){ if(b.id === entry.id) ix = i; });
   if(ix >= 0) S.planHours.savedBreaks[ix] = entry; else S.planHours.savedBreaks.push(entry);
@@ -850,7 +1007,8 @@ function bkLoadBreak(id){
   S.planHours.savedBreaks.forEach(function(b){ if(b.id === id) found = b; });
   if(!found) return;
   S.planHours.breakCal = { id: found.id, name: found.name, start: found.start, end: found.end,
-                           days: JSON.parse(JSON.stringify(found.days)), selected: '' };
+                           days: JSON.parse(JSON.stringify(found.days)), selected: '',
+                           times: JSON.parse(JSON.stringify(found.times || {})) };
   save(); renderBreakCal();
 }
 function bkDeleteBreak(id){
@@ -859,7 +1017,7 @@ function bkDeleteBreak(id){
   save(); renderBreakCal();
 }
 function bkNewBreak(){
-  S.planHours.breakCal = { id: null, name: '', start: '', end: '', days: {}, selected: '' };
+  S.planHours.breakCal = { id: null, name: '', start: '', end: '', days: {}, selected: '', times: {} };
   var note = document.getElementById('bkSaveNote');
   if(note) note.textContent = '';
   save(); renderBreakCal();
@@ -873,11 +1031,13 @@ function renderSavedBreaks(){
   list.forEach(function(b){
     var s = bkSummary(b);
     var st = bkParseDate(b.start), en = bkParseDate(b.end);
+    var bcd = bkCountdown(b);
     var sub = (st && en ? bkShortLabel(st) + ' – ' + bkShortLabel(en) + ', ' + en.getFullYear() : '') +
       (s ? ' · ' + s.workDays + ' work days · ' + fmtPlanHrs(s.totalHours) + ' · ' + money(s.net) + ' take-home' : '');
+    var cdHtml = bcd ? ' · <span class="bk-saved-count ' + bcd.kind + '">' + esc(bcd.short) + '</span>' : '';
     html += '<div class="bk-saved-row">' +
       '<div class="bk-saved-info"><strong>' + esc(b.name || 'Break') + '</strong>' +
-      '<div class="bk-saved-sub">' + esc(sub) + '</div></div>' +
+      '<div class="bk-saved-sub">' + esc(sub) + cdHtml + '</div></div>' +
       '<div class="bk-saved-actions">' +
       '<button class="btn-mini bk-mini" type="button" data-bk-load="' + esc(b.id) + '">Load</button>' +
       '<button class="btn-mini danger bk-mini" type="button" data-bk-del="' + esc(b.id) + '">Delete</button>' +
@@ -898,10 +1058,12 @@ function renderBreakCal(){
   var summaryEl = document.getElementById('bkSummary');
   var weeksEl = document.getElementById('bkWeeks');
   var editor = document.getElementById('bkEditor');
+  var cdEl = document.getElementById('bkCountdown');
   function clearAll(msg){
     hint.textContent = msg;
     wrap.innerHTML = ''; summaryEl.innerHTML = ''; weeksEl.innerHTML = '';
     editor.hidden = true;
+    if(cdEl){ cdEl.hidden = true; cdEl.textContent = ''; }
     renderSavedBreaks();
   }
   var start = bkParseDate(cal.start), end = bkParseDate(cal.end);
@@ -913,11 +1075,22 @@ function renderBreakCal(){
     return;
   }
   bkSyncDraftDays();
+  /* v2.6.1: countdown chip for the break being viewed/edited */
+  var cd = bkCountdown(cal);
+  if(cdEl){
+    if(cd){
+      cdEl.hidden = false;
+      cdEl.className = 'bk-countdown ' + cd.kind;
+      cdEl.textContent = cd.text;
+    } else {
+      cdEl.hidden = true; cdEl.textContent = '';
+    }
+  }
   var monthsTxt = (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear())
     ? BK_MONTHS[start.getMonth()] + ' ' + start.getFullYear()
     : BK_MONTHS[start.getMonth()] + ' ' + start.getFullYear() + ' – ' + BK_MONTHS[end.getMonth()] + ' ' + end.getFullYear();
   hint.textContent = dayCount + ' days · ' + bkDayLabel(start, true) + ' → ' + bkDayLabel(end, true) +
-    '. Tap a day to switch it on or off; tap again or use the steppers to set its hours.';
+    '. Tap a day to select it (tap the selected day again to switch it off), then type its hours or set shift times below.';
   wrap.innerHTML = '';
   var cap = document.createElement('p');
   cap.className = 'bk-months';
@@ -951,12 +1124,32 @@ function renderBreakCal(){
     grid.appendChild(cell);
   }
   wrap.appendChild(grid);
-  /* selected-day stepper row */
+  /* selected-day editor — v2.6.1: type the hours, optional shift times */
   var sel = cal.selected ? bkParseDate(cal.selected) : null;
   if(sel && sel >= start && sel <= end){
     editor.hidden = false;
     document.getElementById('bkEditorLabel').textContent = bkDayLabel(sel, true);
-    document.getElementById('bkEditorVal').textContent = fmtPlanHrs(num(cal.days[cal.selected]));
+    var bkInp = document.getElementById('bkHrsInput');
+    if(bkInp && document.activeElement !== bkInp) bkInp.value = fmtHrsInput(num(cal.days[cal.selected]));
+    var pair = bkDayTime(cal.selected);
+    var hasT = !!(pair.s || pair.e);
+    if(cal.selected !== bkLastSelected){
+      bkLastSelected = cal.selected;
+      bkTimesOpen = hasT; /* reopen showing times that are already set */
+    }
+    var tBtn = document.getElementById('bkTimesBtn');
+    tBtn.classList.toggle('has', hasT);
+    tBtn.classList.toggle('open', bkTimesOpen);
+    tBtn.setAttribute('aria-expanded', bkTimesOpen ? 'true' : 'false');
+    tBtn.textContent = hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times';
+    var tRow = document.getElementById('bkTimesRow');
+    tRow.hidden = !bkTimesOpen;
+    if(bkTimesOpen){
+      var sInp = document.getElementById('bkStartTime'), eInp = document.getElementById('bkEndTime');
+      if(document.activeElement !== sInp) sInp.value = pair.s || '';
+      if(document.activeElement !== eInp) eInp.value = pair.e || '';
+      document.getElementById('bkTimesNote').textContent = planTimesNoteFor(pair, num(cal.days[cal.selected]));
+    }
   } else {
     editor.hidden = true;
   }
@@ -990,6 +1183,27 @@ function renderBreakCal(){
   renderSavedBreaks();
 }
 
+/* v2.6.1: which planner rows have their shift-times editor open,
+   keyed 'school0'..'break6' — view state only, never saved */
+var planTimesExpanded = {};
+function planDayRowHTML(term, i, hrsVal){
+  var pair = planDayTime(term, i);
+  var hasT = !!(pair.s || pair.e);
+  var open = !!planTimesExpanded[term + i];
+  return '<span class="plan-day-name">' + PLAN_DAYS[i] + '</span>' +
+    '<button class="plan-step" type="button" data-plan-dec="' + i + '" aria-label="Fewer hours ' + PLAN_DAY_FULL[i] + '">−</button>' +
+    '<span class="plan-hrs-wrap"><input class="plan-hrs" type="number" inputmode="decimal" min="0" max="12" step="0.25" value="' + fmtHrsInput(hrsVal) + '" data-plan-hrs="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours — type a number"><span class="plan-hrs-unit">hrs</span></span>' +
+    '<button class="plan-step" type="button" data-plan-inc="' + i + '" aria-label="More hours ' + PLAN_DAY_FULL[i] + '">+</button>' +
+    '<button class="plan-times-btn' + (hasT ? ' has' : '') + (open ? ' open' : '') + '" type="button" data-plan-times="' + i + '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Shift times for ' + PLAN_DAY_FULL[i] + '">' +
+      (hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times') + '</button>';
+}
+function planTimesRowHTML(term, i){
+  var pair = planDayTime(term, i);
+  return '<label class="plan-time-field">Start <input type="time" value="' + esc(pair.s || '') + '" data-plan-start="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' shift start"></label>' +
+    '<label class="plan-time-field">End <input type="time" value="' + esc(pair.e || '') + '" data-plan-end="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' shift end"></label>' +
+    '<button class="plan-times-clear" type="button" data-plan-clear-times="' + i + '">Clear times</button>' +
+    '<span class="plan-times-note" id="planTimesNote' + i + '">' + esc(planTimesNoteFor(pair)) + '</span>';
+}
 function renderPlanHours(rebuildDays){
   var schoolBtn = document.getElementById('planTermSchool');
   if(!schoolBtn) return;
@@ -998,23 +1212,26 @@ function renderPlanHours(rebuildDays){
   schoolBtn.classList.toggle('active', term === 'school');
   document.getElementById('planTermBreak').classList.toggle('active', term === 'break');
 
-  /* day rows — skip the rebuild while a slider is being dragged */
+  /* day rows — typed hour fields (v2.6.1, sliders removed). Typing
+     only ever triggers the light update below, never a rebuild, so
+     focus and the caret are safe; rebuilds happen on structural taps
+     (times toggle, tags, templates, term switch). */
   var daysEl = document.getElementById('planDays');
-  var dragging = daysEl.contains(document.activeElement) && document.activeElement.type === 'range';
-  if(rebuildDays && !dragging){
+  if(rebuildDays){
     daysEl.innerHTML = '';
     PLAN_DAYS.forEach(function(name, i){
       var block = document.createElement('div');
       block.className = 'plan-day-block';
       var row = document.createElement('div');
       row.className = 'plan-day' + (num(days[i]) > 8 ? ' over' : '');
-      row.innerHTML =
-        '<span class="plan-day-name">' + name + '</span>' +
-        '<button class="plan-step" type="button" data-plan-dec="' + i + '" aria-label="Fewer hours ' + PLAN_DAY_FULL[i] + '">−</button>' +
-        '<input type="range" min="0" max="10" step="0.5" value="' + num(days[i]) + '" data-plan-range="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours">' +
-        '<button class="plan-step" type="button" data-plan-inc="' + i + '" aria-label="More hours ' + PLAN_DAY_FULL[i] + '">+</button>' +
-        '<span class="plan-day-val" id="planDayVal' + i + '">' + fmtPlanHrs(days[i]) + '</span>';
+      row.innerHTML = planDayRowHTML(term, i, days[i]);
       block.appendChild(row);
+      if(planTimesExpanded[term + i]){
+        var trow = document.createElement('div');
+        trow.className = 'plan-day-times';
+        trow.innerHTML = planTimesRowHTML(term, i);
+        block.appendChild(trow);
+      }
       /* v2.6.0: school days carry toggleable load tags under the row */
       if(term === 'school'){
         var tagRow = document.createElement('div');
@@ -1036,12 +1253,22 @@ function renderPlanHours(rebuildDays){
       daysEl.appendChild(block);
     });
   } else {
-    /* light update: values + over-8 flags only */
+    /* light update: field values (never the focused one), over-8 flags,
+       times-button labels and shift notes */
+    var rowEls = daysEl.querySelectorAll('.plan-day');
     days.forEach(function(v, i){
-      var val = document.getElementById('planDayVal' + i);
-      if(val) val.textContent = fmtPlanHrs(v);
-      var row = val ? val.closest('.plan-day') : null;
-      if(row) row.classList.toggle('over', num(v) > 8);
+      var inp = daysEl.querySelector('[data-plan-hrs="' + i + '"]');
+      if(inp && document.activeElement !== inp) inp.value = fmtHrsInput(v);
+      if(rowEls[i]) rowEls[i].classList.toggle('over', num(v) > 8);
+      var pair = planDayTime(term, i);
+      var hasT = !!(pair.s || pair.e);
+      var tb = daysEl.querySelector('[data-plan-times="' + i + '"]');
+      if(tb){
+        tb.classList.toggle('has', hasT);
+        tb.textContent = hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times';
+      }
+      var note = document.getElementById('planTimesNote' + i);
+      if(note) note.textContent = planTimesNoteFor(pair);
     });
   }
 
@@ -1116,22 +1343,68 @@ function bindPlanHours(){
   if(!daysEl) return;
   function setDay(i, v){
     var days = planTermDays();
-    v = Math.max(0, Math.min(10, Math.round(num(v) * 2) / 2));
-    days[i] = v;
+    days[i] = planClampHrs(v);
     save();
-    var slider = daysEl.querySelector('[data-plan-range="' + i + '"]');
-    if(slider && document.activeElement !== slider) slider.value = v;
+    renderPlanHours(false);
+  }
+  /* v2.6.1: typed hours — blank counts as 0, anything unparseable is
+     ignored (the field snaps back to the last good value on commit) */
+  function setDayTyped(i, raw){
+    var str = String(raw === undefined || raw === null ? '' : raw).trim();
+    var days = planTermDays();
+    if(str === ''){ days[i] = 0; save(); renderPlanHours(false); return; }
+    var v = parseFloat(str);
+    if(!isFinite(v)) return;
+    days[i] = planClampHrs(v);
+    save();
+    renderPlanHours(false);
+  }
+  function setDayTime(i, which, val){
+    var term = planTermKey();
+    var pair = planDayTime(term, i);
+    pair[which] = val || '';
+    S.planHours[term + 'Times'][i] = pair;
+    planFillFromTimes(term, i);
+    save();
     renderPlanHours(false);
   }
   daysEl.addEventListener('input', function(e){
     var t = e.target;
-    if(t.dataset.planRange !== undefined) setDay(+t.dataset.planRange, t.value);
+    if(!t.dataset) return;
+    if(t.dataset.planHrs !== undefined) setDayTyped(+t.dataset.planHrs, t.value);
+    else if(t.dataset.planStart !== undefined) setDayTime(+t.dataset.planStart, 's', t.value);
+    else if(t.dataset.planEnd !== undefined) setDayTime(+t.dataset.planEnd, 'e', t.value);
+  });
+  /* on commit, normalize the field itself (clamped/rounded value, or
+     back to the last valid one if the entry was invalid) — no rebuild,
+     so tabbing through the days never loses focus */
+  daysEl.addEventListener('change', function(e){
+    var t = e.target;
+    if(!t.dataset) return;
+    var term = planTermKey();
+    if(t.dataset.planHrs !== undefined) t.value = fmtHrsInput(planTermDays()[+t.dataset.planHrs]);
+    else if(t.dataset.planStart !== undefined) t.value = planDayTime(term, +t.dataset.planStart).s || '';
+    else if(t.dataset.planEnd !== undefined) t.value = planDayTime(term, +t.dataset.planEnd).e || '';
   });
   daysEl.addEventListener('click', function(e){
     var t = e.target;
+    if(!t.dataset) return;
     /* v2.6.0: day tag chips (school mode) */
-    if(t.dataset && t.dataset.planTag !== undefined && t.dataset.planTagDay !== undefined){
+    if(t.dataset.planTag !== undefined && t.dataset.planTagDay !== undefined){
       togglePlanTag(+t.dataset.planTagDay, t.dataset.planTag);
+      return;
+    }
+    /* v2.6.1: shift-times toggle + clear */
+    if(t.dataset.planTimes !== undefined){
+      var tk = planTermKey() + (+t.dataset.planTimes);
+      planTimesExpanded[tk] = !planTimesExpanded[tk];
+      renderPlanHours(true);
+      return;
+    }
+    if(t.dataset.planClearTimes !== undefined){
+      var ci = +t.dataset.planClearTimes, cterm = planTermKey();
+      S.planHours[cterm + 'Times'][ci] = { s: '', e: '' };
+      save(); renderPlanHours(true);
       return;
     }
     var days = planTermDays();
@@ -1157,8 +1430,24 @@ function bindPlanHours(){
       var cell = e.target.closest ? e.target.closest('[data-bk-day]') : null;
       if(cell) bkTapDay(cell.dataset.bkDay);
     });
-    document.getElementById('bkDec').addEventListener('click', function(){ bkStepSelected(-0.5); });
-    document.getElementById('bkInc').addEventListener('click', function(){ bkStepSelected(0.5); });
+    /* v2.6.1: typed hours + shift times for the selected calendar day */
+    var bkHrsEl = document.getElementById('bkHrsInput');
+    bkHrsEl.addEventListener('input', function(){ bkSetSelectedHours(bkHrsEl.value); });
+    bkHrsEl.addEventListener('change', function(){
+      var cal = bkDraft();
+      if(cal.selected) bkHrsEl.value = fmtHrsInput(num(cal.days[cal.selected]));
+      renderBreakCal();
+    });
+    document.getElementById('bkTimesBtn').addEventListener('click', function(){
+      bkTimesOpen = !bkTimesOpen; renderBreakCal();
+    });
+    document.getElementById('bkStartTime').addEventListener('input', function(e){ bkSetDayTime('s', e.target.value); });
+    document.getElementById('bkEndTime').addEventListener('input', function(e){ bkSetDayTime('e', e.target.value); });
+    document.getElementById('bkClearTimes').addEventListener('click', function(){
+      var cal = bkDraft();
+      if(cal.selected && cal.times) delete cal.times[cal.selected];
+      save(); renderBreakCal();
+    });
     document.getElementById('bkSave').addEventListener('click', bkSaveBreak);
     document.getElementById('bkNew').addEventListener('click', bkNewBreak);
     document.getElementById('bkSaved').addEventListener('click', function(e){
@@ -1182,8 +1471,246 @@ function bindPlanHours(){
       var preset = PLAN_PRESETS[key];
       S.planHours.term = preset.term;
       S.planHours[preset.term] = preset.days.slice();
+      S.planHours[preset.term + 'Times'] = emptyWeekTimes(); /* preset hours aren't shift-derived */
       save(); renderPlanHours(true);
     });
+  });
+}
+
+/* ---------- v2.6.1: Work Log ----------
+   The planner is what he COULD work; this logs what he ACTUALLY
+   worked, week by week, so he can look back: most hours in a week,
+   averages, totals. Pay is computed once at save time through the
+   same planScenarioPaycheck (calcPaycheck) as everything else and
+   stored with the entry — later rate changes never rewrite history. */
+var wlTimesExpanded = {}, wlOpenEntry = null;
+function wlMondayStr(d){
+  var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return bkFmtDate(bkAddDays(x, -bkDowIdx(x)));
+}
+function wlDraftWeek(){
+  var d = bkParseDate(S.wlDraft.week);
+  if(d) return bkFmtDate(bkAddDays(d, -bkDowIdx(d)));
+  return wlMondayStr(new Date());
+}
+function wlDraftTotal(){ return planTotal(S.wlDraft.days); }
+function wlSetDay(i, v){
+  S.wlDraft.days[i] = planClampHrs(v);
+  save(); renderWorkLog(false);
+}
+function wlSetDayTyped(i, raw){
+  var str = String(raw === undefined || raw === null ? '' : raw).trim();
+  if(str === ''){ S.wlDraft.days[i] = 0; save(); renderWorkLog(false); return; }
+  var v = parseFloat(str);
+  if(!isFinite(v)) return;
+  S.wlDraft.days[i] = planClampHrs(v);
+  save(); renderWorkLog(false);
+}
+function wlSetDayTime(i, which, val){
+  var pair = normTimePair(S.wlDraft.times[i]);
+  pair[which] = val || '';
+  S.wlDraft.times[i] = pair;
+  if(pair.s && pair.e){
+    S.wlDraft.days[i] = planClampHrs(calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e)));
+  }
+  save(); renderWorkLog(false);
+}
+function wlSaveWeek(){
+  var note = document.getElementById('wlNote');
+  var week = wlDraftWeek();
+  var total = wlDraftTotal();
+  var p = planScenarioPaycheck(total);
+  var entry = { id: 'wl' + week, week: week,
+                days: S.wlDraft.days.slice(),
+                times: JSON.parse(JSON.stringify(S.wlDraft.times)),
+                total: total, gross: p.weeklyGross, net: p.net };
+  var ix = -1;
+  S.workLog.forEach(function(w, i){ if(w.week === week) ix = i; });
+  var updated = ix >= 0;
+  if(updated) S.workLog[ix] = entry; else S.workLog.push(entry);
+  S.workLog.sort(function(a, b){ return a.week < b.week ? 1 : (a.week > b.week ? -1 : 0); });
+  S.wlDraft.days = [0, 0, 0, 0, 0, 0, 0];
+  S.wlDraft.times = emptyWeekTimes();
+  wlOpenEntry = entry.id;
+  save(); renderWorkLog(true);
+  if(note) note.textContent = (updated ? 'Updated' : 'Logged') + ' the week of ' + bkDayLabel(bkParseDate(week), true) +
+    ' — ' + fmtPlanHrs(total) + ', ' + money(p.net) + ' take-home.';
+}
+function wlCopyPlan(){
+  S.wlDraft.days = S.planHours.school.slice();
+  S.wlDraft.times = JSON.parse(JSON.stringify(S.planHours.schoolTimes));
+  if(!bkParseDate(S.wlDraft.week)) S.wlDraft.week = wlMondayStr(new Date());
+  save(); renderWorkLog(true);
+  var note = document.getElementById('wlNote');
+  if(note) note.textContent = 'Copied your school plan in as worked — fix any day that was different, then save the week.';
+}
+function wlDelete(id){
+  S.workLog = S.workLog.filter(function(w){ return w.id !== id; });
+  if(wlOpenEntry === id) wlOpenEntry = null;
+  save(); renderWorkLog(true);
+}
+function wlStats(){
+  var n = S.workLog.length;
+  if(!n) return null;
+  var totH = 0, totNet = 0, best = null;
+  S.workLog.forEach(function(w){
+    totH += num(w.total); totNet += num(w.net);
+    if(!best || num(w.total) > num(best.total)) best = w;
+  });
+  return { count: n, totalHours: totH, totalNet: totNet,
+           avg: Math.round((totH / n) * 10) / 10, best: best };
+}
+function renderWorkLog(rebuildRows){
+  var daysEl = document.getElementById('wlDays');
+  if(!daysEl) return;
+  var weekEl = document.getElementById('wlWeek');
+  if(weekEl && document.activeElement !== weekEl) weekEl.value = wlDraftWeek();
+  var draft = S.wlDraft;
+  if(rebuildRows){
+    daysEl.innerHTML = '';
+    PLAN_DAYS.forEach(function(name, i){
+      var pair = normTimePair(draft.times[i]);
+      var hasT = !!(pair.s || pair.e);
+      var open = !!wlTimesExpanded[i];
+      var block = document.createElement('div');
+      block.className = 'plan-day-block';
+      var row = document.createElement('div');
+      row.className = 'plan-day' + (num(draft.days[i]) > 8 ? ' over' : '');
+      row.innerHTML =
+        '<span class="plan-day-name">' + name + '</span>' +
+        '<button class="plan-step" type="button" data-wl-dec="' + i + '" aria-label="Fewer hours ' + PLAN_DAY_FULL[i] + '">−</button>' +
+        '<span class="plan-hrs-wrap"><input class="plan-hrs" type="number" inputmode="decimal" min="0" max="12" step="0.25" value="' + fmtHrsInput(draft.days[i]) + '" data-wl-hrs="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' hours worked — type a number"><span class="plan-hrs-unit">hrs</span></span>' +
+        '<button class="plan-step" type="button" data-wl-inc="' + i + '" aria-label="More hours ' + PLAN_DAY_FULL[i] + '">+</button>' +
+        '<button class="plan-times-btn' + (hasT ? ' has' : '') + (open ? ' open' : '') + '" type="button" data-wl-times="' + i + '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Shift times for ' + PLAN_DAY_FULL[i] + '">' +
+          (hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times') + '</button>';
+      block.appendChild(row);
+      if(open){
+        var trow = document.createElement('div');
+        trow.className = 'plan-day-times';
+        trow.innerHTML =
+          '<label class="plan-time-field">Start <input type="time" value="' + esc(pair.s || '') + '" data-wl-start="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' shift start"></label>' +
+          '<label class="plan-time-field">End <input type="time" value="' + esc(pair.e || '') + '" data-wl-end="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' shift end"></label>' +
+          '<button class="plan-times-clear" type="button" data-wl-clear-times="' + i + '">Clear times</button>' +
+          '<span class="plan-times-note" id="wlTimesNote' + i + '">' + esc(planTimesNoteFor(pair)) + '</span>';
+        block.appendChild(trow);
+      }
+      daysEl.appendChild(block);
+    });
+  } else {
+    var rowEls = daysEl.querySelectorAll('.plan-day');
+    draft.days.forEach(function(v, i){
+      var inp = daysEl.querySelector('[data-wl-hrs="' + i + '"]');
+      if(inp && document.activeElement !== inp) inp.value = fmtHrsInput(v);
+      if(rowEls[i]) rowEls[i].classList.toggle('over', num(v) > 8);
+      var pair = normTimePair(draft.times[i]);
+      var hasT = !!(pair.s || pair.e);
+      var tb = daysEl.querySelector('[data-wl-times="' + i + '"]');
+      if(tb){
+        tb.classList.toggle('has', hasT);
+        tb.textContent = hasT ? '🕑 ' + fmtTimeShort(pair.s) + '–' + fmtTimeShort(pair.e) : '＋ times';
+      }
+      var note = document.getElementById('wlTimesNote' + i);
+      if(note) note.textContent = planTimesNoteFor(pair);
+    });
+  }
+  var total = wlDraftTotal();
+  var p = planScenarioPaycheck(total);
+  document.getElementById('wlTotalLine').innerHTML =
+    'Total: <strong>' + fmtPlanHrs(total) + '</strong> · take-home ≈ <strong>' + money(p.net) + '</strong>' +
+    (num(S.rate) > 0 ? '' : ' <span class="hint">(set your rate on the Paycheck tab for real numbers)</span>');
+  /* records header */
+  var statsEl = document.getElementById('wlStats');
+  var st = wlStats();
+  if(!st){
+    statsEl.innerHTML = '<p class="hint">No weeks logged yet — log your first week above and your records will build up here: most hours in a week, your average, and everything you\'ve earned.</p>';
+  } else {
+    var bd = bkParseDate(st.best.week);
+    statsEl.innerHTML =
+      '<div class="plan-pay-grid wl-stats-grid">' +
+      '<div class="plan-pay-cell"><p class="plan-pay-label">Most hours in a week</p><p class="plan-pay-num">' + fmtPlanHrs(st.best.total) + '</p><p class="wl-stat-sub">week of ' + (bd ? bkDayLabel(bd, false) : st.best.week) + '</p></div>' +
+      '<div class="plan-pay-cell"><p class="plan-pay-label">Average / week</p><p class="plan-pay-num">' + fmtPlanHrs(st.avg) + '</p><p class="wl-stat-sub">across ' + st.count + ' logged week' + (st.count === 1 ? '' : 's') + '</p></div>' +
+      '<div class="plan-pay-cell"><p class="plan-pay-label">Total hours logged</p><p class="plan-pay-num">' + fmtPlanHrs(st.totalHours) + '</p><p class="wl-stat-sub">' + st.count + ' week' + (st.count === 1 ? '' : 's') + ' on record</p></div>' +
+      '<div class="plan-pay-cell"><p class="plan-pay-label">Total take-home logged</p><p class="plan-pay-num">' + money(st.totalNet) + '</p><p class="wl-stat-sub">at the rates when each week was saved</p></div>' +
+      '</div>';
+  }
+  /* history list, newest first (workLog is kept sorted desc) */
+  var listEl = document.getElementById('wlList');
+  if(!st){ listEl.innerHTML = ''; return; }
+  var html = '';
+  S.workLog.forEach(function(w){
+    var wd = bkParseDate(w.week);
+    var open = wlOpenEntry === w.id;
+    html += '<div class="wl-entry">' +
+      '<div class="wl-entry-headrow">' +
+      '<button class="wl-entry-head" type="button" data-wl-expand="' + esc(w.id) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+      '<span><strong>Week of ' + (wd ? bkDayLabel(wd, true) : esc(w.week)) + '</strong></span>' +
+      '<span class="wl-entry-sum">' + fmtPlanHrs(w.total) + ' · ' + money(w.net) + ' take-home ' + (open ? '▴' : '▾') + '</span></button>' +
+      '<button class="btn-mini danger bk-mini" type="button" data-wl-del="' + esc(w.id) + '">Delete</button>' +
+      '</div>';
+    if(open){
+      var parts = [];
+      for(var i = 0; i < 7; i++){
+        var h = num(w.days[i]);
+        var tp = normTimePair((w.times || [])[i]);
+        var lbl = PLAN_DAYS[i] + ' ' + (h > 0 ? fmtPlanHrs(h) : '—');
+        if(h > 0 && tp.s && tp.e) lbl += ' (' + fmtTime(tp.s) + '–' + fmtTime(tp.e) + ')';
+        parts.push(lbl);
+      }
+      html += '<div class="wl-entry-detail">' + esc(parts.join(' · ')) +
+        '<br>Gross ' + money(w.gross) + ' · take-home ' + money(w.net) + ' — figured with your pay-stub math when this week was saved.</div>';
+    }
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+}
+function bindWorkLog(){
+  var daysEl = document.getElementById('wlDays');
+  if(!daysEl) return;
+  document.getElementById('wlWeek').addEventListener('change', function(e){
+    S.wlDraft.week = e.target.value; save(); renderWorkLog(false);
+  });
+  daysEl.addEventListener('input', function(e){
+    var t = e.target;
+    if(!t.dataset) return;
+    if(t.dataset.wlHrs !== undefined) wlSetDayTyped(+t.dataset.wlHrs, t.value);
+    else if(t.dataset.wlStart !== undefined) wlSetDayTime(+t.dataset.wlStart, 's', t.value);
+    else if(t.dataset.wlEnd !== undefined) wlSetDayTime(+t.dataset.wlEnd, 'e', t.value);
+  });
+  daysEl.addEventListener('change', function(e){
+    var t = e.target;
+    if(!t.dataset) return;
+    if(t.dataset.wlHrs !== undefined) t.value = fmtHrsInput(S.wlDraft.days[+t.dataset.wlHrs]);
+    else if(t.dataset.wlStart !== undefined) t.value = normTimePair(S.wlDraft.times[+t.dataset.wlStart]).s || '';
+    else if(t.dataset.wlEnd !== undefined) t.value = normTimePair(S.wlDraft.times[+t.dataset.wlEnd]).e || '';
+  });
+  daysEl.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t.dataset) return;
+    if(t.dataset.wlTimes !== undefined){
+      var i = +t.dataset.wlTimes;
+      wlTimesExpanded[i] = !wlTimesExpanded[i];
+      renderWorkLog(true);
+      return;
+    }
+    if(t.dataset.wlClearTimes !== undefined){
+      S.wlDraft.times[+t.dataset.wlClearTimes] = { s: '', e: '' };
+      save(); renderWorkLog(true);
+      return;
+    }
+    if(t.dataset.wlDec !== undefined) wlSetDay(+t.dataset.wlDec, num(S.wlDraft.days[+t.dataset.wlDec]) - 0.5);
+    if(t.dataset.wlInc !== undefined) wlSetDay(+t.dataset.wlInc, num(S.wlDraft.days[+t.dataset.wlInc]) + 0.5);
+  });
+  document.getElementById('wlSave').addEventListener('click', wlSaveWeek);
+  document.getElementById('wlCopyPlan').addEventListener('click', wlCopyPlan);
+  document.getElementById('wlList').addEventListener('click', function(e){
+    var t = e.target;
+    var del = t.closest ? t.closest('[data-wl-del]') : null;
+    if(del){ wlDelete(del.dataset.wlDel); return; }
+    var exp = t.closest ? t.closest('[data-wl-expand]') : null;
+    if(exp){
+      wlOpenEntry = wlOpenEntry === exp.dataset.wlExpand ? null : exp.dataset.wlExpand;
+      renderWorkLog(false);
+    }
   });
 }
 
@@ -1293,6 +1820,7 @@ function renderAll(){
   renderDiscountsStatic(); renderDiscountCalc(); renderCashbackEst();
   renderCalculators(); renderWatchlist(); renderStocks(); renderEarn();
   renderPlanHours(true);
+  renderWorkLog(true);
 }
 
 function renderBudget(){
@@ -2073,6 +2601,7 @@ function bind(){
   });
   bindEarn();
   bindPlanHours();
+  bindWorkLog();
   document.getElementById('clearAllBtn').addEventListener('click', function(){
     if(confirm('Clear all your numbers? Everything you typed will be reset to the starting values.')){
       try{ localStorage.removeItem(KEY); }catch(e){}

@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "v": "2.6.1",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "Type your hours in the Possible Hours planner — the sliders are gone. Every day in the school-week and break-week planners (and the selected day in the Break Calendar) is now a field: tap it and type, 0–12 hrs in quarter-hour steps.",
+        "Optional shift times per day: tap '+ times', set a start and an end, and the hours fill in from the shift length using the exact Paycheck-tab rule — 30 min unpaid meal on shifts over 6 hrs, paid breaks never subtracted. Type hours manually any time to override.",
+        "NEW Work Log in the Hours tab: log the hours you actually worked each week (type them day by day, set shift times, or copy your school plan in as worked) and look back at your records — most hours in a week with its date, average hours per week, total hours and total take-home logged, with per-day detail for every saved week.",
+        "Break countdown: the Break Calendar now shows a countdown chip for the break you're viewing — 'Starts in N days', 'Happening now — ends in N days', or 'Ended …' — and every saved break carries its own countdown tag ('starts in 23 days', '12 days left', 'done')."
+      ]
+    },
+    {
       "v": "2.6.0",
       "date": "Oct 20, 2026",
       "notify": true,

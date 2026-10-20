@@ -689,10 +689,22 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   border-bottom:1px solid var(--line-soft);min-height:56px}
 .plan-day:last-of-type{border-bottom:none}
 .plan-day-name{width:38px;flex-shrink:0;font-weight:700;font-size:.95rem}
-.plan-day input[type=range]{flex:1;min-width:0}
-.plan-day-val{width:44px;flex-shrink:0;text-align:right;font-weight:700;
-  font-family:Georgia,'Times New Roman',serif;font-size:1.02rem}
-.plan-day.over .plan-day-val{color:var(--amber-hi,#e8c47c)}
+/* v2.6.1: type-in hours field (sliders removed) + shift-times toggle */
+.plan-hrs-wrap{display:flex;align-items:center;gap:5px;flex:1;min-width:0;justify-content:center}
+.plan-hrs{width:82px;min-height:44px;text-align:center;padding:6px 4px;
+  font-family:Georgia,'Times New Roman',serif;font-size:1.05rem;font-weight:700;
+  background:var(--input-bg);border:1px solid var(--input-line);border-radius:10px;color:var(--ink);
+  appearance:textfield;-moz-appearance:textfield}
+.plan-hrs::-webkit-outer-spin-button,.plan-hrs::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.plan-hrs:focus{outline:none;border-color:#d4af6a;box-shadow:0 0 0 2px rgba(212,175,106,.25)}
+.plan-hrs-unit{color:var(--muted);font-size:.85rem;flex-shrink:0}
+.plan-day.over .plan-hrs{color:var(--amber-hi,#e8c47c);border-color:rgba(232,196,124,.55)}
+.plan-times-btn{min-height:44px;padding:6px 10px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(212,175,106,.35);background:transparent;color:var(--muted);
+  font-size:.8rem;font-weight:650;white-space:nowrap;flex-shrink:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis}
+.plan-times-btn.has{color:var(--gold-hi,#f2ddab);border-color:rgba(212,175,106,.65)}
+.plan-times-btn.open{background:rgba(212,175,106,.14);color:var(--ink)}
 .plan-step{width:44px;height:44px;flex-shrink:0;border-radius:50%;
   border:1px solid var(--input-line);background:var(--card2);color:var(--ink);
   font-size:1.3rem;font-weight:700;line-height:1;cursor:pointer;
@@ -766,3 +778,50 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .bk-saved-sub{font-size:.85rem;color:var(--muted);margin-top:1px}
 .bk-saved-actions{display:flex;gap:8px;flex-shrink:0}
 .bk-mini{min-height:44px;padding:8px 14px;display:inline-flex;align-items:center}
+
+/* ================================================================
+   v2.6.1 — shift-times rows (planner + work log), break-editor
+   times, Work Log records/history. Same Sovereign language.
+   ================================================================ */
+.plan-day-times{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:2px 2px 10px 48px}
+.plan-time-field{display:flex;align-items:center;gap:6px;font-size:.85rem;
+  color:var(--muted);font-weight:650}
+.plan-time-field input[type=time]{min-height:44px;padding:5px 9px;font:inherit;
+  font-size:.95rem;background:var(--input-bg);border:1px solid var(--input-line);
+  border-radius:10px;color:var(--ink)}
+.plan-time-field input[type=time]:focus{outline:none;border-color:#d4af6a;
+  box-shadow:0 0 0 2px rgba(212,175,106,.25)}
+.plan-times-clear{min-height:44px;padding:6px 12px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line-soft);background:transparent;color:var(--muted);
+  font-size:.82rem;font-weight:650}
+.plan-times-note{flex-basis:100%;font-size:.82rem;color:var(--muted);line-height:1.45}
+/* v2.6.1: break countdown chip + saved-break countdown tags */
+.bk-countdown{display:inline-block;margin:2px 0 8px;padding:8px 14px;
+  border:1px solid rgba(212,175,106,.55);border-radius:999px;
+  background:linear-gradient(135deg,rgba(212,175,106,.22),rgba(212,175,106,.08));
+  color:var(--gold-hi,#f2ddab);font-family:Georgia,'Times New Roman',serif;
+  font-weight:700;font-size:1rem}
+.bk-countdown[hidden]{display:none}
+.bk-countdown.now{background:linear-gradient(135deg,#a67c3d,#d4af6a);color:#241a0b;
+  border-color:transparent;box-shadow:0 2px 10px rgba(212,175,106,.3)}
+.bk-countdown.past{background:transparent;border-color:var(--line-soft);
+  color:var(--muted);box-shadow:none}
+.bk-saved-count{font-weight:700;color:var(--gold-hi,#f2ddab);white-space:nowrap}
+.bk-saved-count.past{color:var(--muted);font-weight:650}
+.bk-hrs-wrap{flex:0 1 auto;justify-content:flex-start}
+.bk-hrs-input{width:96px}
+.bk-editor-times{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  flex-basis:100%;margin-top:2px}
+.bk-editor-times[hidden]{display:none}
+.wl-stats-grid{margin-bottom:6px}
+.wl-stat-sub{margin:2px 0 0;font-size:.8rem;color:var(--muted)}
+.wl-entry{border-bottom:1px solid var(--line-soft);padding:6px 2px}
+.wl-entry:last-of-type{border-bottom:none}
+.wl-entry-headrow{display:flex;align-items:center;gap:8px}
+.wl-entry-head{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;
+  justify-content:space-between;gap:10px;background:none;border:none;color:var(--ink);
+  font:inherit;cursor:pointer;text-align:left;padding:4px 0}
+.wl-entry-sum{font-weight:700;font-family:Georgia,'Times New Roman',serif;
+  color:var(--green-hi,#f2ddab);white-space:nowrap;font-size:.95rem}
+.wl-entry-detail{font-size:.87rem;color:var(--muted);line-height:1.55;padding:2px 0 8px}
