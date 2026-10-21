@@ -1,6 +1,18 @@
 {
   "versions": [
     {
+      "v": "2.17.0",
+      "date": "Oct 21, 2026",
+      "notify": true,
+      "notes": [
+        "Big polish update: switching tabs, opening What's New, expanding sections (like Your week) and adding donut slices now animate smoothly — and every animation turns off if your phone is set to reduce motion. Buttons also respond without the old double-tap delay.",
+        "New on the Budget tab: a per-day pace line under 'You'll have left' — what's left spread over the days left in the month, or what to trim per day to get back on track.",
+        "Fixed: tapping a donut slice could show a category's old numbers after you edited it — slice details now always show the slice as it is right now, and new slices sweep in.",
+        "Fixed: a sync code made by an older version could break the app on the other device — imports now get the same full setup as a first load, so nothing is missing.",
+        "Fixed: weeks logged before pay breakdowns existed could show one take-home in the list and a different one inside their breakdown — they always match now. And zeroing a day's hours in the planner now removes its shift from Your week and the week export, even if that day still had old times set."
+      ]
+    },
+    {
       "v": "2.16.0",
       "date": "Oct 20, 2026",
       "notify": true,

@@ -997,3 +997,30 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .week-export-btn{min-height:44px;padding:10px 18px;font-size:.95rem}
 #weekExportNote{margin:6px 0 0}
 #weekExportNote:empty{display:none}
+
+/* ---------- v2.17.0: motion + touch polish ----------
+   New entrances all live under no-preference; the global
+   reduced-motion rule above already kills every animation and
+   transition for people who opt out. */
+@media (prefers-reduced-motion: no-preference){
+  .modal:not([hidden]){animation:bp-fade-in .18s ease-out}
+  .modal:not([hidden]) .modal-card{animation:bp-pop-in .26s cubic-bezier(.21,.9,.35,1.12)}
+  .update-banner:not([hidden]){animation:bp-drop-in .3s ease-out}
+  .view.active .card{animation:bp-card-in .3s ease-out}
+  .details[open] > :not(summary){animation:bp-details-in .22s ease-out}
+  @keyframes bp-fade-in{from{opacity:0}}
+  @keyframes bp-pop-in{from{opacity:0;transform:translateY(16px) scale(.98)}}
+  @keyframes bp-drop-in{from{opacity:0;transform:translateY(-10px)}}
+  @keyframes bp-card-in{from{opacity:0;transform:translateY(8px)}}
+  @keyframes bp-details-in{from{opacity:0;transform:translateY(-4px)}}
+}
+/* per-day pace line on the Budget tab (v2.17.0) */
+.pace-line{font-size:1.02rem;color:var(--green-hi,#b9f5d4);margin:2px 0 0}
+/* touch polish: no double-tap zoom delay on controls */
+button{touch-action:manipulation}
+/* 44px targets: the last stragglers (v2.13 covered the rest) */
+.details summary{min-height:44px;padding:11px 0;box-sizing:border-box}
+.nav-btn{min-height:44px}
+.btn-danger{min-height:44px}
+.cat-row input[type=text],.cat-row input[type=number]{padding-top:11px;padding-bottom:11px}
+summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}

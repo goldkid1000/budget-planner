@@ -1,1 +1,10 @@
-{"notes":["The athlete warning now checks YOUR sleep: set your wake-up and lights-out times in the new 😴 Sleep schedule (Hours tab) and the app judges a work plan by your real sleep — exact hours per night and your latest safe work end — instead of calling every 20+ hour week too heavy."],"notify":true,"updated":"2026-10-20","version":"2.16.0"}
+{
+  "notes": [
+    "Big polish update: smoother animations when you switch tabs, open What's New, expand sections and grow the donut — all of them still respect your phone's reduce-motion setting.",
+    "New on the Budget tab: a per-day pace line — what's left, spread over the days left in the month.",
+    "Bug fixes: donut slice details always show current numbers; sync codes from older versions import safely; older Work Log weeks show matching take-home everywhere; zeroing a day's hours now removes its shift from Your week and the export."
+  ],
+  "notify": true,
+  "updated": "2026-10-21",
+  "version": "2.17.0"
+}

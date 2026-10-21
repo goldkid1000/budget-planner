@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.16.0';
+var APP_VERSION = '2.17.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -711,6 +711,62 @@ function loadState(){
   return JSON.parse(JSON.stringify(DEFAULTS));
 }
 var S = loadState();
+function normTimePair(v){
+  function ok(s){ return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s) ? s : ''; }
+  if(!v || typeof v !== 'object') return { s: '', e: '' };
+  return { s: ok(v.s), e: ok(v.e) };
+}
+
+function normWeekTimes(v){
+  var out = [];
+  for(var i = 0; i < 7; i++) out.push(normTimePair(Array.isArray(v) ? v[i] : null));
+  return out;
+}
+
+function normSleep(v){
+  function okTime(s){ return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s) ? s : ''; }
+  if(!v || typeof v !== 'object') v = {};
+  var g = parseFloat(v.goalHrs); if(!isFinite(g)) g = 8;
+  g = Math.min(12, Math.max(5, g));
+  var w = Math.round(parseFloat(v.windDownMin)); if(!isFinite(w)) w = 90;
+  w = Math.min(240, Math.max(0, w));
+  return { wake: okTime(v.wake), bed: okTime(v.bed), goalHrs: g, windDownMin: w };
+}
+
+function newClassId(){
+  return 'cl' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+}
+
+function normClasses(v){
+  if(!Array.isArray(v)) return [];
+  var out = [];
+  v.forEach(function(c){
+    if(!c || typeof c !== 'object') return;
+    var name = typeof c.name === 'string' ? c.name.trim() : '';
+    if(!name) return;
+    var days = [];
+    (Array.isArray(c.days) ? c.days : []).forEach(function(d){
+      var n = parseInt(d, 10);
+      if(isFinite(n) && n >= 0 && n <= 6 && days.indexOf(n) === -1) days.push(n);
+    });
+    if(!days.length) return;
+    days.sort(function(a, b){ return a - b; });
+    var pair = normTimePair({ s: c.s, e: c.e });
+    if(!pair.s || !pair.e) return;
+    out.push({ id: (typeof c.id === 'string' && c.id) ? c.id : newClassId(),
+               kind: ['class', 'practice', 'workout'].indexOf(c.kind) >= 0 ? c.kind : 'class',
+               name: name, days: days, s: pair.s, e: pair.e });
+  });
+  return out;
+}
+
+function normalizeState(){
+  /* v2.17.0: ONE normalization for first load AND sync import.
+     An imported state may predate any field below (planner, Work
+     Log, sleep schedule, ded split...) — every piece is backfilled
+     here so both paths always land on the same complete shape. */
+  if(!Array.isArray(S.categories)) S.categories = [];
+  if(!Array.isArray(S.bills)) S.bills = [];
 /* fill in fields added in later versions so old saved data keeps working */
 if(!S.ded) S.ded = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
 /* v2.3.0: Earn tab state */
@@ -761,29 +817,10 @@ if(S.planHours.term !== 'break') S.planHours.term = 'school';
 /* v2.6.1: backfill per-day shift times (planner weeks + break calendar)
    and the Work Log. Old saves without any of these load untouched —
    times simply start blank and hours stay exactly as they were. */
-function normTimePair(v){
-  function ok(s){ return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s) ? s : ''; }
-  if(!v || typeof v !== 'object') return { s: '', e: '' };
-  return { s: ok(v.s), e: ok(v.e) };
-}
-function normWeekTimes(v){
-  var out = [];
-  for(var i = 0; i < 7; i++) out.push(normTimePair(Array.isArray(v) ? v[i] : null));
-  return out;
-}
 /* v2.16.0: 😴 sleep schedule — times must be real 'HH:MM' strings or
    blank (= not configured); goal clamps to 5–12 hrs (default 8),
    wind-down to 0–240 min (default 90). Anything unusable falls back
    to the default, so old saves without a sleep block load cleanly. */
-function normSleep(v){
-  function okTime(s){ return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s) ? s : ''; }
-  if(!v || typeof v !== 'object') v = {};
-  var g = parseFloat(v.goalHrs); if(!isFinite(g)) g = 8;
-  g = Math.min(12, Math.max(5, g));
-  var w = Math.round(parseFloat(v.windDownMin)); if(!isFinite(w)) w = 90;
-  w = Math.min(240, Math.max(0, w));
-  return { wake: okTime(v.wake), bed: okTime(v.bed), goalHrs: g, windDownMin: w };
-}
 (function(){
   var ph = S.planHours;
   ph.schoolTimes = normWeekTimes(ph.schoolTimes);
@@ -829,31 +866,6 @@ function normSleep(v){
    sync-import guard.
    v2.11.0: 'workout' is a third valid kind; anything that isn't
    exactly 'class', 'practice' or 'workout' still becomes 'class'. */
-function newClassId(){
-  return 'cl' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
-}
-function normClasses(v){
-  if(!Array.isArray(v)) return [];
-  var out = [];
-  v.forEach(function(c){
-    if(!c || typeof c !== 'object') return;
-    var name = typeof c.name === 'string' ? c.name.trim() : '';
-    if(!name) return;
-    var days = [];
-    (Array.isArray(c.days) ? c.days : []).forEach(function(d){
-      var n = parseInt(d, 10);
-      if(isFinite(n) && n >= 0 && n <= 6 && days.indexOf(n) === -1) days.push(n);
-    });
-    if(!days.length) return;
-    days.sort(function(a, b){ return a - b; });
-    var pair = normTimePair({ s: c.s, e: c.e });
-    if(!pair.s || !pair.e) return;
-    out.push({ id: (typeof c.id === 'string' && c.id) ? c.id : newClassId(),
-               kind: ['class', 'practice', 'workout'].indexOf(c.kind) >= 0 ? c.kind : 'class',
-               name: name, days: days, s: pair.s, e: pair.e });
-  });
-  return out;
-}
 S.classes = normClasses(S.classes);
 /* v1.2.0: the old single FICA % splits into Social Security + Medicare at the
    statutory 6.2 / 1.45 ratio, so old saved rates keep working. The old
@@ -896,6 +908,9 @@ if(!S.stocks) S.stocks = [];
 if(!S.syncUsed) S.syncUsed = [];
 S.watchlist.forEach(function(it){ if(!it.history) it.history = []; if(it.store === undefined) it.store = 'Other'; });
 S.stocks.forEach(function(st){ if(!st.history) st.history = []; });
+}
+normalizeState();
+
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function num(v, d){ var n = parseFloat(v); return isFinite(n) ? n : (d || 0); }
 
@@ -2136,11 +2151,17 @@ function renderWorkLog(rebuildRows){
   S.workLog.forEach(function(w){
     var wd = bkParseDate(w.week);
     var open = wlOpenEntry === w.id;
+    /* v2.17.0 fix: the row, the detail line and the 💵 breakdown all
+       read from wlEntryPay — for pre-v2.12 weeks (no stored breakdown)
+       the stored gross/net could disagree with the live breakdown
+       after a rate change; now every number on the entry matches. */
+    var bd = wlEntryPay(w);
+    var hasStoredPay = !!wlNormPay(w.pay);
     html += '<div class="wl-entry">' +
       '<div class="wl-entry-headrow">' +
       '<button class="wl-entry-head" type="button" data-wl-expand="' + esc(w.id) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
       '<span><strong>Week of ' + (wd ? bkDayLabel(wd, true) : esc(w.week)) + '</strong></span>' +
-      '<span class="wl-entry-sum">' + fmtPlanHrs(w.total) + ' · ' + money(w.net) + ' take-home ' + (open ? '▴' : '▾') + '</span></button>' +
+      '<span class="wl-entry-sum">' + fmtPlanHrs(w.total) + ' · ' + money(bd.net) + ' take-home ' + (open ? '▴' : '▾') + '</span></button>' +
       '<button class="btn-mini danger bk-mini" type="button" data-wl-del="' + esc(w.id) + '">Delete</button>' +
       '</div>';
     if(open){
@@ -2153,12 +2174,13 @@ function renderWorkLog(rebuildRows){
         parts.push(lbl);
       }
       html += '<div class="wl-entry-detail">' + esc(parts.join(' · ')) +
-        '<br>Gross ' + money(w.gross) + ' · take-home ' + money(w.net) + ' — figured with your pay-stub math when this week was saved.';
+        '<br>Gross ' + money(bd.gross) + ' · take-home ' + money(bd.net) +
+        (hasStoredPay ? ' — figured with your pay-stub math when this week was saved.'
+                      : ' — figured live from the logged hours with your current pay-stub math (this week predates saved breakdowns).');
       /* v2.12.0: the full pay picture for this week, same engine */
       var payOpen = !!wlPayOpen[w.id];
       html += '<br><button class="btn-chip wl-pay-btn" type="button" data-wl-pay="' + esc(w.id) + '" aria-expanded="' + (payOpen ? 'true' : 'false') + '">💵 Pay breakdown ' + (payOpen ? '▴' : '▾') + '</button>';
       if(payOpen){
-        var bd = wlEntryPay(w);
         function payRow(label, amt, cls){
           return '<div class="wl-pay-row' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span><span>' + amt + '</span></div>';
         }
@@ -2394,8 +2416,13 @@ function weekViewData(){
       items.push({ text: entryMarker(c) + ' ' + c.name + ' · ' + fmtTime(c.s) + ' – ' + fmtTime(c.e) +
         ' · ' + fmtMinutes(exactMinutes(c.s, c.e)), id: c.id, work: false, conflict: false });
     });
-    if(pair.s && pair.e){
-      var paid = calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e));
+    /* v2.17.0 fix: a timed shift only counts as work when the day
+       actually has planned hours — zeroing a day's hours (typing
+       overrides, per the planner note) used to leave its old times
+       showing a shift here and in the week export. The paid figure
+       is the planned hours, the same number every total uses. */
+    if(pair.s && pair.e && num(S.planHours.school[i]) > 0){
+      var paid = num(S.planHours.school[i]);
       var hits = dayClasses.filter(function(c){ return timesOverlap(pair.s, pair.e, c.s, c.e); });
       hits.forEach(function(c){
         conflicts.push(PLAN_DAYS[i] + ': Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
@@ -3029,25 +3056,51 @@ function renderDonut(slices, total){
       c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       c.setAttribute('cx', '100'); c.setAttribute('cy', '100'); c.setAttribute('r', '80');
       c.setAttribute('fill', 'none'); c.setAttribute('stroke-width', '34');
+      c._fresh = true; /* v2.17.0: brand-new slice — sweeps in below */
       svg.appendChild(c);
       donutCircleEls.push(c);
     }
     c.setAttribute('stroke', s.color);
-    c.setAttribute('stroke-dasharray', dash.toFixed(1) + ' ' + (C - dash).toFixed(1));
-    c.setAttribute('stroke-dashoffset', (-acc).toFixed(1));
+    var dashStr = dash.toFixed(1) + ' ' + (C - dash).toFixed(1);
+    var offStr = (-acc).toFixed(1);
+    if(c._fresh && !REDUCED_MOTION && typeof requestAnimationFrame !== 'undefined'){
+      /* start the new slice empty and let the CSS transition glide it
+         to size on the next frame; the token stops a stale frame from
+         overwriting a newer render */
+      var tok = (c._animToken || 0) + 1; c._animToken = tok;
+      c.setAttribute('stroke-dasharray', '0 ' + C.toFixed(1));
+      c.setAttribute('stroke-dashoffset', offStr);
+      (function(cc, ds, os, tk){
+        requestAnimationFrame(function(){
+          if(cc._animToken === tk){ cc.setAttribute('stroke-dasharray', ds); cc.setAttribute('stroke-dashoffset', os); }
+        });
+      })(c, dashStr, offStr, tok);
+    } else {
+      c._animToken = (c._animToken || 0) + 1;
+      c.setAttribute('stroke-dasharray', dashStr);
+      c.setAttribute('stroke-dashoffset', offStr);
+    }
+    c._fresh = false;
     acc += dash;
-    /* v2.0.0: tap/hover a slice to see its details */
+    /* v2.0.0: tap/hover a slice to see its details.
+       v2.17.0 fix: circles are REUSED across renders, so the label /
+       value / total are refreshed on the element every render and the
+       (once-bound) handler reads the current ones — binding the first
+       render's numbers into the closure left taps showing stale
+       details after any edit. */
+    c._sliceLabel = s.label || 'Slice';
+    c._sliceValue = s.value;
+    c._sliceTotal = total;
     if(!c._detailBound){
       c._detailBound = true;
       c.style.cursor = 'pointer';
-      (function(lbl, val){
-        var show = function(){
-          var d = document.getElementById('donutDetail');
-          if(d && total > 0) d.textContent = lbl + ' — ' + money(val) + ' (' + Math.round(val / total * 100) + '% of ' + money(total) + ')';
-        };
-        c.addEventListener('click', show);
-        c.addEventListener('mouseover', show);
-      })(s.label || 'Slice', s.value);
+      var showDetail = function(){
+        var d = document.getElementById('donutDetail');
+        var t = c._sliceTotal, v = c._sliceValue;
+        if(d && t > 0) d.textContent = c._sliceLabel + ' — ' + money(v) + ' (' + Math.round(v / t * 100) + '% of ' + money(t) + ')';
+      };
+      c.addEventListener('click', showDetail);
+      c.addEventListener('mouseover', showDetail);
     }
   });
   while(donutCircleEls.length > slices.length){
@@ -3123,6 +3176,21 @@ function renderBudgetSummary(){
   setMoneyText(document.getElementById('billsLine'), bills);
   setMoneyText(document.getElementById('spendLine'), spend);
   setMoneyText(document.getElementById('leftLine'), left);
+  /* v2.17.0: per-day pace — what's left spread over the days left in
+     the month, so a monthly leftover becomes a daily number he can
+     actually steer by. Pure display math; no state. */
+  var pdEl = document.getElementById('perDayLine');
+  if(pdEl){
+    var nowD = new Date();
+    var daysLeftInMonth = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate() - nowD.getDate() + 1;
+    if(left > 0){
+      pdEl.hidden = false;
+      pdEl.textContent = 'That\u2019s about ' + money(round2(left / daysLeftInMonth)) + ' a day for the rest of the month (' + daysLeftInMonth + (daysLeftInMonth === 1 ? ' day' : ' days') + ' left, today included).';
+    } else if(left < 0){
+      pdEl.hidden = false;
+      pdEl.textContent = 'To get back to zero by month\u2019s end, trim about ' + money(round2(-left / daysLeftInMonth)) + ' a day for the next ' + daysLeftInMonth + (daysLeftInMonth === 1 ? ' day' : ' days') + '.';
+    } else pdEl.hidden = true;
+  }
   updateEarnTotal();
   setMoneyText(document.getElementById('donutLeft'), left, money);
   /* v2.0.0 grow/shrink pulse: the center number pops up or down with the change */
@@ -3194,6 +3262,11 @@ function renderCategoryList(){
   /* categories list */
   var list = document.getElementById('categoryList');
   list.innerHTML = '';
+  if(!S.categories.length){
+    /* v2.17.0: an empty list said nothing — name the one next action */
+    list.innerHTML = '<p class="hint">No spending categories yet — add one below and this becomes your monthly plan.</p>';
+    return;
+  }
   S.categories.forEach(function(c, i){
     var pct = income > 0 ? Math.round(num(c.amount) / income * 100) : 0;
     var row = document.createElement('div'); row.className = 'cat-row';
@@ -3834,7 +3907,8 @@ function esc(s){
 function switchView(name){
   document.querySelectorAll('.view').forEach(function(v){ v.classList.toggle('active', v.id === 'view-' + name); });
   document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.view === name); });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* v2.17.0: smooth-scroll only when motion is welcome */
+  window.scrollTo({ top: 0, behavior: REDUCED_MOTION ? 'auto' : 'smooth' });
 }
 
 function bind(){
@@ -4234,24 +4308,12 @@ function bind(){
     }
     if(!window.confirm('Replace everything on this device with the synced data?')) return;
     S = pl.state;
-    /* v2.7.0: imported state may predate the Class Schedule */
-    S.classes = normClasses(S.classes);
-    /* v2.16.0: …or the 😴 sleep schedule */
-    S.sleep = normSleep(S.sleep);
-    /* v2.8.0: …or the suggest-my-work-hours target (v2.14.0: any
-       2–30 hrs in half-hour steps; unusable → default 16) */
-    if(S.planHours){
-      var inst = normSuggestTarget(S.planHours.suggestTarget);
-      S.planHours.suggestTarget = inst === null ? 16 : inst;
-    }
-    /* v2.10.0: …or the busy-day guard cutoff */
-    if(S.planHours && [4, 5, 6].indexOf(S.planHours.busyThresholdHrs) === -1) S.planHours.busyThresholdHrs = 5;
-    /* v2.11.0: …or the schedule builder tab */
-    if(S.planHours && ['class', 'practice', 'workout'].indexOf(S.planHours.schedTab) === -1) S.planHours.schedTab = 'class';
-    if(S.employerKey === undefined) S.employerKey = 'custom';
-    if(!S.stocks) S.stocks = [];
-    if(!S.syncUsed) S.syncUsed = [];
-    S.watchlist.forEach(function(it){ if(!it.history) it.history = []; });
+    /* v2.17.0: an imported state gets the SAME normalization as a
+       first load (normalizeState) — a code made by an older version
+       may predate the Class Schedule, the planner fields, the Work
+       Log, the 😴 sleep schedule or the ded split, and patching only
+       some of them here left the rest undefined and broke renders. */
+    normalizeState();
     S.syncUsed.push(pl.id);
     save(); renderAll();
     status.textContent = '\u2713 Synced \u2014 your numbers from the other device are now here.';
