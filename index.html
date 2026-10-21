@@ -424,6 +424,12 @@
         </div>
         <details class="details sched-week-details">
           <summary>🗓️ Your week — classes, practices, workouts + work</summary>
+          <!-- v2.15.0: download/share this week -->
+          <div class="week-export-row">
+            <button class="btn-chip week-export-btn" id="weekExportImg" type="button">📸 Image</button>
+            <button class="btn-chip week-export-btn" id="weekExportTxt" type="button">📄 Text file</button>
+          </div>
+          <p class="hint" id="weekExportNote" role="status"></p>
           <div id="classWeek"></div>
           <div class="class-summary" id="classSummary"></div>
         </details>

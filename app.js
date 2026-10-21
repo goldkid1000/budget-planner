@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.14.0';
+var APP_VERSION = '2.15.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -2200,6 +2200,233 @@ function startClassEdit(c){
   var nameEl = document.getElementById('classNameInput');
   if(nameEl && nameEl.scrollIntoView) nameEl.scrollIntoView({ block: 'center' });
 }
+/* v2.15.0: the week view's data, computed ONCE — renderSchedule
+   draws it as HTML and the week export (text file + PNG) draws the
+   very same lines, so an export can never disagree with what is on
+   screen. Items carry their plain-text form plus the bits the HTML
+   renderer needs (entry id for tap-to-edit, work/conflict flags).
+   The overlap check covers ALL kinds (v2.9.0 practices, v2.11.0
+   workouts), exactly as the inline code did before this split. */
+function weekViewData(){
+  var classes = getClasses();
+  var conflicts = [];
+  var totalClassMins = 0, totalPracticeMins = 0, totalWorkoutMins = 0;
+  classes.forEach(function(c){
+    var m = exactMinutes(c.s, c.e) * c.days.length;
+    var k = entryKind(c);
+    if(k === 'practice') totalPracticeMins += m;
+    else if(k === 'workout') totalWorkoutMins += m;
+    else totalClassMins += m;
+  });
+  var workTotal = planTotal(S.planHours.school);
+  var days = [];
+  var hasContent = false;
+  for(var i = 0; i < 7; i++){
+    var dayClasses = classes.filter(function(c){ return c.days.indexOf(i) >= 0; })
+      .slice().sort(function(a, b){ return a.s < b.s ? -1 : (a.s > b.s ? 1 : 0); });
+    var pair = planDayTime('school', i);
+    var items = [];
+    dayClasses.forEach(function(c){
+      items.push({ text: entryMarker(c) + ' ' + c.name + ' · ' + fmtTime(c.s) + ' – ' + fmtTime(c.e) +
+        ' · ' + fmtMinutes(exactMinutes(c.s, c.e)), id: c.id, work: false, conflict: false });
+    });
+    if(pair.s && pair.e){
+      var paid = calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e));
+      var hits = dayClasses.filter(function(c){ return timesOverlap(pair.s, pair.e, c.s, c.e); });
+      hits.forEach(function(c){
+        conflicts.push(PLAN_DAYS[i] + ': Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
+          ' overlaps ' + c.name + ' (' + fmtTime(c.s) + ' – ' + fmtTime(c.e) + ')');
+      });
+      var hitKinds = [];
+      hits.forEach(function(c){ if(hitKinds.indexOf(entryKind(c)) === -1) hitKinds.push(entryKind(c)); });
+      var hitText = ' — overlaps ' + hitKinds.map(function(k){ return 'a ' + k; }).join(' + ');
+      items.push({ text: (hits.length ? '⚠️ ' : '💼 ') + 'Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
+        ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? hitText : ''), id: null, work: true, conflict: !!hits.length });
+    } else if(num(S.planHours.school[i]) > 0){
+      items.push({ text: '💼 Work · ' + fmtHrsExact(num(S.planHours.school[i])) +
+        ' hrs planned (no times set — add them in the planner above to check overlaps)', id: null, work: true, conflict: false });
+    }
+    if(items.length) hasContent = true;
+    days.push({ name: PLAN_DAY_FULL[i], items: items });
+  }
+  var totalsText = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Practice: ' + fmtMinutes(totalPracticeMins) +
+    ' / week · Workouts: ' + fmtMinutes(totalWorkoutMins) +
+    ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
+  return { days: days, totalsText: totalsText, conflicts: conflicts,
+           workTotal: workTotal, hasContent: hasContent };
+}
+
+/* ---------- v2.15.0: export your week (📸 image / 📄 text file) ----------
+   Both formats are built from weekViewData() — the same lines the
+   on-screen week view renders — plus one pay line from the same
+   wlPayBreakdown the Work Log and Suggest preview use. */
+var WEEK_EXPORT_TITLE = '🗓️ Your week — classes, practices, workouts + work';
+
+function weekVerdictLines(wv){
+  if(wv.conflicts.length) return wv.conflicts.map(function(c){ return '⚠️ ' + c; });
+  return ['No overlaps — work fits around your classes, practices and workouts. ✅'];
+}
+function weekPayLine(workTotal){
+  var bd = wlPayBreakdown(workTotal);
+  return '💵 Work pays: ' + money(bd.gross) + ' gross → ' + money(bd.totalTaken) + ' taken → ' +
+    money(bd.net) + ' take-home / week' +
+    (bd.estimate ? ' (estimate — set up your pay stub for exact numbers)' : '');
+}
+function buildWeekText(wv){
+  var out = [WEEK_EXPORT_TITLE, ''];
+  wv.days.forEach(function(day){
+    out.push(day.name);
+    if(day.items.length){
+      day.items.forEach(function(it){ out.push(it.text); });
+    } else out.push('Nothing scheduled');
+    out.push('');
+  });
+  out.push(wv.totalsText);
+  weekVerdictLines(wv).forEach(function(l){ out.push(l); });
+  out.push(weekPayLine(wv.workTotal));
+  return out.join('\n') + '\n';
+}
+function downloadBlob(blob, filename){
+  if(!blob) return;
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){
+    if(a.parentNode) a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 500);
+}
+function weekExportNote(msg){
+  var note = document.getElementById('weekExportNote');
+  if(note) note.textContent = msg;
+}
+
+/* PNG card: drawn by hand on Canvas 2D (no libraries). Deep
+   ink-navy ground, parchment text, copper day headings — the
+   Sovereign palette as a shareable picture, 1080 wide, as tall as
+   the week needs. Layout is measured BEFORE anything is drawn:
+   every line's font steps down (20px floor; 14px hard floor for a
+   rare line that still overflows there) until its measured width
+   fits inside the margins, so nothing clips. */
+var WEEK_PNG_STYLE = {
+  title:   { size: 46, serif: true,  bold: true,  color: '#f4ecd9', indent: 0,  lh: 62, gap: 0 },
+  day:     { size: 35, serif: true,  bold: true,  color: '#cf9455', indent: 0,  lh: 48, gap: 30 },
+  item:    { size: 30, serif: false, bold: false, color: '#f4ecd9', indent: 30, lh: 44, gap: 2 },
+  none:    { size: 30, serif: false, bold: false, color: '#a89a7d', indent: 30, lh: 44, gap: 2 },
+  totals:  { size: 29, serif: false, bold: true,  color: '#f4ecd9', indent: 0,  lh: 44, gap: 32 },
+  verdict: { size: 29, serif: false, bold: false, color: '#a89a7d', indent: 0,  lh: 44, gap: 4 },
+  pay:     { size: 33, serif: true,  bold: true,  color: '#cf9455', indent: 0,  lh: 50, gap: 18 }
+};
+function weekPngFont(st, size){
+  return (st.bold ? '700 ' : '') + size + 'px ' +
+    (st.serif ? 'Georgia, "Times New Roman", serif' : '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif');
+}
+function weekImageLines(wv){
+  var lines = [{ text: WEEK_EXPORT_TITLE, kind: 'title' }];
+  wv.days.forEach(function(day){
+    lines.push({ text: day.name, kind: 'day' });
+    if(day.items.length){
+      day.items.forEach(function(it){
+        lines.push({ text: it.text, kind: it.conflict ? 'conflict' : 'item' });
+      });
+    } else lines.push({ text: 'Nothing scheduled', kind: 'none' });
+  });
+  lines.push({ text: wv.totalsText, kind: 'totals' });
+  weekVerdictLines(wv).forEach(function(l){ lines.push({ text: l, kind: 'verdict' }); });
+  lines.push({ text: weekPayLine(wv.workTotal), kind: 'pay' });
+  return lines;
+}
+function drawWeekPng(wv, canvas){
+  var W = 1080, M = 60, TOP = 54, BOT = 54;
+  var lines = weekImageLines(wv);
+  canvas.width = W;
+  canvas.height = 10; /* re-set once measured — resets ctx state, so all styling happens after */
+  var ctx = canvas.getContext('2d');
+  var laid = lines.map(function(l){
+    var st = WEEK_PNG_STYLE[l.kind] || WEEK_PNG_STYLE.item;
+    if(l.kind === 'conflict') st = WEEK_PNG_STYLE.item;
+    var size = st.size;
+    ctx.font = weekPngFont(st, size);
+    var maxW = W - M - st.indent - M;
+    /* step down toward the 20px floor; a rare line that STILL does
+       not fit there (the totals line runs ~110 chars) may continue
+       to a 14px hard floor — an unclipped smaller line beats a
+       bigger one running off the card */
+    while(size > 14 && ctx.measureText(l.text).width > maxW){
+      size = Math.max(14, size - 2);
+      ctx.font = weekPngFont(st, size);
+    }
+    return { text: l.text, st: st, size: size, conflict: l.kind === 'conflict' };
+  });
+  var h = TOP + BOT;
+  laid.forEach(function(l, i){ h += l.st.lh + (i ? l.st.gap : 0); });
+  h += 29; /* the copper rule under the title: 12 gap + 3 rule + 14 gap */
+  canvas.height = h;
+  ctx.fillStyle = '#0c1424';
+  ctx.fillRect(0, 0, W, h);
+  ctx.strokeStyle = 'rgba(207, 148, 85, .45)';
+  ctx.lineWidth = 2;
+  if(ctx.strokeRect) ctx.strokeRect(19, 19, W - 38, h - 38);
+  ctx.textBaseline = 'top';
+  var y = TOP;
+  laid.forEach(function(l, i){
+    if(i) y += l.st.gap;
+    ctx.font = weekPngFont(l.st, l.size);
+    ctx.fillStyle = l.conflict ? '#f0b35e' : l.st.color;
+    ctx.fillText(l.text, M + l.st.indent, y + Math.round((l.st.lh - l.size) / 2));
+    y += l.st.lh;
+    if(i === 0){
+      y += 12;
+      ctx.fillStyle = '#cf9455';
+      ctx.fillRect(M, y, W - M * 2, 3);
+      y += 14;
+    }
+  });
+  return canvas;
+}
+function shareOrDownloadPng(blob){
+  var file = null;
+  try { file = new File([blob], 'my-week-plan.png', { type: 'image/png' }); } catch(e){ file = null; }
+  if(file && typeof navigator !== 'undefined' && navigator.canShare && navigator.share){
+    var ok = false;
+    try { ok = !!navigator.canShare({ files: [file] }); } catch(e){ ok = false; }
+    if(ok){
+      var done = false;
+      try {
+        var p = navigator.share({ files: [file] });
+        if(p && typeof p.catch === 'function'){
+          p.catch(function(err){
+            if(err && err.name === 'AbortError') return; /* he closed the sheet — his call, stay silent */
+            if(!done){ done = true; downloadBlob(blob, 'my-week-plan.png'); }
+          });
+        }
+      } catch(e){ downloadBlob(blob, 'my-week-plan.png'); }
+      return;
+    }
+  }
+  downloadBlob(blob, 'my-week-plan.png');
+}
+function exportWeek(kind){
+  var wv = weekViewData();
+  if(!wv.hasContent){
+    weekExportNote('Add classes or plan work first, then export your week.');
+    return;
+  }
+  weekExportNote('');
+  if(kind === 'text'){
+    downloadBlob(new Blob([buildWeekText(wv)], { type: 'text/plain;charset=utf-8' }), 'my-week-plan.txt');
+    return;
+  }
+  var canvas = document.createElement('canvas');
+  drawWeekPng(wv, canvas);
+  if(canvas.toBlob){
+    canvas.toBlob(function(blob){ if(blob) shareOrDownloadPng(blob); }, 'image/png');
+  }
+}
+
 function renderSchedule(){
   var listEl = document.getElementById('classList');
   if(!listEl) return;
@@ -2271,62 +2498,33 @@ function renderSchedule(){
   }
 
   /* week view: classes, practices + workouts vs the school work
-     plan, day by day — the overlap check covers ALL kinds (v2.9.0
-     added practices, v2.11.0 workouts) */
-  var conflicts = [];
-  var totalClassMins = 0, totalPracticeMins = 0, totalWorkoutMins = 0;
-  classes.forEach(function(c){
-    var m = exactMinutes(c.s, c.e) * c.days.length;
-    var k = entryKind(c);
-    if(k === 'practice') totalPracticeMins += m;
-    else if(k === 'workout') totalWorkoutMins += m;
-    else totalClassMins += m;
-  });
-  var workTotal = planTotal(S.planHours.school);
+     plan, day by day — computed by weekViewData() (v2.15.0) so the
+     on-screen view and the week export always agree */
+  var wv = weekViewData();
   var weekEl = document.getElementById('classWeek');
   if(weekEl){
     var wHtml = '';
-    for(var i = 0; i < 7; i++){
-      var dayClasses = classes.filter(function(c){ return c.days.indexOf(i) >= 0; })
-        .slice().sort(function(a, b){ return a.s < b.s ? -1 : (a.s > b.s ? 1 : 0); });
-      var pair = planDayTime('school', i);
+    wv.days.forEach(function(day){
       var lines = '';
-      dayClasses.forEach(function(c){
-        lines += '<div class="class-week-line" data-class-edit="' + esc(c.id) + '" title="Tap to edit">' + entryMarker(c) + ' ' + esc(c.name) + ' · ' + esc(fmtTime(c.s)) + ' – ' + esc(fmtTime(c.e)) +
-          ' · ' + fmtMinutes(exactMinutes(c.s, c.e)) + '</div>';
+      day.items.forEach(function(it){
+        if(it.id){
+          lines += '<div class="class-week-line" data-class-edit="' + esc(it.id) + '" title="Tap to edit">' + esc(it.text) + '</div>';
+        } else {
+          lines += '<div class="class-week-line work' + (it.conflict ? ' conflict' : '') + '">' + esc(it.text) + '</div>';
+        }
       });
-      if(pair.s && pair.e){
-        var paid = calcShiftPaidHours(pair.s, pair.e, defaultMeal(pair.s, pair.e));
-        var hits = dayClasses.filter(function(c){ return timesOverlap(pair.s, pair.e, c.s, c.e); });
-        hits.forEach(function(c){
-          conflicts.push(PLAN_DAYS[i] + ': Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
-            ' overlaps ' + c.name + ' (' + fmtTime(c.s) + ' – ' + fmtTime(c.e) + ')');
-        });
-        var hitKinds = [];
-        hits.forEach(function(c){ if(hitKinds.indexOf(entryKind(c)) === -1) hitKinds.push(entryKind(c)); });
-        var hitText = ' — overlaps ' + hitKinds.map(function(k){ return 'a ' + k; }).join(' + ');
-        lines += '<div class="class-week-line work' + (hits.length ? ' conflict' : '') + '">' +
-          (hits.length ? '⚠️ ' : '💼 ') + 'Work ' + esc(fmtTime(pair.s)) + ' – ' + esc(fmtTime(pair.e)) +
-          ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? hitText : '') + '</div>';
-      } else if(num(S.planHours.school[i]) > 0){
-        lines += '<div class="class-week-line work">💼 Work · ' + fmtHrsExact(num(S.planHours.school[i])) +
-          ' hrs planned (no times set — add them in the planner above to check overlaps)</div>';
-      }
-      wHtml += '<div class="class-week-day"><span class="class-week-name">' + PLAN_DAY_FULL[i] + '</span>' +
+      wHtml += '<div class="class-week-day"><span class="class-week-name">' + day.name + '</span>' +
         (lines || '<div class="class-week-line none">Nothing scheduled</div>') + '</div>';
-    }
+    });
     weekEl.innerHTML = wHtml;
   }
   var sumEl = document.getElementById('classSummary');
   if(sumEl){
-    var totals = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Practice: ' + fmtMinutes(totalPracticeMins) +
-      ' / week · Workouts: ' + fmtMinutes(totalWorkoutMins) +
-      ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
-    if(conflicts.length){
-      sumEl.innerHTML = esc(totals) + '<br>' +
-        conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
+    if(wv.conflicts.length){
+      sumEl.innerHTML = esc(wv.totalsText) + '<br>' +
+        wv.conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
     } else {
-      sumEl.innerHTML = esc(totals) + '<br>No overlaps — work fits around your classes, practices and workouts. ✅';
+      sumEl.innerHTML = esc(wv.totalsText) + '<br>No overlaps — work fits around your classes, practices and workouts. ✅';
     }
   }
   renderSuggest();
@@ -2547,6 +2745,12 @@ function bindSchedule(){
     var line = t.closest ? t.closest('[data-class-edit]') : null;
     if(line) startClassEdit(classById(line.dataset.classEdit));
   });
+  /* v2.15.0: export the week view — 📸 image (share sheet when the
+     browser offers one, else a PNG download) or 📄 text file */
+  var expImg = document.getElementById('weekExportImg');
+  if(expImg) expImg.addEventListener('click', function(){ exportWeek('image'); });
+  var expTxt = document.getElementById('weekExportTxt');
+  if(expTxt) expTxt.addEventListener('click', function(){ exportWeek('text'); });
   /* v2.8.0: suggest-target chips + the Suggest button */
   var sugChips = document.getElementById('suggestTargets');
   if(sugChips) sugChips.addEventListener('click', function(e){

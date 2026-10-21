@@ -981,3 +981,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   border:1px solid var(--input-line);border-radius:10px;background:var(--input-bg);
   color:var(--ink);font-variant-numeric:tabular-nums}
 #planFromScheduleBtn{min-height:48px}
+
+/* ---------- v2.15.0: export your week ---------- */
+.week-export-row{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 2px}
+.week-export-btn{min-height:44px;padding:10px 18px;font-size:.95rem}
+#weekExportNote{margin:6px 0 0}
+#weekExportNote:empty{display:none}
