@@ -454,6 +454,21 @@
         <p class="result-line plan-total-line">Total: <strong id="planTotalOut">0 hrs / week</strong></p>
         <p class="plan-load-line" id="planLoadLine"></p>
         <div id="planWarn"></div>
+        <!-- v2.16.0: sleep schedule — the plan is judged by real sleep -->
+        <div class="sleep-block">
+          <h4 class="sleep-head">😴 Sleep schedule</h4>
+          <p class="hint">The app checks your work plan against these times and tells you your real sleep — no guessing.</p>
+          <div class="sleep-grid">
+            <label class="sleep-field">Wake up
+              <input type="time" id="sleepWake" aria-label="Wake up time"></label>
+            <label class="sleep-field">Lights-out
+              <input type="time" id="sleepBed" aria-label="Lights-out time"></label>
+            <label class="sleep-field">Sleep goal (hrs)
+              <input type="number" id="sleepGoal" min="5" max="12" step="0.5" inputmode="decimal" aria-label="Sleep goal in hours"></label>
+            <label class="sleep-field">Wind-down after work (min)
+              <input type="number" id="sleepWind" min="0" max="240" step="5" inputmode="numeric" aria-label="Wind-down minutes needed after work, before lights-out"></label>
+          </div>
+        </div>
       </div>
 
       <div class="card">

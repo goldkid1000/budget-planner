@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.15.0';
+var APP_VERSION = '2.16.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -666,6 +666,12 @@ var DEFAULTS = {
                   'class' | 'practice' | 'workout'; the tab fixes the
                   kind of the entry being added */
                schedTab: 'class' },
+  /* v2.16.0: 😴 Sleep schedule — when wake + lights-out are set, the
+     athlete guardrail judges a plan by the user's real sleep window
+     (and his wind-down after work), not by hours alone. Blank wake or
+     bed = not configured; the planner falls back to the plain
+     hours-based caution. Defaults are EMPTY/generic on purpose. */
+  sleep: { wake: '', bed: '', goalHrs: 8, windDownMin: 90 },
   /* v2.6.1: Work Log — weeks he ACTUALLY worked, saved to look back on.
      Entries: { id, week (Monday 'YYYY-MM-DD'), days [7], times [7 {s,e}],
      total, gross, net } — pay frozen at save time via planScenarioPaycheck. */
@@ -765,10 +771,25 @@ function normWeekTimes(v){
   for(var i = 0; i < 7; i++) out.push(normTimePair(Array.isArray(v) ? v[i] : null));
   return out;
 }
+/* v2.16.0: 😴 sleep schedule — times must be real 'HH:MM' strings or
+   blank (= not configured); goal clamps to 5–12 hrs (default 8),
+   wind-down to 0–240 min (default 90). Anything unusable falls back
+   to the default, so old saves without a sleep block load cleanly. */
+function normSleep(v){
+  function okTime(s){ return typeof s === 'string' && /^\d{2}:\d{2}$/.test(s) ? s : ''; }
+  if(!v || typeof v !== 'object') v = {};
+  var g = parseFloat(v.goalHrs); if(!isFinite(g)) g = 8;
+  g = Math.min(12, Math.max(5, g));
+  var w = Math.round(parseFloat(v.windDownMin)); if(!isFinite(w)) w = 90;
+  w = Math.min(240, Math.max(0, w));
+  return { wake: okTime(v.wake), bed: okTime(v.bed), goalHrs: g, windDownMin: w };
+}
 (function(){
   var ph = S.planHours;
   ph.schoolTimes = normWeekTimes(ph.schoolTimes);
   ph.breakTimes = normWeekTimes(ph.breakTimes);
+  /* v2.16.0: 😴 sleep schedule backfill + normalize */
+  S.sleep = normSleep(S.sleep);
   /* v2.8.0: suggest-my-work-hours target. v2.14.0: any 2–30 hrs in
      half-hour steps (typed or chipped); unusable → default 16 */
   var nst = normSuggestTarget(ph.suggestTarget);
@@ -1473,6 +1494,103 @@ function planTimesRowHTML(term, i){
     '<button class="plan-times-clear" type="button" data-plan-clear-times="' + i + '">Clear times</button>' +
     '<span class="plan-times-note" id="planTimesNote' + i + '">' + esc(planTimesNoteFor(pair)) + '</span>';
 }
+/* ---------- v2.16.0: 😴 sleep check ----------
+   The athlete guardrail used to judge a school week by hours alone
+   (anything over 20h = "heavy for track season"). When the user has
+   set a sleep schedule, the plan is judged by his REAL sleep instead:
+   the nightly window from lights-out to wake-up against his goal,
+   and whether any shift ends so late it eats into the wind-down he
+   needs before bed. Days planned by hours only (no shift times) can't
+   be end-checked — the check says so instead of guessing. */
+/* the school plan as sleep-checkable days: paid hrs + shift end in
+   minutes since midnight (overnight ends roll past 1440), or endMin
+   null when the day has no complete pair of shift times */
+function planDaysForSleep(){
+  var out = [];
+  for(var i = 0; i < 7; i++){
+    var pair = planDayTime('school', i);
+    var endMin = null;
+    if(pair.s && pair.e){
+      var sMin = toMinutes(pair.s), eMin = toMinutes(pair.e);
+      if(eMin <= sMin) eMin += 1440;
+      endMin = eMin;
+    }
+    out.push({ day: i, paid: num(S.planHours.school[i]), endMin: endMin });
+  }
+  return out;
+}
+function sleepCheck(plan, sleep){
+  var sl = normSleep(sleep);
+  if(!sl.wake || !sl.bed) return { configured: false };
+  var wakeMin = toMinutes(sl.wake), bedMin = toMinutes(sl.bed);
+  var sleepMin = wakeMin - bedMin; if(sleepMin <= 0) sleepMin += 1440;
+  var goalMin = Math.round(sl.goalHrs * 60);
+  var safeEnd = bedMin - sl.windDownMin; if(safeEnd < 0) safeEnd += 1440;
+  var overruns = [], untimed = [], latestEnd = null, worst = null;
+  (plan || []).forEach(function(d){
+    if(!(num(d.paid) > 0)) return;
+    if(d.endMin === null || d.endMin === undefined){ untimed.push(d.day); return; }
+    if(latestEnd === null || d.endMin > latestEnd) latestEnd = d.endMin;
+    if(d.endMin > safeEnd){
+      var ov = { day: d.day, endMin: d.endMin, overrun: d.endMin - safeEnd,
+                 slippedSleep: sleepMin - (d.endMin - safeEnd) };
+      overruns.push(ov);
+      if(!worst || ov.overrun > worst.overrun) worst = ov;
+    }
+  });
+  var baseShort = sleepMin < goalMin;
+  return { configured: true, sleep: sl, sleepMin: sleepMin, goalMin: goalMin,
+           latestSafeEnd: safeEnd, overruns: overruns, worstDay: worst,
+           latestEnd: latestEnd, untimedDays: untimed, baseShort: baseShort,
+           sleepOk: !baseShort && overruns.length === 0 };
+}
+/* guardrail lines for a CONFIGURED sleep check — [{ kind, text }]
+   with exact numbers throughout; 'ok' is the truth line that replaces
+   the old blanket warning when the plan protects the user's sleep */
+function sleepGuardrailMsgs(total, sc){
+  var sl = sc.sleep, out = [];
+  var sleepTxt = fmtMinutes(sc.sleepMin);
+  var goalTxt = fmtHrsExact(sl.goalHrs);
+  if(sc.baseShort){
+    out.push({ kind: 'warn', text: '😴 <strong>Your sleep window is ' + sleepTxt +
+      '</strong> (lights-out ' + fmtTime(sl.bed) + ' → wake ' + fmtTime(sl.wake) +
+      ') — under your ' + goalTxt + ' hr goal before work even starts.' });
+  }
+  sc.overruns.forEach(function(ov){
+    var txt = '😴 <strong>Sleep check ⚠️ ' + PLAN_DAYS[ov.day] + ' ends ' +
+      fmtTime(minsToHHMM(ov.endMin % 1440)) + '</strong> — ' + ov.overrun +
+      ' min past your ' + fmtTime(minsToHHMM(sc.latestSafeEnd)) +
+      ' safe end (lights-out ' + fmtTime(sl.bed) + ' minus ' + sl.windDownMin +
+      ' min wind-down). Sleep would slip to ' + fmtMinutes(ov.slippedSleep);
+    txt += ov.slippedSleep < sc.goalMin ? ', under your ' + goalTxt + ' hr goal.' : '.';
+    out.push({ kind: 'warn', text: txt });
+  });
+  if(!sc.baseShort && !sc.overruns.length && total > 0){
+    var t;
+    if(sc.latestEnd !== null){
+      var wdLeft = (toMinutes(sl.bed) - (sc.latestEnd % 1440) + 1440) % 1440;
+      t = '😴 <strong>Sleep check ✅</strong> — ' + fmtPlanHrs(total) +
+        ' week: latest work end ' + fmtTime(minsToHHMM(sc.latestEnd % 1440)) +
+        ' still leaves ' + fmtMinutes(wdLeft) + ' before lights-out ' +
+        fmtTime(sl.bed) + '; ' + sleepTxt + ' of sleep before your ' +
+        fmtTime(sl.wake) + ' wake-up (goal ' + fmtPlanHrs(sl.goalHrs) +
+        '). This plan protects your sleep.';
+    } else {
+      t = '😴 <strong>Sleep check ✅</strong> — ' + fmtPlanHrs(total) +
+        ' week: your sleep window is ' + sleepTxt + ' (lights-out ' +
+        fmtTime(sl.bed) + ' → wake ' + fmtTime(sl.wake) +
+        '), meeting your ' + fmtPlanHrs(sl.goalHrs) + ' goal.';
+    }
+    if(sc.untimedDays.length){
+      t += ' Add shift times to check ' +
+        sc.untimedDays.map(function(d){ return PLAN_DAYS[d]; }).join(', ') +
+        ' exactly — those days are planned by hours only.';
+    }
+    out.push({ kind: 'ok', text: t });
+  }
+  return out;
+}
+
 function renderPlanHours(rebuildDays){
   var schoolBtn = document.getElementById('planTermSchool');
   if(!schoolBtn) return;
@@ -1578,18 +1696,47 @@ function renderPlanHours(rebuildDays){
       '. Monthly is the weekly take-home × 52 ÷ 12.';
   }
 
-  /* athlete guardrails */
+  /* athlete guardrails — v2.16.0: when a 😴 sleep schedule is set,
+     the school plan is judged by the user's real sleep (sleepCheck)
+     instead of the blanket hours warning; unset sleep keeps the
+     original plain-hours caution plus a hint to set the schedule.
+     The over-8h single-day flag and the break-week exemption are
+     unchanged. */
   var warn = document.getElementById('planWarn');
-  var msgs = [];
-  if(term === 'school' && total > 20){
-    msgs.push('🏃 <strong>' + fmtPlanHrs(total) + ' in a school week is heavy for track season</strong> — that pace eats into sleep and recovery. Around 20 hrs is the ceiling that still protects your training.');
+  var warnMsgs = [], okMsgs = [], hintHtml = '';
+  if(term === 'school'){
+    var sc = sleepCheck(planDaysForSleep(), S.sleep);
+    if(sc.configured){
+      sleepGuardrailMsgs(total, sc).forEach(function(m){
+        (m.kind === 'ok' ? okMsgs : warnMsgs).push(m.text);
+      });
+    } else {
+      if(total > 20){
+        warnMsgs.push('🏃 <strong>' + fmtPlanHrs(total) + ' in a school week is heavy for track season</strong> — that pace eats into sleep and recovery. Around 20 hrs is the ceiling that still protects your training.');
+      }
+      if(total > 0){
+        hintHtml = '<p class="hint plan-sleep-hint">😴 Set your sleep schedule (below) and the app will check your real sleep instead of just counting hours.</p>';
+      }
+    }
   }
   var heavy = [];
   days.forEach(function(v, i){ if(num(v) > 8) heavy.push(PLAN_DAY_FULL[i] + ' (' + fmtPlanHrs(v) + ')'); });
   if(heavy.length){
-    msgs.push('⚠️ Long day' + (heavy.length > 1 ? 's' : '') + ' over 8 hrs: ' + heavy.join(', ') + ' — a single shift that long is rough on a practice day.');
+    warnMsgs.push('⚠️ Long day' + (heavy.length > 1 ? 's' : '') + ' over 8 hrs: ' + heavy.join(', ') + ' — a single shift that long is rough on a practice day.');
   }
-  warn.innerHTML = msgs.length ? '<div class="warning plan-warning">' + msgs.join('<br>') + '</div>' : '';
+  var warnHtml = '';
+  if(warnMsgs.length) warnHtml += '<div class="warning plan-warning">' + warnMsgs.join('<br>') + '</div>';
+  if(okMsgs.length) warnHtml += '<div class="plan-sleep-ok">' + okMsgs.join('<br>') + '</div>';
+  warn.innerHTML = warnHtml + hintHtml;
+
+  /* v2.16.0: 😴 sleep schedule fields mirror S.sleep (never the
+     field being typed in, so focus and caret stay put) */
+  var swEl = document.getElementById('sleepWake'), sbEl = document.getElementById('sleepBed'),
+      sgEl = document.getElementById('sleepGoal'), swdEl = document.getElementById('sleepWind');
+  if(swEl && document.activeElement !== swEl) swEl.value = normSleep(S.sleep).wake;
+  if(sbEl && document.activeElement !== sbEl) sbEl.value = normSleep(S.sleep).bed;
+  if(sgEl && document.activeElement !== sgEl) sgEl.value = normSleep(S.sleep).goalHrs;
+  if(swdEl && document.activeElement !== swdEl) swdEl.value = normSleep(S.sleep).windDownMin;
 
   /* compare strip: the three school paces side by side */
   var cmp = document.getElementById('planCompare');
@@ -1624,6 +1771,23 @@ function bindPlanHours(){
     if(box && box.scrollIntoView) box.scrollIntoView({ block: 'center' });
     runSuggest();
   });
+  /* v2.16.0: 😴 sleep schedule fields — commit on change, normalize
+     (clamps/defaults), save, and re-judge the plan by real sleep */
+  function bindSleep(id, apply){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('change', function(){
+      if(!S.sleep || typeof S.sleep !== 'object') S.sleep = {};
+      apply(el.value);
+      S.sleep = normSleep(S.sleep);
+      save();
+      renderPlanHours(false);
+    });
+  }
+  bindSleep('sleepWake', function(v){ S.sleep.wake = v || ''; });
+  bindSleep('sleepBed', function(v){ S.sleep.bed = v || ''; });
+  bindSleep('sleepGoal', function(v){ S.sleep.goalHrs = v; });
+  bindSleep('sleepWind', function(v){ S.sleep.windDownMin = v; });
   function setDay(i, v){
     var days = planTermDays();
     days[i] = planClampHrs(v);
@@ -4072,6 +4236,8 @@ function bind(){
     S = pl.state;
     /* v2.7.0: imported state may predate the Class Schedule */
     S.classes = normClasses(S.classes);
+    /* v2.16.0: …or the 😴 sleep schedule */
+    S.sleep = normSleep(S.sleep);
     /* v2.8.0: …or the suggest-my-work-hours target (v2.14.0: any
        2–30 hrs in half-hour steps; unusable → default 16) */
     if(S.planHours){

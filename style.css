@@ -714,6 +714,16 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .plan-total-line strong,.plan-pay-num,.plan-compare-net{
   font-family:Georgia,'Times New Roman',serif}
 .plan-warning{margin-top:12px}
+/* v2.16.0: 😴 sleep check passed — a calm green truth line, not a warning */
+.plan-sleep-ok{background:linear-gradient(180deg,#0e2b1e,#0a2115);color:#b9f4d2;
+  border:1px solid rgba(70,217,138,.35);border-radius:12px;padding:12px 14px;margin:10px 0 0;width:100%}
+/* v2.16.0: 😴 sleep schedule block in the planner card */
+.sleep-block{margin-top:18px;border-top:1px solid var(--line-soft);padding-top:14px}
+.sleep-head{margin:0;font-size:1rem}
+.sleep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px}
+.sleep-field{display:block;font-weight:650;font-size:.92rem}
+.sleep-field input{display:block;width:100%;margin-top:6px;padding:11px 13px;font-size:1rem;min-height:44px;
+  border:1px solid var(--input-line);border-radius:12px;background:var(--input-bg);color:var(--ink)}
 .plan-pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px}
 .plan-pay-cell{background:rgba(212,175,106,.05);border:1px solid var(--line-soft);
   border-radius:12px;padding:12px 14px}

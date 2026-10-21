@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.16.0",
+      "date": "Oct 20, 2026",
+      "notify": true,
+      "notes": [
+        "The athlete warning now checks YOUR sleep: set your wake-up and lights-out times in the new 😴 Sleep schedule (Hours tab) and the app judges a work plan by your real sleep — exact hours per night and your latest safe work end — instead of calling every 20+ hour week too heavy.",
+        "If a shift ends too late for your wind-down, the warning names the day and the exact minutes it costs your sleep. Leave the sleep times blank and the old hours-based caution stays."
+      ]
+    },
+    {
       "v": "2.15.0",
       "date": "Oct 20, 2026",
       "notify": true,
