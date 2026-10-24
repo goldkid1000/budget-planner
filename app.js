@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.17.0';
+var APP_VERSION = '2.18.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -418,6 +418,20 @@ function wlNormPay(v){
            totalTaken: round2(num0(v.totalTaken)), net: round2(num0(v.net)),
            estimate: !!v.estimate };
 }
+/* v2.18.0: add whole months without overflowing into the month after.
+   Plain setMonth() rolls over: Oct 31 + 1 month lands on Dec 1 (there is
+   no Nov 31), so a goal checked on the 29th–31st showed a month late and
+   a monthly payday on the 31st skipped February entirely. Clamp to the
+   last day of the target month instead, keeping the anchor day whenever
+   the target month has it. Pure date math; no state. */
+function addMonthsClamped(fromDate, months){
+  var d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 12);
+  var day = d.getDate();
+  var target = new Date(d.getFullYear(), d.getMonth() + months, 1, 12);
+  var lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0, 12).getDate();
+  target.setDate(Math.min(day, lastDay));
+  return target;
+}
 /* savings-goal projection from the monthly leftover (take-home − unpaid
    bills − planned spending). Never invents a date when leftover <= 0.
    Returns { status: 'reached' | 'date' | 'far' | 'short', toGo, months,
@@ -432,7 +446,7 @@ function calcGoalProjection(goal, saved, monthlyLeftover, rate, effRate){
   if(leftover > 0){
     var months = Math.ceil(toGo / leftover);
     if(months > 600) return { status: 'far', toGo: toGo, months: months, dateStr: '', shortfall: 0, extraHours: 0 };
-    var date = new Date(); date.setMonth(date.getMonth() + months);
+    var date = addMonthsClamped(new Date(), months);
     return { status: 'date', toGo: toGo, months: months,
       dateStr: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       shortfall: 0, extraHours: 0 };
@@ -594,7 +608,7 @@ if (typeof module !== 'undefined' && module.exports){
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
     calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
-    calcGoalProjection: calcGoalProjection, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode,
+    calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
     FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
 }
@@ -950,10 +964,13 @@ function nextPaydayInfo(nowOpt){
     if(d2 <= t){ var diff = Math.ceil((t - d2) / 86400000 / 14); d2.setDate(d2.getDate() + diff * 14); }
     return { date: d2, daysAway: Math.round((d2 - t) / 86400000) };
   }
-  /* monthly: same calendar date next month, rolling forward while past */
-  var m = new Date(anchor); m.setMonth(m.getMonth() + 1);
+  /* monthly: same calendar date next month, rolling forward while past.
+     Stepped from the anchor (not from the previous candidate) so a 31st
+     payday clamps to Feb 28 and comes back to Mar 31 instead of skipping
+     February — see addMonthsClamped. */
   var t2 = atNoon(today);
-  while(m <= t2) m.setMonth(m.getMonth() + 1);
+  var steps = 1, m = addMonthsClamped(anchor, steps);
+  while(m <= t2){ steps++; m = addMonthsClamped(anchor, steps); }
   return { date: m, daysAway: Math.round((m - t2) / 86400000) };
 }
 function fmtPayday(d){
