@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.19.0';
+var APP_VERSION = '2.20.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -100,10 +100,16 @@ function normSuggestTarget(v){
    v2.14.0: a day with NOTHING scheduled at all starts its shift
    at 10:00 instead of the 07:00 window open (EMPTY_DAY_START) —
    days with entries keep start-of-longest-free-interval.
+   v2.20.0: weekend rule — the suggestion never leaves Saturday AND
+   Sunday both work-free (Walmart allows only one weekend day off):
+   when Saturday is workable but empty, a 2-hr block moves there from
+   the latest staffed weekday; when Saturday can't take work at all,
+   weekendOk is false so the preview warns instead of staying silent.
    classes: [{ days:[Mon=0..Sun=6], s:'HH:MM', e:'HH:MM' }];
    schoolTags: [[tag,...] ×7]. Returns { days: [{s,e,paid}|null ×7],
    totalPaid, capacity (hrs), shortfall (hrs vs the target),
-   dayInfo: [{ state, scheduledMinutes } ×7] }. */
+   dayInfo: [{ state, scheduledMinutes } ×7], weekendOk,
+   starts: [window minute or -1 ×7] }. */
 function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
   var WIN_S = 420, WIN_E = 1320, BUF = 30, STEP = 30;
   var EMPTY_DAY_START = 600; /* v2.14.0: 10:00 for entry-free days */
@@ -193,6 +199,21 @@ function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
       alloc[i] += give; remaining -= give;
     }
   }
+  /* v2.20.0: weekend rule — Walmart allows only ONE weekend day off,
+     so a suggestion must never leave Saturday AND Sunday work-free.
+     Sunday is always off by design, so when Saturday is workable but
+     got no hours (the target was already met Mon–Fri), move a 2-hr
+     block from the latest staffed weekday onto Saturday. The paid
+     totals below are recomputed from the final allocation, so the
+     move can't skew pay. When Saturday itself can't take work (meet
+     day, busy day, or no 2-hr free stretch) the rule is unsatisfiable
+     here — weekendOk comes back false and the preview warns instead
+     of silently proposing an illegal week. */
+  if(alloc[5] === 0 && caps[5] > 0){
+    for(var wi = 4; wi >= 0; wi--){
+      if(alloc[wi] >= 120){ alloc[wi] -= 120; alloc[5] += 120; break; }
+    }
+  }
   /* paid hours for a block, same meal rule as calcShiftPaidHours with
      defaultMeal (30 min unpaid over 6 hrs) — unreachable at the 6-hr
      cap, but coded so the rule stays consistent everywhere */
@@ -216,7 +237,54 @@ function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
   }
   return { days: days, totalPaid: totalPaid, capacity: capacityMin / 60,
            shortfall: Math.max(0, num0(targetHours) - totalPaid),
-           dayInfo: dayInfo };
+           dayInfo: dayInfo, weekendOk: alloc[5] > 0 || alloc[6] > 0,
+           starts: starts };
+}
+/* v2.20.0: paid hours for one EDITED suggestion shift — the planner's
+   own rule (calcShiftPaidHours + defaultMeal: 30 min unpaid meal off
+   shifts over 6 hrs), minute-rounded and clamped to the planner's
+   0–12 hr day cap, so preview totals always match what Apply writes.
+   Empty times or an end at/before the start are not a shift (0) —
+   the suggestion editor is strict: no overnight shifts here, unlike
+   the planner's own time fields, which roll past midnight. */
+function suggestPaidFor(s, e){
+  if(!s || !e) return 0;
+  if(toMinutes(e) <= toMinutes(s)) return 0;
+  var paid = calcShiftPaidHours(s, e, defaultMeal(s, e));
+  if(paid < 0) paid = 0;
+  if(paid > 12) paid = 12;
+  return Math.round(paid * 60) / 60;
+}
+/* v2.20.0: total paid hours for an edited suggestion week ([{s,e}|null
+   ×7]) — the single number the preview totals, the pay block and
+   Apply all use, so they can never disagree. */
+function suggestEditedTotal(edits){
+  var total = 0;
+  (edits || []).forEach(function(d){
+    if(d) total += suggestPaidFor(d.s, d.e);
+  });
+  return Math.round(total * 60) / 60;
+}
+/* v2.20.0: the weekend rule as a pure check — a week passes unless
+   BOTH Saturday (5) and Sunday (6) have no shift. */
+function suggestWeekendOk(days){
+  function hasWork(d){ return !!(d && d.s && d.e && toMinutes(d.e) > toMinutes(d.s)); }
+  return hasWork(days[5]) || hasWork(days[6]);
+}
+/* v2.20.0: which entries does one edited shift overlap? Pure minute
+   math, same touching-is-not-overlap rule as timesOverlap (a shift
+   ending exactly when a class starts does not overlap it). */
+function suggestShiftOverlaps(s, e, entries){
+  if(!s || !e || toMinutes(e) <= toMinutes(s)) return [];
+  var a = toMinutes(s), b = toMinutes(e);
+  var hits = [];
+  (entries || []).forEach(function(c){
+    if(!c) return;
+    var c1 = toMinutes(c.s), c2 = toMinutes(c.e);
+    if(c2 <= c1) c2 += 1440;
+    if(a < c2 && c1 < b) hits.push(c);
+  });
+  return hits;
 }
 /* compare dotted version strings: -1 if a<b, 0 if equal, 1 if a>b */
 function compareVersions(a, b){
@@ -629,6 +697,8 @@ if (typeof module !== 'undefined' && module.exports){
     deriveDedFromStub: deriveDedFromStub, wlNormPay: wlNormPay,
     calcShiftHours: calcShiftHours, calcShiftPaidHours: calcShiftPaidHours, defaultMeal: defaultMeal,
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
+    suggestWorkWeek: suggestWorkWeek, suggestPaidFor: suggestPaidFor, suggestEditedTotal: suggestEditedTotal,
+    suggestWeekendOk: suggestWeekendOk, suggestShiftOverlaps: suggestShiftOverlaps,
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
@@ -2366,8 +2436,9 @@ function runSuggest(){
     return;
   }
   var tgt = suggestTargetHrs();
-  suggestPreviewData = { target: tgt,
-    result: suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt, suggestBusyThresholdHrs()) };
+  var result = suggestWorkWeek(getClasses(), S.planHours.schoolTags, tgt, suggestBusyThresholdHrs());
+  suggestPreviewData = { target: tgt, result: result,
+    edits: result.days.map(function(d){ return d ? { s: d.s, e: d.e } : null; }), edited: false };
   if(note) note.textContent = '';
   renderSuggest();
 }
@@ -2478,8 +2549,17 @@ function weekViewData(){
   var totalsText = 'Classes: ' + fmtMinutes(totalClassMins) + ' / week · Practice: ' + fmtMinutes(totalPracticeMins) +
     ' / week · Workouts: ' + fmtMinutes(totalWorkoutMins) +
     ' / week · Work planned: ' + fmtHrsExact(workTotal) + ' hrs / week';
+  /* v2.20.0: weekend rule on the APPLIED plan — a week with work
+     planned but both Saturday and Sunday empty breaks Walmart's
+     one-weekend-day-off rule. Hours-only days count as work (a day
+     with planned hours is a work day even without shift times). A
+     fully empty plan is not warned: nothing planned yet is not a
+     violation, it's a blank week. */
+  var weekendWork = num(S.planHours.school[5]) > 0 || num(S.planHours.school[6]) > 0;
+  var weekendWarning = (workTotal > 0 && !weekendWork) ?
+    '⚠️ Weekend rule: Saturday and Sunday are both off — Walmart only allows one weekend day off. Add a shift to Saturday or Sunday.' : '';
   return { days: days, totalsText: totalsText, conflicts: conflicts,
-           workTotal: workTotal, hasContent: hasContent };
+           workTotal: workTotal, hasContent: hasContent, weekendWarning: weekendWarning };
 }
 
 /* ---------- v2.15.0: export your week (📸 image / 📄 text file) ----------
@@ -2489,8 +2569,11 @@ function weekViewData(){
 var WEEK_EXPORT_TITLE = '🗓️ Your week — classes, practices, workouts + work';
 
 function weekVerdictLines(wv){
-  if(wv.conflicts.length) return wv.conflicts.map(function(c){ return '⚠️ ' + c; });
-  return ['No overlaps — work fits around your classes, practices and workouts. ✅'];
+  var lines = [];
+  if(wv.conflicts.length) wv.conflicts.forEach(function(c){ lines.push('⚠️ ' + c); });
+  if(wv.weekendWarning) lines.push(wv.weekendWarning);
+  if(!lines.length) lines.push('No overlaps — work fits around your classes, practices and workouts. ✅');
+  return lines;
 }
 function weekPayLine(workTotal){
   var bd = wlPayBreakdown(workTotal);
@@ -2746,18 +2829,163 @@ function renderSchedule(){
   }
   var sumEl = document.getElementById('classSummary');
   if(sumEl){
+    var sumHtml = esc(wv.totalsText) + '<br>';
     if(wv.conflicts.length){
-      sumEl.innerHTML = esc(wv.totalsText) + '<br>' +
-        wv.conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
+      sumHtml += wv.conflicts.map(function(c){ return '⚠️ ' + esc(c); }).join('<br>');
     } else {
-      sumEl.innerHTML = esc(wv.totalsText) + '<br>No overlaps — work fits around your classes, practices and workouts. ✅';
+      sumHtml += 'No overlaps — work fits around your classes, practices and workouts. ✅';
     }
+    if(wv.weekendWarning) sumHtml += '<br>' + esc(wv.weekendWarning);
+    sumEl.innerHTML = sumHtml;
   }
   renderSuggest();
 }
 /* v2.8.0: ✨ Suggest my work hours — target chips + preview. The
    preview is a proposal only: nothing in the school plan changes
    until Apply is tapped, and Apply says so right in the preview. */
+/* v2.20.0: editable suggestion preview — suggestPreviewData.edits
+   holds [{s,e}|null ×7], seeded from the suggestion. Rows render
+   typed time inputs (never sliders); totals, pay, overlaps and the
+   weekend warning refresh live from the edits WITHOUT re-rendering
+   the inputs, so typing never loses focus. Add/Remove re-render
+   rows (those are taps, not keystrokes). Apply writes the EDITS,
+   not the original suggestion. */
+var suggestBound = false;
+function suggestEdits(){
+  return suggestPreviewData ? suggestPreviewData.edits : null;
+}
+function suggestRowOffHtml(i){
+  var res = suggestPreviewData.result;
+  var offHtml = '<span class="suggest-off">off</span>';
+  if(res.dayInfo && res.dayInfo[i]){
+    var info = res.dayInfo[i];
+    if(info.state === 'sunday') offHtml = '<span class="suggest-off">off — rest day</span>';
+    else if(info.state === 'meet') offHtml = '<span class="suggest-off">off — meet day</span>';
+    else if(info.state === 'busy') offHtml = '<span class="suggest-busy">🚫 no work — busy day (' +
+      esc(fmtMinutes(info.scheduledMinutes)) + ' of classes, practice + workouts)</span>';
+  }
+  return offHtml;
+}
+function suggestRowHtml(i){
+  var dy = suggestEdits()[i];
+  if(dy){
+    return '<div class="suggest-line suggest-edit-line"><span class="suggest-day">' + PLAN_DAYS[i] + '</span>' +
+      '<label class="suggest-time-field">Start <input type="time" value="' + esc(dy.s || '') + '" data-suggest-start="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' shift start"></label>' +
+      '<label class="suggest-time-field">End <input type="time" value="' + esc(dy.e || '') + '" data-suggest-end="' + i + '" aria-label="' + PLAN_DAY_FULL[i] + ' shift end"></label>' +
+      '<span class="suggest-row-paid" id="suggest-paid-' + i + '"></span>' +
+      '<button class="btn-chip suggest-remove" type="button" data-suggest-remove="' + i + '" aria-label="Remove ' + PLAN_DAY_FULL[i] + ' shift">✕ Remove</button>' +
+      '<span class="suggest-row-warn" id="suggest-warn-' + i + '"></span></div>';
+  }
+  return '<div class="suggest-line"><span class="suggest-day">' + PLAN_DAYS[i] + '</span>' +
+    suggestRowOffHtml(i) +
+    ' <button class="btn-chip suggest-add" type="button" data-suggest-add="' + i + '" aria-label="Add a shift on ' + PLAN_DAY_FULL[i] + '">＋ Add shift</button></div>';
+}
+function renderSuggestRows(){
+  var rowsEl = document.getElementById('suggestRows');
+  if(!rowsEl || !suggestPreviewData) return;
+  var html = '';
+  for(var i = 0; i < 7; i++) html += suggestRowHtml(i);
+  rowsEl.innerHTML = html;
+}
+/* default shift for "Add shift" — the day's longest free stretch
+   when the suggester found one (the same start it would have used),
+   else 10:00; 4 hrs long, capped at the 22:00 window end, never
+   shorter than an hour (else plain 10:00–14:00). The live overlap
+   check flags it if it still lands on a class. */
+function suggestAddDefault(i){
+  var res = suggestPreviewData.result;
+  var st = res.starts && res.starts[i] >= 0 ? res.starts[i] : 600;
+  var en = Math.min(1320, st + 240);
+  if(en - st < 60){ st = 600; en = 840; }
+  return { s: minsToHHMM(st), e: minsToHHMM(en) };
+}
+function refreshSuggestSummary(){
+  var sumEl = document.getElementById('suggestSummary');
+  if(!sumEl || !suggestPreviewData) return;
+  var edits = suggestEdits(), tgt = suggestPreviewData.target;
+  var classes = getClasses();
+  /* per-row paid + overlap spans only — the time inputs are never
+     touched here, so typing never loses focus */
+  edits.forEach(function(dy, i){
+    var paidEl = document.getElementById('suggest-paid-' + i);
+    var warnEl = document.getElementById('suggest-warn-' + i);
+    if(!dy) return;
+    var valid = dy.s && dy.e && toMinutes(dy.e) > toMinutes(dy.s);
+    if(paidEl) paidEl.textContent = valid ? fmtHrsExact(suggestPaidFor(dy.s, dy.e)) + ' paid hrs' : 'set both times, end after start';
+    if(warnEl){
+      var hits = valid ? classes.filter(function(c){ return c.days.indexOf(i) >= 0 && timesOverlap(dy.s, dy.e, c.s, c.e); }) : [];
+      warnEl.textContent = hits.length ? '⚠️ overlaps ' + hits.map(function(c){ return c.name; }).join(' + ') : '';
+    }
+  });
+  var total = suggestEditedTotal(edits);
+  var html = '<p class="suggest-total">Total: <strong>' + fmtHrsExact(total) + ' paid hrs</strong> (target ' + tgt + 'h)</p>';
+  if(total < tgt){
+    html += suggestPreviewData.edited ?
+      '<p class="suggest-warn">Your edits total ' + fmtHrsExact(total) + ' paid hrs — short of the ' + tgt + 'h target.</p>' :
+      '<p class="suggest-warn">Your classes and practices only leave room for ~' + fmtHrsExact(total) +
+      ' paid hrs — short of the ' + tgt + 'h target.</p>';
+  }
+  if(total > 0 && !suggestWeekendOk(edits)){
+    html += '<p class="suggest-warn suggest-warn-big">⚠️ Weekend rule: Saturday and Sunday are both off — Walmart only allows one weekend day off. Add a shift to Saturday or Sunday.</p>';
+  }
+  /* v2.14.0: 💵 This plan pays — the full real pay for the plan's
+     ACTUAL paid hrs, from the same wlPayBreakdown the Work Log
+     uses: gross, every tax/deduction line, total taken, net, and
+     about per month. Rendered with the Work Log's pay classes so
+     the two breakdowns always look identical. */
+  var bd = wlPayBreakdown(total);
+  function sgPayRow(label, amt, cls){
+    return '<div class="wl-pay-row' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span><span>' + amt + '</span></div>';
+  }
+  html += '<div class="wl-pay suggest-pay"><p class="suggest-pay-head">💵 This plan pays</p>' +
+    sgPayRow('Gross pay', money(bd.gross), 'wl-pay-grossrow');
+  if(num(bd.otHrs) > 0.001){
+    html += '<p class="wl-pay-ot">Includes ' + fmtHrs(bd.otHrs) + ' hrs overtime at 1.5× (overtime added ' + money(bd.otAmt) + ' of gross).</p>';
+  }
+  html += '<p class="wl-pay-sec">Taxes</p>';
+  bd.taxes.forEach(function(l){ html += sgPayRow(l.label, '−' + money(l.amt)); });
+  html += sgPayRow('Taxes total', money(bd.taxesTotal), 'wl-pay-sub');
+  html += '<p class="wl-pay-sec">Deductions</p>';
+  bd.deductions.forEach(function(l){ html += sgPayRow(l.label, '−' + money(l.amt)); });
+  html += sgPayRow('Deductions total', money(bd.dedTotal), 'wl-pay-sub');
+  html += sgPayRow('Total taken', money(bd.totalTaken), 'wl-pay-taken');
+  html += sgPayRow('Net pay — take-home', money(bd.net), 'wl-pay-net');
+  html += sgPayRow('Take-home / month (avg)', '≈ ' + money0(bd.net * 52 / 12), 'wl-pay-sub');
+  if(bd.estimate) html += '<p class="hint wl-pay-note">Estimated from tax tables — set up your pay stub in the Paycheck tab for exact numbers.</p>';
+  html += '</div>';
+  sumEl.innerHTML = html;
+}
+function bindSuggestPreview(){
+  var prevEl = document.getElementById('suggestPreview');
+  if(!prevEl || suggestBound) return;
+  suggestBound = true;
+  /* typing in a time input updates the edit + the summary only —
+     the inputs themselves are never re-rendered mid-keystroke */
+  prevEl.addEventListener('input', function(e){
+    var t = e.target;
+    if(!t.dataset || (t.dataset.suggestStart === undefined && t.dataset.suggestEnd === undefined)) return;
+    var edits = suggestEdits(); if(!edits) return;
+    var i = +(t.dataset.suggestStart !== undefined ? t.dataset.suggestStart : t.dataset.suggestEnd);
+    var dy = edits[i]; if(!dy) return;
+    if(t.dataset.suggestStart !== undefined) dy.s = t.value || '';
+    else dy.e = t.value || '';
+    suggestPreviewData.edited = true;
+    refreshSuggestSummary();
+  });
+  prevEl.addEventListener('click', function(e){
+    var t = e.target.closest ? e.target.closest('[data-suggest-add],[data-suggest-remove]') : null;
+    if(!t || !suggestPreviewData) return;
+    var edits = suggestEdits();
+    if(t.dataset.suggestAdd !== undefined){
+      edits[+t.dataset.suggestAdd] = suggestAddDefault(+t.dataset.suggestAdd);
+    } else {
+      edits[+t.dataset.suggestRemove] = null;
+    }
+    suggestPreviewData.edited = true;
+    renderSuggestRows();
+    refreshSuggestSummary();
+  });
+}
 function renderSuggest(){
   var chipsEl = document.getElementById('suggestTargets');
   if(chipsEl){
@@ -2789,56 +3017,14 @@ function renderSuggest(){
   var prevEl = document.getElementById('suggestPreview');
   if(!prevEl) return;
   if(!suggestPreviewData){ prevEl.innerHTML = ''; return; }
-  var res = suggestPreviewData.result, tgt = suggestPreviewData.target;
-  var html = '';
-  res.days.forEach(function(dy, i){
-    var offHtml = '<span class="suggest-off">off</span>';
-    if(!dy && res.dayInfo && res.dayInfo[i]){
-      var info = res.dayInfo[i];
-      if(info.state === 'sunday') offHtml = '<span class="suggest-off">off — rest day</span>';
-      else if(info.state === 'meet') offHtml = '<span class="suggest-off">off — meet day</span>';
-      else if(info.state === 'busy') offHtml = '<span class="suggest-busy">🚫 no work — busy day (' +
-        esc(fmtMinutes(info.scheduledMinutes)) + ' of classes, practice + workouts)</span>';
-    }
-    html += '<div class="suggest-line"><span class="suggest-day">' + PLAN_DAYS[i] + '</span>' +
-      (dy ? '<span>' + esc(fmtTime(dy.s)) + ' – ' + esc(fmtTime(dy.e)) + ' · ' + fmtHrsExact(dy.paid) + ' paid hrs</span>'
-          : offHtml) + '</div>';
-  });
-  html += '<p class="suggest-total">Total: <strong>' + fmtHrsExact(res.totalPaid) + ' paid hrs</strong> (target ' + tgt + 'h)</p>';
-  if(res.shortfall > 0){
-    html += '<p class="suggest-warn">Your classes and practices only leave room for ~' + fmtHrsExact(res.totalPaid) +
-      ' paid hrs — short of the ' + tgt + 'h target.</p>';
-  }
-  /* v2.14.0: 💵 This plan pays — the full real pay for the plan's
-     ACTUAL paid hrs, from the same wlPayBreakdown the Work Log
-     uses: gross, every tax/deduction line, total taken, net, and
-     about per month. Rendered with the Work Log's pay classes so
-     the two breakdowns always look identical. */
-  var bd = wlPayBreakdown(res.totalPaid);
-  function sgPayRow(label, amt, cls){
-    return '<div class="wl-pay-row' + (cls ? ' ' + cls : '') + '"><span>' + esc(label) + '</span><span>' + amt + '</span></div>';
-  }
-  html += '<div class="wl-pay suggest-pay"><p class="suggest-pay-head">💵 This plan pays</p>' +
-    sgPayRow('Gross pay', money(bd.gross), 'wl-pay-grossrow');
-  if(num(bd.otHrs) > 0.001){
-    html += '<p class="wl-pay-ot">Includes ' + fmtHrs(bd.otHrs) + ' hrs overtime at 1.5× (overtime added ' + money(bd.otAmt) + ' of gross).</p>';
-  }
-  html += '<p class="wl-pay-sec">Taxes</p>';
-  bd.taxes.forEach(function(l){ html += sgPayRow(l.label, '−' + money(l.amt)); });
-  html += sgPayRow('Taxes total', money(bd.taxesTotal), 'wl-pay-sub');
-  html += '<p class="wl-pay-sec">Deductions</p>';
-  bd.deductions.forEach(function(l){ html += sgPayRow(l.label, '−' + money(l.amt)); });
-  html += sgPayRow('Deductions total', money(bd.dedTotal), 'wl-pay-sub');
-  html += sgPayRow('Total taken', money(bd.totalTaken), 'wl-pay-taken');
-  html += sgPayRow('Net pay — take-home', money(bd.net), 'wl-pay-net');
-  html += sgPayRow('Take-home / month (avg)', '≈ ' + money0(bd.net * 52 / 12), 'wl-pay-sub');
-  if(bd.estimate) html += '<p class="hint wl-pay-note">Estimated from tax tables — set up your pay stub in the Paycheck tab for exact numbers.</p>';
-  html += '</div>';
-  html += '<p class="hint">Applying replaces your current school-week plan — the hours and the shift times. You can still edit any day in the planner afterwards.</p>' +
+  prevEl.innerHTML = '<div id="suggestRows"></div><div id="suggestSummary"></div>' +
+    '<p class="hint">Edit any day: type new start/end times, remove a shift, or add one to a day off — totals, pay and overlap checks update live. Applying replaces your current school-week plan — the hours and the shift times. You can still edit any day in the planner afterwards.</p>' +
     '<div class="bk-actions">' +
     '<button class="btn-primary" type="button" id="suggestApply">Apply to my school plan</button>' +
     '<button class="btn-chip" type="button" id="suggestDiscard">Discard</button></div>';
-  prevEl.innerHTML = html;
+  bindSuggestPreview();
+  renderSuggestRows();
+  refreshSuggestSummary();
   document.getElementById('suggestApply').addEventListener('click', applySuggestion);
   document.getElementById('suggestDiscard').addEventListener('click', function(){
     suggestPreviewData = null;
@@ -2847,10 +3033,17 @@ function renderSuggest(){
 }
 function applySuggestion(){
   if(!suggestPreviewData) return;
-  var res = suggestPreviewData.result;
+  /* v2.20.0: Apply writes the EDITS — a row is a shift only when
+     both times are set and the end is after the start; anything
+     else applies as a day off, so a half-typed row can never write
+     a garbage shift into the plan */
+  var edits = suggestEdits();
   S.planHours.term = 'school';
-  res.days.forEach(function(dy, i){
-    if(dy){ S.planHours.school[i] = dy.paid; S.planHours.schoolTimes[i] = { s: dy.s, e: dy.e }; }
+  edits.forEach(function(dy, i){
+    if(dy && dy.s && dy.e && toMinutes(dy.e) > toMinutes(dy.s)){
+      S.planHours.school[i] = suggestPaidFor(dy.s, dy.e);
+      S.planHours.schoolTimes[i] = { s: dy.s, e: dy.e };
+    }
     else { S.planHours.school[i] = 0; S.planHours.schoolTimes[i] = { s: '', e: '' }; }
   });
   suggestPreviewData = null;

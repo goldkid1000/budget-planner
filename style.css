@@ -876,6 +876,14 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .suggest-total strong{font-family:Georgia,'Times New Roman',serif;
   color:var(--green-hi,#f2ddab)}
 .suggest-warn{margin:6px 0 0;font-size:.92rem;color:#f0b35e;font-weight:650}
+.suggest-warn-big{font-size:.98rem;padding:8px 10px;border:1px solid rgba(240,179,94,.5);border-radius:8px}
+.suggest-edit-line{flex-wrap:wrap}
+.suggest-time-field{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.suggest-time-field input[type=time]{min-height:44px;padding:5px 9px;font:inherit;font-size:.95rem;background:var(--input-bg);border:1px solid var(--input-line);border-radius:10px;color:var(--ink)}
+.suggest-time-field input[type=time]:focus{outline:none;border-color:#d4af6a;box-shadow:0 0 0 2px rgba(212,175,106,.25)}
+.suggest-row-paid{font-weight:650;white-space:nowrap}
+.suggest-row-warn{color:#f0b35e;font-weight:650;font-size:.9rem}
+.suggest-add,.suggest-remove{flex-shrink:0}
 #suggestPreview .bk-actions{margin-top:12px}
 #suggestPreview .bk-actions .btn-primary,
 #suggestPreview .bk-actions .btn-chip{min-height:48px}

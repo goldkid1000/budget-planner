@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "v": "2.20.0",
+      "date": "Oct 24, 2026",
+      "notify": true,
+      "notes": [
+        "Suggested work is now editable: in the ✨ Suggest preview, type any day's start/end times, remove a shift, or add one to a day off — totals, pay and overlap checks update live as you type, and Apply writes your edits, not the original suggestion.",
+        "Weekend rule: a suggestion never leaves Saturday AND Sunday both off — Walmart only allows one weekend day off. When Saturday can take work, the suggestion moves a 2-hour block there; when it can't (meet day, busy day, or no free stretch), the preview warns instead of staying silent.",
+        "The same weekend warning now shows on your week view and week exports whenever your applied plan has work planned but both weekend days empty."
+      ]
+    },
+    {
       "v": "2.19.0",
       "date": "Oct 24, 2026",
       "notify": true,
