@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.20.0';
+var APP_VERSION = '2.20.1';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -63,6 +63,39 @@ function fmtMinutes(mins){
 function fmtHrsExact(h){
   var v = Number(h); if(!isFinite(v)) v = 0;
   return String(Math.round(v * 100) / 100);
+}
+/* v2.20.1: the week-view/export work line, as ONE pure builder so the
+   on-screen week view, the text export and the PNG export can never
+   disagree: a timed shift reads exactly like a class line
+   ("Work · 4:30 PM – 8:00 PM · 3.5 hrs"); a shift without times keeps
+   the old "hrs planned (no times set…)" fallback. Times are never
+   invented here — a missing time stays missing. The caller prefixes
+   the marker (💼, or ⚠️ on a conflict), same as the other lines. */
+function fmtTime12(t){
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+  if(!m) return '';
+  var h = +m[1], ap = h >= 12 ? 'PM' : 'AM', h12 = h % 12; if(h12 === 0) h12 = 12;
+  return h12 + ':' + m[2] + ' ' + ap;
+}
+function workLineText(s, e, paid, hitKinds){
+  if(s && e){
+    var suffix = (hitKinds && hitKinds.length) ? ' — overlaps ' + hitKinds.map(function(k){ return 'a ' + k; }).join(' + ') : '';
+    return 'Work · ' + fmtTime12(s) + ' – ' + fmtTime12(e) + ' · ' + fmtHrsExact(paid) + ' hrs' + suffix;
+  }
+  return 'Work · ' + fmtHrsExact(paid) + ' hrs planned (no times set — add them in the planner above to check overlaps)';
+}
+/* v2.20.1: Apply's core as a pure step — the exact mapping the
+   Suggest preview's Apply button performs, testable without the DOM:
+   a row is a shift only when both times are set and the end is after
+   the start; anything else applies as a day off (times cleared), so a
+   half-typed row can never write a garbage shift into the plan. */
+function applySuggestEdits(school, schoolTimes, edits){
+  (edits || []).forEach(function(dy, i){
+    if(dy && dy.s && dy.e && toMinutes(dy.e) > toMinutes(dy.s)){
+      school[i] = suggestPaidFor(dy.s, dy.e);
+      schoolTimes[i] = { s: dy.s, e: dy.e };
+    } else { school[i] = 0; schoolTimes[i] = { s: '', e: '' }; }
+  });
 }
 /* minutes since midnight -> "HH:MM" */
 function minsToHHMM(mins){
@@ -702,6 +735,7 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
+    fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
     FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
 }
@@ -2536,12 +2570,9 @@ function weekViewData(){
       });
       var hitKinds = [];
       hits.forEach(function(c){ if(hitKinds.indexOf(entryKind(c)) === -1) hitKinds.push(entryKind(c)); });
-      var hitText = ' — overlaps ' + hitKinds.map(function(k){ return 'a ' + k; }).join(' + ');
-      items.push({ text: (hits.length ? '⚠️ ' : '💼 ') + 'Work ' + fmtTime(pair.s) + ' – ' + fmtTime(pair.e) +
-        ' · ' + fmtHrsExact(paid) + ' paid hrs' + (hits.length ? hitText : ''), id: null, work: true, conflict: !!hits.length });
+      items.push({ text: (hits.length ? '⚠️ ' : '💼 ') + workLineText(pair.s, pair.e, paid, hitKinds), id: null, work: true, conflict: !!hits.length });
     } else if(num(S.planHours.school[i]) > 0){
-      items.push({ text: '💼 Work · ' + fmtHrsExact(num(S.planHours.school[i])) +
-        ' hrs planned (no times set — add them in the planner above to check overlaps)', id: null, work: true, conflict: false });
+      items.push({ text: '💼 ' + workLineText('', '', num(S.planHours.school[i]), []), id: null, work: true, conflict: false });
     }
     if(items.length) hasContent = true;
     days.push({ name: PLAN_DAY_FULL[i], items: items });
@@ -3039,13 +3070,7 @@ function applySuggestion(){
      a garbage shift into the plan */
   var edits = suggestEdits();
   S.planHours.term = 'school';
-  edits.forEach(function(dy, i){
-    if(dy && dy.s && dy.e && toMinutes(dy.e) > toMinutes(dy.s)){
-      S.planHours.school[i] = suggestPaidFor(dy.s, dy.e);
-      S.planHours.schoolTimes[i] = { s: dy.s, e: dy.e };
-    }
-    else { S.planHours.school[i] = 0; S.planHours.schoolTimes[i] = { s: '', e: '' }; }
-  });
+  applySuggestEdits(S.planHours.school, S.planHours.schoolTimes, edits);
   suggestPreviewData = null;
   save();
   renderPlanHours(true);

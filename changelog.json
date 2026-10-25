@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "v": "2.20.1",
+      "date": "Oct 24, 2026",
+      "notify": true,
+      "notes": [
+        "Work shifts now say their hours: whenever a shift has start/end times, the week view and the 'Your week' export show it like the other lines — 'Work · 4:30 PM – 8:00 PM · 3.5 hrs' — instead of 'hrs planned (no times set)'. Shifts without times keep the old fallback (times are never invented)."
+      ]
+    },
+    {
       "v": "2.20.0",
       "date": "Oct 24, 2026",
       "notify": true,
