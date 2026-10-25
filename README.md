@@ -41,13 +41,13 @@ Add to Home Screen; PC: browser menu → Install). Works offline once installed.
   can't read the file, it says so plainly and manual entry still works.
 - **Bills** — Editable list (name, amount, due date, auto-pay, paid). Sorted by due
   date. Starter entries are starting points, not live bank data.
-- **Discounts** — Deal search (opens real searches you check yourself — the app never
-  claims a code works), a student-discount directory (UNiDAYS, Student Beans, Spotify
+- **Discounts** — A deal watchlist (items you want + the price you'd buy at, with a
+  target-hit alert) and a student-discount directory (UNiDAYS, Student Beans, Spotify
   Student, Amazon Prime Student, Apple Education, Adobe student, Microsoft 365
-  student, YouTube Premium student, Nike/SheerID), cashback-tool explainers
-  (Checkmate, PayPal Honey, Rakuten), a discount-stacking calculator (stacked
-  discounts multiply — 20% then 10% is $72 on $100, not $70), and a cashback estimator.
-- **Calculators** — Split a bill, unit price comparison, tip calculator.
+  student, YouTube Premium student, Nike/SheerID).
+- **Calculators** — Unit price comparison (which size is the better deal?) and a
+  discount-stacking calculator (stacked discounts multiply — 20% then 10% is $72 on
+  $100, not $70).
 
 ## Taxes are an estimate, not a tax filing
 

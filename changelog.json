@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "v": "2.19.0",
+      "date": "Oct 24, 2026",
+      "notify": true,
+      "notes": [
+        "Removed the Stocks tab: paper-trading stocks isn't budgeting, and this app shouldn't look like investing advice. Your pay-stub stock lines (company stock contribution, stock purchase) are untouched — those are real paycheck math.",
+        "Trimmed the Discounts tab: the deal-search links, cashback-service explainers, and cashback estimator are gone, along with a Refresh button that never actually refreshed anything. What stays: your deal watchlist, the student-discount directory, and the discount calculator (now in Calculators).",
+        "Trimmed the Calculators tab: split-a-bill and tip math are gone — restaurant math isn't budgeting. Unit-price comparison stays.",
+        "New on the Budget tab: a due-soon line under Bills due — anything unpaid and overdue, plus what's due in the next 7 days, so a due date can't sneak up on you."
+      ]
+    },
+    {
       "v": "2.18.0",
       "date": "Oct 24, 2026",
       "notify": true,

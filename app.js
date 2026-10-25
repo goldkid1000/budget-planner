@@ -1,7 +1,7 @@
 /* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.18.0';
+var APP_VERSION = '2.19.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -473,13 +473,36 @@ function calcDiscount(price, d1, d2, cashbackPct){
   var finalPay = after2 - cashback;
   return { after1: after1, after2: after2, cashback: cashback, finalPay: finalPay, saved: price - finalPay };
 }
-function calcSplit(total, people, tipPct){
-  var tip = total * (tipPct / 100);
-  var withTip = total + tip;
-  return { tip: tip, withTip: withTip, each: people > 0 ? withTip / people : 0 };
+
+/* ---------- v2.19.0: bills due soon — pure date math, no state ----------
+   Unpaid bills due in the next 7 days (overdue ones count too), for the
+   Budget tab's due-soon line. Due dates are plain YYYY-MM-DD, parsed as
+   LOCAL dates so a bill due today never reads as yesterday. */
+function parseDueDate(s){
+  if(!s) return null;
+  var parts = String(s).split('-');
+  if(parts.length !== 3) return null;
+  var d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+  return isNaN(d.getTime()) ? null : d;
+}
+function dueSoonBills(bills, nowMs){
+  var now = new Date(nowMs);
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var horizon = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+  var out = { overdueTotal: 0, overdueCount: 0, soonTotal: 0, soonCount: 0, names: [] };
+  (bills || []).forEach(function(b){
+    if(!b || b.paid) return;
+    var d = parseDueDate(b.due);
+    if(!d) return;
+    var amt = num0(b.amount);
+    if(d < today){ out.overdueTotal = round2(out.overdueTotal + amt); out.overdueCount++; }
+    else if(d <= horizon){ out.soonTotal = round2(out.soonTotal + amt); out.soonCount++; }
+    else return;
+    if(out.names.length < 3 && b.name) out.names.push(b.name);
+  });
+  return out;
 }
 function calcUnit(price, size){ return size > 0 ? price / size : 0; }
-function calcTip(bill, pct){ var tip = bill * (pct / 100); return { tip: tip, total: bill + tip }; }
 
 /* ---------- 2025 income-tax estimate tables (single filer) ----------
    Source: Tax Foundation, "State Individual Income Tax Rates and Brackets,
@@ -606,9 +629,9 @@ if (typeof module !== 'undefined' && module.exports){
     deriveDedFromStub: deriveDedFromStub, wlNormPay: wlNormPay,
     calcShiftHours: calcShiftHours, calcShiftPaidHours: calcShiftPaidHours, defaultMeal: defaultMeal,
     toMinutes: toMinutes, compareVersions: compareVersions, parseStatementCSV: parseStatementCSV,
-    calcDiscount: calcDiscount, calcSplit: calcSplit, calcUnit: calcUnit, calcTip: calcTip,
+    calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
-    calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode,
+    calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
     FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
 }
@@ -710,11 +733,6 @@ var STUDENT = [
   { name: 'Microsoft 365 for students', what: 'Office apps for students — many schools include it free, so check with your school first.', url: 'https://www.microsoft.com/en-us/education', cta: 'Open Microsoft Education' },
   { name: 'YouTube Premium student', what: 'A student plan at a lower monthly price than the regular plan. Check YouTube for current terms.', url: 'https://www.youtube.com/premium', cta: 'Open YouTube Premium' },
   { name: 'Nike student discount', what: 'A student discount verified through SheerID. Check Nike for the current offer.', url: 'https://www.nike.com/', cta: 'Open Nike' }
-];
-var CASHBACK = [
-  { name: 'Checkmate', what: 'A browser extension/app that says it automatically tries promo codes at checkout and pays cashback at many stores. This planner cannot auto-apply codes — Checkmate is a separate service.', url: 'https://joincheckmate.com/', cta: 'Open Checkmate' },
-  { name: 'PayPal Honey', what: 'A browser extension that tries promo codes at checkout and offers points/cashback. A separate service — read its terms before signing up.', url: 'https://www.joinhoney.com/', cta: 'Open Honey' },
-  { name: 'Rakuten', what: 'Pays cashback when you start your shopping trip on Rakuten and click through to a store. A separate service.', url: 'https://www.rakuten.com/', cta: 'Open Rakuten' }
 ];
 
 function loadState(){
@@ -3128,8 +3146,8 @@ function renderDonut(slices, total){
 
 function renderAll(){
   renderBudget(); renderPaycheck(); renderMyMoney(); renderBills();
-  renderDiscountsStatic(); renderDiscountCalc(); renderCashbackEst();
-  renderCalculators(); renderWatchlist(); renderStocks(); renderEarn();
+  renderDiscountsStatic(); renderDiscountCalc();
+  renderCalculators(); renderWatchlist(); renderEarn();
   renderPlanHours(true);
   renderWorkLog(true);
   renderSchedule();
@@ -3191,6 +3209,20 @@ function renderBudgetSummary(){
   setMoneyText(document.getElementById('startingLine'), starting);
   setMoneyText(document.getElementById('incomeLine'), income);
   setMoneyText(document.getElementById('billsLine'), bills);
+  /* v2.19.0: due-soon line — unpaid bills due in the next 7 days (plus
+     anything already overdue), so a due date can't sneak up on you. */
+  var dsEl = document.getElementById('dueSoonLine');
+  if(dsEl){
+    var ds = dueSoonBills(S.bills, Date.now());
+    if(ds.overdueCount + ds.soonCount > 0){
+      ds.hidden = false;
+      var dsBits = [];
+      if(ds.overdueCount > 0) dsBits.push('\u26a0\ufe0f ' + money(ds.overdueTotal) + ' overdue (' + ds.overdueCount + (ds.overdueCount === 1 ? ' bill' : ' bills') + ')');
+      if(ds.soonCount > 0) dsBits.push(money(ds.soonTotal) + ' more due in the next 7 days (' + ds.soonCount + (ds.soonCount === 1 ? ' bill' : ' bills') + ')');
+      if(ds.names.length) dsBits.push(ds.names.join(', ') + (ds.overdueCount + ds.soonCount > ds.names.length ? ', \u2026' : ''));
+      ds.textContent = dsBits.join(' \u00b7 ') + '.';
+    } else ds.hidden = true;
+  }
   setMoneyText(document.getElementById('spendLine'), spend);
   setMoneyText(document.getElementById('leftLine'), left);
   /* v2.17.0: per-day pace — what's left spread over the days left in
@@ -3825,12 +3857,6 @@ function renderDiscountsStatic(){
       d.innerHTML = '<h4>' + esc(s.name) + '</h4><p>' + esc(s.what) + '</p><a href="' + s.url + '" target="_blank" rel="noopener">' + esc(s.cta) + ' ↗</a>';
       sl.appendChild(d);
     });
-    var cl = document.getElementById('cashbackList');
-    CASHBACK.forEach(function(s){
-      var d = document.createElement('div'); d.className = 'disc-card';
-      d.innerHTML = '<h4>' + esc(s.name) + '</h4><p>' + esc(s.what) + '</p><a href="' + s.url + '" target="_blank" rel="noopener">' + esc(s.cta) + ' ↗</a>';
-      cl.appendChild(d);
-    });
   }
 }
 
@@ -3886,22 +3912,10 @@ function renderWatchlist(){
     list.appendChild(row);
     drawPriceChart('wlChart' + i, hist);
   });
-  var stamp = document.getElementById('dealsStamp');
-  if(stamp) stamp.textContent = S.dealsRefreshedAt ? fmtCheckedStamp(S.dealsRefreshedAt) : 'Never refreshed yet.';
   var hint = document.getElementById('watchlistHint');
   if(hint) hint.textContent = 'Prices are ones you type in — the app never checks a store\'s price by itself.';
 }
-function renderCashbackEst(){
-  var amt = num(document.getElementById('cbAmount').value);
-  var pct = num(document.getElementById('cbPct').value);
-  document.getElementById('cbOut').textContent = money(amt * pct / 100);
-}
-
 function renderCalculators(){
-  var sp = calcSplit(num(document.getElementById('splitTotal').value), num(document.getElementById('splitPeople').value, 1), num(document.getElementById('splitTip').value));
-  document.getElementById('splitTipOut').textContent = money(sp.tip);
-  document.getElementById('splitTotalOut').textContent = money(sp.withTip);
-  document.getElementById('splitEachOut').textContent = money(sp.each);
   var ua = calcUnit(num(document.getElementById('unitPriceA').value), num(document.getElementById('unitSizeA').value));
   var ub = calcUnit(num(document.getElementById('unitPriceB').value), num(document.getElementById('unitSizeB').value));
   document.getElementById('unitOutA').textContent = money(ua);
@@ -3910,9 +3924,6 @@ function renderCalculators(){
   if(ua > 0 && ub > 0){
     v.textContent = ua < ub ? '✅ Size A is cheaper per unit.' : (ub < ua ? '✅ Size B is cheaper per unit.' : 'Same price per unit.');
   } else { v.textContent = ''; }
-  var t = calcTip(num(document.getElementById('tipBill').value), num(document.getElementById('tipPct').value));
-  document.getElementById('tipOut').textContent = money(t.tip);
-  document.getElementById('tipTotalOut').textContent = money(t.total);
 }
 
 function esc(s){
@@ -4256,41 +4267,6 @@ function bind(){
     save(); renderAll();
   });
 
-  /* v2.0.0 stocks */
-  document.getElementById('addStockBtn').addEventListener('click', function(){
-    var symEl = document.getElementById('stockSym');
-    var sym = symEl.value.trim().toUpperCase().replace(/[^A-Z.]/g, '');
-    if(!sym){ alert('Type a ticker symbol first.'); return; }
-    if(S.stocks.some(function(s){ return s.sym === sym; })){ alert(sym + ' is already on your watchlist.'); return; }
-    S.stocks.push({ sym: sym, price: null, change: null, high52: null, low52: null, history: [] });
-    symEl.value = ''; save(); renderStocks();
-  });
-  document.getElementById('stockSym').addEventListener('keydown', function(e){
-    if(e.key === 'Enter') document.getElementById('addStockBtn').click();
-  });
-  var stockListEl = document.getElementById('stockList');
-  stockListEl.addEventListener('change', function(e){
-    var t = e.target, i = -1;
-    if(t.dataset.stockPrice !== undefined){ i = +t.dataset.stockPrice; S.stocks[i].price = num(t.value) || null; }
-    else if(t.dataset.stockChange !== undefined){ i = +t.dataset.stockChange; S.stocks[i].change = (t.value === '' ? null : num(t.value)); }
-    else if(t.dataset.stockHigh !== undefined){ i = +t.dataset.stockHigh; S.stocks[i].high52 = num(t.value) || null; }
-    else if(t.dataset.stockLow !== undefined){ i = +t.dataset.stockLow; S.stocks[i].low52 = num(t.value) || null; }
-    else return;
-    save(); renderStocks();
-  });
-  stockListEl.addEventListener('click', function(e){
-    var t = e.target;
-    if(t.dataset.stockLog !== undefined){
-      var i = +t.dataset.stockLog, st = S.stocks[i], pv = num(st.price);
-      if(!(pv > 0)){ alert('Type the current price first, then log it.'); return; }
-      st.history.push({ d: Date.now(), p: pv });
-      if(st.history.length > 90) st.history = st.history.slice(-90);
-      save(); renderStocks();
-    } else if(t.dataset.stockDel !== undefined){
-      S.stocks.splice(+t.dataset.stockDel, 1); save(); renderStocks();
-    }
-  });
-  document.getElementById('allocAmt').addEventListener('input', renderAlloc);
 
   /* v2.0.0 device sync code */
   document.getElementById('syncExportBtn').addEventListener('click', function(){
@@ -4388,48 +4364,12 @@ function bind(){
       save(); renderWatchlist();
     }
   });
-  document.getElementById('refreshDealsBtn').addEventListener('click', function(){
-    S.dealsRefreshedAt = Date.now();
-    save(); renderWatchlist();
-  });
-  /* discounts */
-  function doDealSearch(){
-    var q = document.getElementById('dealQuery').value.trim();
-    if(!q){ alert('Type a store or item first.'); return; }
-    var enc = encodeURIComponent(q);
-    document.getElementById('dealLinks').hidden = false;
-    document.getElementById('dealQueryOut').textContent = q;
-    document.getElementById('dealGoogle').href = 'https://www.google.com/search?q=' + enc + '+promo+code';
-    document.getElementById('dealBing').href = 'https://www.bing.com/search?q=' + enc + '+promo+code';
-    document.getElementById('dealDuck').href = 'https://duckduckgo.com/?q=' + enc + '+promo+code';
-    document.getElementById('dealStudent').href = 'https://www.google.com/search?q=' + enc + '+student+discount';
-  }
-  document.getElementById('dealSearchBtn').addEventListener('click', doDealSearch);
-  document.getElementById('dealQuery').addEventListener('keydown', function(e){ if(e.key === 'Enter') doDealSearch(); });
   ['discPrice','discOne','discTwo','discCashback'].forEach(function(id){
     document.getElementById(id).addEventListener('input', renderDiscountCalc);
   });
-  ['cbAmount','cbPct'].forEach(function(id){
-    document.getElementById(id).addEventListener('input', renderCashbackEst);
-  });
 
-  /* calculators */
-  ['splitTotal','splitPeople','splitTip'].forEach(function(id){
-    document.getElementById(id).addEventListener('input', renderCalculators);
-  });
   ['unitPriceA','unitSizeA','unitPriceB','unitSizeB'].forEach(function(id){
     document.getElementById(id).addEventListener('input', renderCalculators);
-  });
-  document.getElementById('tipBill').addEventListener('input', renderCalculators);
-  document.getElementById('tipPct').addEventListener('input', renderCalculators);
-  /* tip % chips only — hours-mode chips have their own handlers above, and the
-     old unscoped selector used to wipe the tip % with "undefined" on mode switch */
-  document.querySelectorAll('.btn-chip[data-tip]').forEach(function(b){
-    b.addEventListener('click', function(){
-      document.getElementById('tipPct').value = b.dataset.tip;
-      document.querySelectorAll('.btn-chip[data-tip]').forEach(function(x){ x.classList.toggle('active', x === b); });
-      renderCalculators();
-    });
   });
   /* install button — one button at the top of the Budget tab */
   document.getElementById('installBtn').addEventListener('click', function(){
@@ -4477,38 +4417,6 @@ function drawPriceChart(id, hist){
 }
 
 /* ---------- v2.0.0: stocks (educational paper-trading — prices are user-typed) ---------- */
-function renderStocks(){
-  var list = document.getElementById('stockList');
-  if(!list) return;
-  list.innerHTML = '';
-  if(!S.stocks.length){
-    list.innerHTML = '<p class="hint">No stocks yet \u2014 add a ticker above. Paper-trading only: prices you type, nothing real moves.</p>';
-  }
-  S.stocks.forEach(function(st, i){
-    var row = document.createElement('div'); row.className = 'stock-card';
-    var hist = st.history || [];
-    row.innerHTML =
-      '<h4>' + esc(String(st.sym || '').toUpperCase()) + '</h4>' +
-      '<div class="add-row">' +
-      '<input type="number" min="0" step="0.01" placeholder="Price you see ($)" value="' + (st.price || '') + '" data-stock-price="' + i + '" aria-label="Current price">' +
-      '<input type="number" step="0.01" placeholder="Day change %" value="' + (st.change === null || st.change === undefined ? '' : st.change) + '" data-stock-change="' + i + '" aria-label="Day change percent">' +
-      '</div>' +
-      '<div class="add-row">' +
-      '<input type="number" min="0" step="0.01" placeholder="52-wk high ($)" value="' + (st.high52 || '') + '" data-stock-high="' + i + '" aria-label="52 week high">' +
-      '<input type="number" min="0" step="0.01" placeholder="52-wk low ($)" value="' + (st.low52 || '') + '" data-stock-low="' + i + '" aria-label="52 week low">' +
-      '</div>' +
-      '<canvas class="mini-chart" id="stockChart' + i + '" width="300" height="64" aria-label="Price history chart"></canvas>' +
-      '<p class="hint">' + (hist.length ? hist.length + ' logged price' + (hist.length === 1 ? '' : 's') + ' \u2014 tap Log to add more over time.' : 'Log prices over time to build a highs/lows chart.') + '</p>' +
-      '<div class="add-row">' +
-      '<button class="btn-mini" data-stock-log="' + i + '" type="button">Log today\u2019s price</button>' +
-      '<button class="btn-mini danger" data-stock-del="' + i + '" type="button">Remove</button>' +
-      '</div>';
-    list.appendChild(row);
-    drawPriceChart('stockChart' + i, hist);
-  });
-  renderAlloc();
-}
-
 /* ---------- v2.3.0: Earn tab — dorm-friendly ways to make money ----------
    Toggles per option, realistic monthly ranges, combined total bar.
    Side income is a SEPARATE line — never folded into the pay-stub
@@ -4655,17 +4563,6 @@ function bindEarn(){
       setTimeout(function(){ btn.textContent = 'Add to my monthly income'; }, 2000);
     });
   }
-}
-
-function renderAlloc(){
-  var out = document.getElementById('allocOut');
-  if(!out) return;
-  var amt = num(document.getElementById('allocAmt').value);
-  var base = num(S.saved) + num(S.checking);
-  if(!(amt > 0)){ out.textContent = 'Type an amount to see what share of your savings that is.'; return; }
-  if(!(base > 0)){ out.textContent = 'Add your savings balance in My Money first \u2014 then this shows the share.'; return; }
-  var pct = Math.round(amt / base * 1000) / 10;
-  out.textContent = money(amt) + ' is ' + pct + '% of your ' + money(base) + ' savings. That leaves ' + money(base - amt) + ' untouched.';
 }
 
 bind();

@@ -41,7 +41,6 @@
       <button class="nav-btn" data-view="mymoney" type="button">🏦 My Money</button>
       <button class="nav-btn" data-view="bills" type="button">🧾 Bills</button>
       <button class="nav-btn" data-view="discounts" type="button">🎓 Discounts</button>
-      <button class="nav-btn" data-view="stocks" type="button">📈 Stocks</button>
       <button class="nav-btn" data-view="earn" type="button">💰 Earn</button>
       <button class="nav-btn" data-view="calculators" type="button">🧮 Calculators</button>
     </nav>
@@ -82,6 +81,7 @@
           <p class="explain" id="incomeBreakdown"></p>
           <p id="earnLine" hidden><strong>+ Side income (Earn tab):</strong> <span id="earnLineAmt">$0</span> / month <span class="hint-inline">— separate from paycheck math</span></p>
           <p><strong>Bills due:</strong> <span id="billsLine">$0</span></p>
+        <p class="explain" id="dueSoonLine" hidden></p>
           <p><strong>You'll spend:</strong> <span id="spendLine">$0</span> / month</p>
           <p><strong>You'll have left:</strong> <span id="leftLine">$0</span> / month</p>
           <p class="pace-line" id="perDayLine" hidden></p>
@@ -658,27 +658,7 @@
 
     <!-- ================= DISCOUNTS ================= -->
     <section class="view" id="view-discounts">
-      <h2>🎓 Discount Finder</h2>
-      <div class="card">
-        <h3>🔍 Find a deal</h3>
-        <p>Type a store or item. We'll open real searches — you check the pages yourself. This app never claims a code works.</p>
-        <div class="add-row">
-          <input id="dealQuery" type="text" placeholder="e.g. Nike shoes" maxlength="80" aria-label="Store or item">
-          <button class="btn-primary" id="dealSearchBtn" type="button">Search deals</button>
-        </div>
-        <div class="deal-links" id="dealLinks" hidden>
-          <p>Search for <strong id="dealQueryOut"></strong>:</p>
-          <ul>
-            <li><a id="dealGoogle" href="#" target="_blank" rel="noopener">Google: promo code</a></li>
-            <li><a id="dealBing" href="#" target="_blank" rel="noopener">Bing: promo code</a></li>
-            <li><a id="dealDuck" href="#" target="_blank" rel="noopener">DuckDuckGo: promo code</a></li>
-            <li><a id="dealStudent" href="#" target="_blank" rel="noopener">Google: student discount</a></li>
-          </ul>
-          <p>Or check these deal sites directly: <a href="https://www.retailmenot.com/" target="_blank" rel="noopener">RetailMeNot</a> · <a href="https://www.coupons.com/" target="_blank" rel="noopener">Coupons.com</a></p>
-        </div>
-        <p class="hint">Tip: always check the store's own site too — many codes are fake or expired on coupon sites.</p>
-      </div>
-
+      <h2>🎓 Discounts</h2>
       <div class="card">
         <h3>🏷️ Deal Watchlist</h3>
         <p>Track something you want to buy. Add the item + the price you'd buy at — the app tells you when the price you see hits your target.</p>
@@ -700,10 +680,6 @@
           <input id="wlTarget" type="number" min="0" step="0.01" placeholder="Price you'd buy at ($)" aria-label="Target price">
           <button class="btn-primary" id="addWatchlistBtn" type="button">Add to watchlist</button>
         </div>
-        <div class="add-row">
-          <button class="btn-mini" id="refreshDealsBtn" type="button">Refresh deals</button>
-          <span class="hint" id="dealsStamp">Never refreshed yet.</span>
-        </div>
         <div id="watchlistList"></div>
       </div>
 
@@ -713,74 +689,6 @@
         <div id="studentList"></div>
       </div>
 
-      <div class="card">
-        <h3>💸 Cashback tools</h3>
-        <p>These are separate services, not part of this app. They pay you cashback when you shop through them, and some try promo codes at checkout. Read their terms before signing up.</p>
-        <div id="cashbackList"></div>
-      </div>
-
-      <div class="card">
-        <h3>🧮 Discount calculator</h3>
-        <label class="field">Original price ($)
-          <input id="discPrice" type="number" min="0" step="0.01" value="100">
-        </label>
-        <label class="field">First discount (% off)
-          <input id="discOne" type="number" min="0" max="100" step="1" value="20">
-        </label>
-        <label class="field">Extra discount (% off) — optional, set to 0 if none
-          <input id="discTwo" type="number" min="0" max="100" step="1" value="10">
-        </label>
-        <label class="field">Cashback (%) — optional, set to 0 if none
-          <input id="discCashback" type="number" min="0" max="100" step="0.5" value="0">
-        </label>
-        <div class="result-box">
-          <details class="details"><summary>Show how this was worked out</summary><p id="discSteps"></p></details>
-          <p><strong>You pay:</strong> <span id="discFinal">$0</span></p>
-          <p><strong>Total saved:</strong> <span id="discSaved">$0</span></p>
-        </div>
-        <p class="hint">Stacked discounts multiply, they don't add: 20% off then 10% off is $72 on $100, not $70.</p>
-      </div>
-
-      <div class="card">
-        <h3>💵 Cashback estimator</h3>
-        <label class="field">Purchase amount ($)
-          <input id="cbAmount" type="number" min="0" step="0.01" value="50">
-        </label>
-        <label class="field">Cashback (%)
-          <input id="cbPct" type="number" min="0" max="100" step="0.5" value="5">
-        </label>
-        <p class="result-line">Cash back earned: <strong id="cbOut">$0</strong></p>
-      </div>
-    </section>
-
-    <!-- ================= STOCKS ================= -->
-    <section class="view" id="view-stocks">
-      <h2>📈 Stocks — learn &amp; paper-trade</h2>
-      <p class="hint"><strong>Educational only — not financial advice.</strong> This is a learning tool: prices are ones you type in yourself, and nothing here moves real money. The app is not connected to any brokerage or bank.</p>
-      <div class="card">
-        <h3>📋 My watchlist</h3>
-        <p class="hint">Look up a stock price in your brokerage app or a finance site, then type it here. The app never fetches market data by itself.</p>
-        <div class="add-row">
-          <input id="stockSym" type="text" placeholder="Ticker (e.g. AAPL)" maxlength="10" aria-label="Stock ticker">
-          <button class="btn-primary" id="addStockBtn" type="button">Add stock</button>
-        </div>
-        <div id="stockList"></div>
-      </div>
-      <div class="card">
-        <h3>🧮 Allocation calculator</h3>
-        <p>If I put <input id="allocAmt" type="number" min="0" step="1" placeholder="$" aria-label="Amount to invest" class="inline-num"> into stocks…</p>
-        <p class="result-line" id="allocOut">Type an amount to see what share of your savings that is.</p>
-        <p class="hint">Savings balance comes from My Money. Never invest money you'll need soon — and never invest what you can't afford to lose. Educational only.</p>
-      </div>
-      <div class="card">
-        <h3>🎬 Learn how stocks work</h3>
-        <ul class="video-list">
-          <li><a href="https://www.youtube.com/watch?v=yt8Qzc8ij28" target="_blank" rel="noopener">How the Stock Market Actually Works (10 min) — Digital Skills Network ↗</a></li>
-          <li><a href="https://www.youtube.com/watch?v=DuLX72ZB3r0" target="_blank" rel="noopener">Stock Market Investing for Beginners (Shares, ETFs &amp; Dividends) — Talking Money With Nozi ↗</a></li>
-          <li><a href="https://www.youtube.com/watch?v=ht-oVM5tsUQ" target="_blank" rel="noopener">Stock Exchanges Explained — Fundamental Investing Institute ↗</a></li>
-          <li><a href="https://www.youtube.com/watch?v=XdQPVLdklYA" target="_blank" rel="noopener">How to Start Investing With $0 — The 72-Hour Rule ↗</a></li>
-        </ul>
-      </div>
     </section>
 
     <!-- ================= EARN ================= -->
@@ -809,20 +717,6 @@
       <h2>🧮 Calculators</h2>
 
       <div class="card">
-        <h3>🍕 Split a bill</h3>
-        <label class="field">Total bill ($)
-          <input id="splitTotal" type="number" min="0" step="0.01" value="120">
-        </label>
-        <label class="field">Number of people
-          <input id="splitPeople" type="number" min="1" step="1" value="4">
-        </label>
-        <label class="field">Tip (%)
-          <input id="splitTip" type="number" min="0" step="1" value="20">
-        </label>
-        <p class="result-line">Tip: <strong id="splitTipOut">$0</strong> · Total with tip: <strong id="splitTotalOut">$0</strong> · Each person pays: <strong id="splitEachOut">$0</strong></p>
-      </div>
-
-      <div class="card">
         <h3>🏷️ Unit price — which size is the better deal?</h3>
         <div class="two-col">
           <div>
@@ -843,22 +737,27 @@
       </div>
 
       <div class="card">
-        <h3>💁 Tip calculator</h3>
-        <label class="field">Bill ($)
-          <input id="tipBill" type="number" min="0" step="0.01" value="50">
+        <h3>🧮 Discount calculator</h3>
+        <label class="field">Original price ($)
+          <input id="discPrice" type="number" min="0" step="0.01" value="100">
         </label>
-        <label class="field">Tip (%)
-          <input id="tipPct" type="number" min="0" step="1" value="20">
+        <label class="field">First discount (% off)
+          <input id="discOne" type="number" min="0" max="100" step="1" value="20">
         </label>
-        <div class="tip-presets">
-          <button class="btn-chip" data-tip="10" type="button">10%</button>
-          <button class="btn-chip" data-tip="15" type="button">15%</button>
-          <button class="btn-chip" data-tip="18" type="button">18%</button>
-          <button class="btn-chip" data-tip="20" type="button">20%</button>
-          <button class="btn-chip" data-tip="25" type="button">25%</button>
+        <label class="field">Extra discount (% off) — optional, set to 0 if none
+          <input id="discTwo" type="number" min="0" max="100" step="1" value="10">
+        </label>
+        <label class="field">Cashback (%) — optional, set to 0 if none
+          <input id="discCashback" type="number" min="0" max="100" step="0.5" value="0">
+        </label>
+        <div class="result-box">
+          <details class="details"><summary>Show how this was worked out</summary><p id="discSteps"></p></details>
+          <p><strong>You pay:</strong> <span id="discFinal">$0</span></p>
+          <p><strong>Total saved:</strong> <span id="discSaved">$0</span></p>
         </div>
-        <p class="result-line">Tip: <strong id="tipOut">$0</strong> · Total: <strong id="tipTotalOut">$0</strong></p>
+        <p class="hint">Stacked discounts multiply, they don't add: 20% off then 10% off is $72 on $100, not $70.</p>
       </div>
+
     </section>
   </main>
 </div>
@@ -870,7 +769,6 @@
   <button class="nav-btn" data-view="mymoney" type="button">🏦<span>My Money</span></button>
   <button class="nav-btn" data-view="bills" type="button">🧾<span>Bills</span></button>
   <button class="nav-btn" data-view="discounts" type="button">🎓<span>Discounts</span></button>
-  <button class="nav-btn" data-view="stocks" type="button">📈<span>Stocks</span></button>
   <button class="nav-btn" data-view="earn" type="button">💰<span>Earn</span></button>
   <button class="nav-btn" data-view="calculators" type="button">🧮<span>Calc</span></button>
 </nav>

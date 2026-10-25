@@ -170,9 +170,6 @@ select{appearance:none;-webkit-appearance:none;
 .bill-due{color:var(--muted);font-size:.92rem}
 .bill-auto{font-size:.8rem;font-weight:700;background:rgba(79,224,142,.12);color:var(--link);
   border:1px solid rgba(79,224,142,.25);border-radius:999px;padding:3px 10px}
-.deal-links ul{margin:8px 0}
-.deal-links li{margin:6px 0}
-.deal-links a{color:var(--link);font-weight:650}
 .disc-card{border:1px solid var(--line-soft);border-radius:14px;padding:14px 16px;margin-bottom:10px;
   background:linear-gradient(180deg,#121915,#0e130f)}
 .disc-card h4{margin:0 0 4px}
@@ -233,15 +230,8 @@ select{appearance:none;-webkit-appearance:none;
 .txn-neg{color:var(--red)}
 .shift-math{width:100%;font-size:.9rem;color:var(--muted);margin:-4px 0 0}
 
-/* ---------- stocks / misc ---------- */
-.stock-card{background:linear-gradient(180deg,#131a15,#0e130f);border:1px solid var(--line-soft);border-radius:14px;padding:14px;margin:10px 0}
-.stock-card h4{margin:0 0 8px;font-size:1.05rem;letter-spacing:.04em}
+/* ---------- misc ---------- */
 .mini-chart{width:100%;height:64px;display:block;background:#0a0e0b;border-radius:10px;margin:8px 0 2px;border:1px solid var(--line-soft)}
-.video-list{list-style:none;padding:0;margin:0}
-.video-list li{margin:10px 0}
-.video-list a{color:var(--link);text-decoration:none;font-weight:550}
-.video-list a:hover{text-decoration:underline}
-.inline-num{width:110px;padding:8px 10px;border-radius:10px;border:1px solid var(--input-line);background:var(--input-bg);color:inherit;font-size:1rem}
 .sync-code{width:100%;min-height:74px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;
   word-break:break-all;padding:10px;border-radius:10px;border:1px solid var(--input-line);background:#0a0e0b;color:inherit;margin:8px 0}
 .disc-card{border-left:3px solid transparent}
