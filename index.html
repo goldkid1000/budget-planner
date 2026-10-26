@@ -40,6 +40,7 @@
       <button class="nav-btn" data-view="hours" type="button">🕐 Possible Hours</button>
       <button class="nav-btn" data-view="mymoney" type="button">🏦 My Money</button>
       <button class="nav-btn" data-view="bills" type="button">🧾 Bills</button>
+      <button class="nav-btn" data-view="loans" type="button">🎓 Loans</button>
       <button class="nav-btn" data-view="discounts" type="button">🎓 Discounts</button>
       <button class="nav-btn" data-view="earn" type="button">💰 Earn</button>
       <button class="nav-btn" data-view="calculators" type="button">🧮 Calculators</button>
@@ -656,6 +657,43 @@
       </div>
     </section>
 
+    <!-- ================= LOANS ================= -->
+    <section class="view" id="view-loans">
+      <h2>🎓 Loans</h2>
+      <div class="card">
+        <h3>🎓 Your loans</h3>
+        <p class="hint">Type what you owe — balance, yearly interest rate, and minimum payment a month. Everything stays on this device. Loan payments are NOT added to your Bills here: a payment only belongs in Bills once repayment actually starts.</p>
+        <div class="add-row bill-add">
+          <input id="loanName" type="text" placeholder="Loan name" maxlength="60" aria-label="Loan name">
+          <input id="loanBalance" type="number" min="0" step="0.01" placeholder="$ balance" aria-label="Loan balance">
+          <input id="loanApr" type="number" min="0" step="0.01" placeholder="Rate % / year" aria-label="Interest rate percent per year">
+          <input id="loanMin" type="number" min="0" step="0.01" placeholder="$ min / month" aria-label="Minimum payment per month">
+          <button class="btn-primary" id="addLoanBtn" type="button">Add loan</button>
+        </div>
+        <p class="bill-total">Total owed: <strong id="loanTotal">$0</strong></p>
+        <div id="loanList"></div>
+      </div>
+
+      <div class="card">
+        <h3>📅 Payoff plan</h3>
+        <p class="explain" id="loanLeftoverLine"></p>
+        <label class="field">Extra I can put in each month
+          <input id="loanExtraInput" type="number" min="0" step="1" placeholder="0">
+        </label>
+        <div class="add-row">
+          <button class="btn-chip" id="loanUseHalfBtn" type="button">Use half my leftover</button>
+          <button class="btn-chip" id="loanUseAllBtn" type="button">Use all my leftover</button>
+        </div>
+        <div id="loanPlanOut"></div>
+      </div>
+
+      <div class="card">
+        <h3>💡 Good to know</h3>
+        <p>Federal student loans usually don't need payments while you're enrolled at least half-time, plus a 6-month grace period after you leave school — your servicer (or studentaid.gov for federal loans) can confirm yours. If money gets tight later, federal loans have income-driven plans that set the payment from your income, and deferment/forbearance as a backup. Private loans play by different rules — call that servicer and ask about hardship options.</p>
+        <p class="hint">This tab is a calculator, not loan advice: rates and rules change, so confirm the real numbers with your servicer.</p>
+      </div>
+    </section>
+
     <!-- ================= DISCOUNTS ================= -->
     <section class="view" id="view-discounts">
       <h2>🎓 Discounts</h2>
@@ -768,6 +806,7 @@
   <button class="nav-btn" data-view="hours" type="button">🕐<span>Hours</span></button>
   <button class="nav-btn" data-view="mymoney" type="button">🏦<span>My Money</span></button>
   <button class="nav-btn" data-view="bills" type="button">🧾<span>Bills</span></button>
+  <button class="nav-btn" data-view="loans" type="button">🎓<span>Loans</span></button>
   <button class="nav-btn" data-view="discounts" type="button">🎓<span>Discounts</span></button>
   <button class="nav-btn" data-view="earn" type="button">💰<span>Earn</span></button>
   <button class="nav-btn" data-view="calculators" type="button">🧮<span>Calc</span></button>

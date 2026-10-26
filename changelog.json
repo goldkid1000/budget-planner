@@ -1,11 +1,29 @@
 {
   "versions": [
     {
+      "v": "2.22.0",
+      "date": "Oct 26, 2026",
+      "notify": true,
+      "notes": [
+        "New Loans tab: add each loan (balance, yearly rate, minimum payment) and see its payoff date and total interest \u2014 plus a payoff plan where extra money each month goes to your highest-rate loan first, showing the new payoff date and exactly how much interest you save vs minimums only. A 'use half/all my leftover' button fills the extra from your Budget tab's monthly leftover, so 'what can I put in' comes from your real budget.",
+        "Also includes the v2.21.0 paycheck fixes: flat per-check fees no longer multiply on every-2-weeks/monthly pay, and the monthly next-payday countdown no longer skips payday-today."
+      ]
+    },
+    {
+      "v": "2.21.0",
+      "date": "Oct 25, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed the paycheck math for every-2-weeks and monthly pay: flat fees like the membership fee and stock lines are a fixed amount per check, so a biweekly check now shows one fee instead of two \u2014 take-home was understated by the extra fees. Weekly pay is unchanged.",
+        "Fixed the monthly next-payday countdown: when today is payday it now says 0 days instead of jumping to next month, matching how weekly and every-2-weeks already worked."
+      ]
+    },
+    {
       "v": "2.20.1",
       "date": "Oct 24, 2026",
       "notify": true,
       "notes": [
-        "Work shifts now say their hours: whenever a shift has start/end times, the week view and the 'Your week' export show it like the other lines — 'Work · 4:30 PM – 8:00 PM · 3.5 hrs' — instead of 'hrs planned (no times set)'. Shifts without times keep the old fallback (times are never invented)."
+        "Work shifts now say their hours: whenever a shift has start/end times, the week view and the 'Your week' export show it like the other lines \u2014 'Work \u00b7 4:30 PM \u2013 8:00 PM \u00b7 3.5 hrs' \u2014 instead of 'hrs planned (no times set)'. Shifts without times keep the old fallback (times are never invented)."
       ]
     },
     {
@@ -13,8 +31,8 @@
       "date": "Oct 24, 2026",
       "notify": true,
       "notes": [
-        "Suggested work is now editable: in the ✨ Suggest preview, type any day's start/end times, remove a shift, or add one to a day off — totals, pay and overlap checks update live as you type, and Apply writes your edits, not the original suggestion.",
-        "Weekend rule: a suggestion never leaves Saturday AND Sunday both off — Walmart only allows one weekend day off. When Saturday can take work, the suggestion moves a 2-hour block there; when it can't (meet day, busy day, or no free stretch), the preview warns instead of staying silent.",
+        "Suggested work is now editable: in the \u2728 Suggest preview, type any day's start/end times, remove a shift, or add one to a day off \u2014 totals, pay and overlap checks update live as you type, and Apply writes your edits, not the original suggestion.",
+        "Weekend rule: a suggestion never leaves Saturday AND Sunday both off \u2014 Walmart only allows one weekend day off. When Saturday can take work, the suggestion moves a 2-hour block there; when it can't (meet day, busy day, or no free stretch), the preview warns instead of staying silent.",
         "The same weekend warning now shows on your week view and week exports whenever your applied plan has work planned but both weekend days empty."
       ]
     },
@@ -23,10 +41,10 @@
       "date": "Oct 24, 2026",
       "notify": true,
       "notes": [
-        "Removed the Stocks tab: paper-trading stocks isn't budgeting, and this app shouldn't look like investing advice. Your pay-stub stock lines (company stock contribution, stock purchase) are untouched — those are real paycheck math.",
+        "Removed the Stocks tab: paper-trading stocks isn't budgeting, and this app shouldn't look like investing advice. Your pay-stub stock lines (company stock contribution, stock purchase) are untouched \u2014 those are real paycheck math.",
         "Trimmed the Discounts tab: the deal-search links, cashback-service explainers, and cashback estimator are gone, along with a Refresh button that never actually refreshed anything. What stays: your deal watchlist, the student-discount directory, and the discount calculator (now in Calculators).",
-        "Trimmed the Calculators tab: split-a-bill and tip math are gone — restaurant math isn't budgeting. Unit-price comparison stays.",
-        "New on the Budget tab: a due-soon line under Bills due — anything unpaid and overdue, plus what's due in the next 7 days, so a due date can't sneak up on you."
+        "Trimmed the Calculators tab: split-a-bill and tip math are gone \u2014 restaurant math isn't budgeting. Unit-price comparison stays.",
+        "New on the Budget tab: a due-soon line under Bills due \u2014 anything unpaid and overdue, plus what's due in the next 7 days, so a due date can't sneak up on you."
       ]
     },
     {
@@ -34,8 +52,8 @@
       "date": "Oct 24, 2026",
       "notify": true,
       "notes": [
-        "Fixed month-end dates: your savings-goal date and a monthly payday no longer skip a month when they fall on the 29th–31st — a goal checked on Oct 31 used to show December instead of November, and a payday on the 31st skipped February entirely. Dates now land on the last day of the short month instead.",
-        "Paycheck math re-verified: overtime at 1.5× over 40 hrs, weekly/biweekly/monthly take-home, and the NY 2025 estimate brackets all check out."
+        "Fixed month-end dates: your savings-goal date and a monthly payday no longer skip a month when they fall on the 29th\u201331st \u2014 a goal checked on Oct 31 used to show December instead of November, and a payday on the 31st skipped February entirely. Dates now land on the last day of the short month instead.",
+        "Paycheck math re-verified: overtime at 1.5\u00d7 over 40 hrs, weekly/biweekly/monthly take-home, and the NY 2025 estimate brackets all check out."
       ]
     },
     {
@@ -43,11 +61,11 @@
       "date": "Oct 21, 2026",
       "notify": true,
       "notes": [
-        "Big polish update: switching tabs, opening What's New, expanding sections (like Your week) and adding donut slices now animate smoothly — and every animation turns off if your phone is set to reduce motion. Buttons also respond without the old double-tap delay.",
-        "New on the Budget tab: a per-day pace line under 'You'll have left' — what's left spread over the days left in the month, or what to trim per day to get back on track.",
-        "Fixed: tapping a donut slice could show a category's old numbers after you edited it — slice details now always show the slice as it is right now, and new slices sweep in.",
-        "Fixed: a sync code made by an older version could break the app on the other device — imports now get the same full setup as a first load, so nothing is missing.",
-        "Fixed: weeks logged before pay breakdowns existed could show one take-home in the list and a different one inside their breakdown — they always match now. And zeroing a day's hours in the planner now removes its shift from Your week and the week export, even if that day still had old times set."
+        "Big polish update: switching tabs, opening What's New, expanding sections (like Your week) and adding donut slices now animate smoothly \u2014 and every animation turns off if your phone is set to reduce motion. Buttons also respond without the old double-tap delay.",
+        "New on the Budget tab: a per-day pace line under 'You'll have left' \u2014 what's left spread over the days left in the month, or what to trim per day to get back on track.",
+        "Fixed: tapping a donut slice could show a category's old numbers after you edited it \u2014 slice details now always show the slice as it is right now, and new slices sweep in.",
+        "Fixed: a sync code made by an older version could break the app on the other device \u2014 imports now get the same full setup as a first load, so nothing is missing.",
+        "Fixed: weeks logged before pay breakdowns existed could show one take-home in the list and a different one inside their breakdown \u2014 they always match now. And zeroing a day's hours in the planner now removes its shift from Your week and the week export, even if that day still had old times set."
       ]
     },
     {
@@ -55,7 +73,7 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "The athlete warning now checks YOUR sleep: set your wake-up and lights-out times in the new 😴 Sleep schedule (Hours tab) and the app judges a work plan by your real sleep — exact hours per night and your latest safe work end — instead of calling every 20+ hour week too heavy.",
+        "The athlete warning now checks YOUR sleep: set your wake-up and lights-out times in the new \ud83d\ude34 Sleep schedule (Hours tab) and the app judges a work plan by your real sleep \u2014 exact hours per night and your latest safe work end \u2014 instead of calling every 20+ hour week too heavy.",
         "If a shift ends too late for your wind-down, the warning names the day and the exact minutes it costs your sleep. Leave the sleep times blank and the old hours-based caution stays."
       ]
     },
@@ -64,7 +82,7 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "You can now download your week: in the “Your week” view, tap 📸 Image to save or share a picture of your whole week — classes, practices, workouts + work, with totals and what it pays — or 📄 Text file for a plain-text copy you can paste anywhere."
+        "You can now download your week: in the \u201cYour week\u201d view, tap \ud83d\udcf8 Image to save or share a picture of your whole week \u2014 classes, practices, workouts + work, with totals and what it pays \u2014 or \ud83d\udcc4 Text file for a plain-text copy you can paste anywhere."
       ]
     },
     {
@@ -72,9 +90,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "Planning now runs off your class schedule end to end: the ✨ Suggest preview shows the full real pay for the plan — gross, every tax and deduction taken, your take-home, and about per month — using the same pay-stub math as your paycheck.",
-        "You can type your own target hours (like 22) next to the 12/16/20 chips, and a new “✨ Plan from my schedule” button in the planner jumps you straight to the suggestions.",
-        "Free days start at a friendlier time: a day with nothing scheduled — like Saturday — now starts its suggested shift at 10:00 AM instead of 7:00 AM."
+        "Planning now runs off your class schedule end to end: the \u2728 Suggest preview shows the full real pay for the plan \u2014 gross, every tax and deduction taken, your take-home, and about per month \u2014 using the same pay-stub math as your paycheck.",
+        "You can type your own target hours (like 22) next to the 12/16/20 chips, and a new \u201c\u2728 Plan from my schedule\u201d button in the planner jumps you straight to the suggestions.",
+        "Free days start at a friendlier time: a day with nothing scheduled \u2014 like Saturday \u2014 now starts its suggested shift at 10:00 AM instead of 7:00 AM."
       ]
     },
     {
@@ -82,9 +100,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "Whole-app cleanup: everything tidied into comfortable, clearly-labeled cards so each thing is where you'd expect to find it — schedule, suggested hours, planner, break calendar and work log now sit in one clean order in the Hours tab, and the Budget summary leads its tab.",
+        "Whole-app cleanup: everything tidied into comfortable, clearly-labeled cards so each thing is where you'd expect to find it \u2014 schedule, suggested hours, planner, break calendar and work log now sit in one clean order in the Hours tab, and the Budget summary leads its tab.",
         "Roomier buttons and spacing everywhere: every tap target is a comfortable size, money figures line up neatly, and long names wrap instead of squeezing the layout on your phone.",
-        "Nothing about your numbers or how anything calculates has changed — same pay-stub math, same saved data, just a tidier app."
+        "Nothing about your numbers or how anything calculates has changed \u2014 same pay-stub math, same saved data, just a tidier app."
       ]
     },
     {
@@ -92,9 +110,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "NEW 💵 Work Log pay breakdowns: open any logged week and tap \"💵 Pay breakdown\" to see that week's full pay picture — gross pay, every tax and deduction taken (federal, NY, Social Security, Medicare, 401K and the rest from your pay stub setup), total taken, and your exact take-home.",
-        "Weeks over 40 hours call out the overtime right in the breakdown — how many OT hours at 1.5× and how much extra gross they added.",
-        "NEW 📊 \"Your records\" now totals it all up: total gross logged and total taken (taxes + deductions) across every week you've logged, next to your hours and take-home totals. All of it is calculated with the same pay-stub math as the Paycheck tab, straight from the hours in your Work Log."
+        "NEW \ud83d\udcb5 Work Log pay breakdowns: open any logged week and tap \"\ud83d\udcb5 Pay breakdown\" to see that week's full pay picture \u2014 gross pay, every tax and deduction taken (federal, NY, Social Security, Medicare, 401K and the rest from your pay stub setup), total taken, and your exact take-home.",
+        "Weeks over 40 hours call out the overtime right in the breakdown \u2014 how many OT hours at 1.5\u00d7 and how much extra gross they added.",
+        "NEW \ud83d\udcca \"Your records\" now totals it all up: total gross logged and total taken (taxes + deductions) across every week you've logged, next to your hours and take-home totals. All of it is calculated with the same pay-stub math as the Paycheck tab, straight from the hours in your Work Log."
       ]
     },
     {
@@ -102,8 +120,8 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "NEW 🗓️ Schedule tabs: the schedule card is now tabs — Classes / Practices / Workouts. Tap a tab, pick the days and start/end times, tap Add, then “add another” to keep going with more of the same — two classes in a row, then switch to Practices and put your practice times in.",
-        "NEW 💪 Workouts tab: solo training days get their own tab and their own times. They count toward busy days, ✨ Suggest my work hours routes around them, and the week view flags work that overlaps them — exactly like classes and practices.",
+        "NEW \ud83d\uddd3\ufe0f Schedule tabs: the schedule card is now tabs \u2014 Classes / Practices / Workouts. Tap a tab, pick the days and start/end times, tap Add, then \u201cadd another\u201d to keep going with more of the same \u2014 two classes in a row, then switch to Practices and put your practice times in.",
+        "NEW \ud83d\udcaa Workouts tab: solo training days get their own tab and their own times. They count toward busy days, \u2728 Suggest my work hours routes around them, and the week view flags work that overlaps them \u2014 exactly like classes and practices.",
         "The saved list now shows only the tab you're on, sorted by name, and tapping any entry in your week view jumps straight to editing it on its own tab. Everything you already saved carries over untouched."
       ]
     },
@@ -112,9 +130,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "NEW 🚫 Busy-day guard: if a day's classes + practice add up to 5+ hrs, ✨ Suggest my work hours now says \"no work\" for that day and puts the hours on your other days instead.",
-        "You can change the cutoff to 4h or 6h in the Suggest section — look for \"Busy day = no work at\". Days at or over the cutoff show why right in the preview: \"🚫 no work — busy day (5 hrs 30 min of class + practice)\".",
-        "The preview now says why every off day is off — \"off — rest day\" on Sundays, \"off — meet day\" on meet days. The guard only affects Suggest: your manual planner stays fully yours."
+        "NEW \ud83d\udeab Busy-day guard: if a day's classes + practice add up to 5+ hrs, \u2728 Suggest my work hours now says \"no work\" for that day and puts the hours on your other days instead.",
+        "You can change the cutoff to 4h or 6h in the Suggest section \u2014 look for \"Busy day = no work at\". Days at or over the cutoff show why right in the preview: \"\ud83d\udeab no work \u2014 busy day (5 hrs 30 min of class + practice)\".",
+        "The preview now says why every off day is off \u2014 \"off \u2014 rest day\" on Sundays, \"off \u2014 meet day\" on meet days. The guard only affects Suggest: your manual planner stays fully yours."
       ]
     },
     {
@@ -122,10 +140,10 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "Practices count too: the Class Schedule form now has a Class / Practice toggle — add your practices with their start and end times (e.g. Track Practice, Mon/Wed/Fri 3:30–5:30 PM) and they appear in your week with a 🏃 marker, right alongside your classes.",
-        "✨ Suggest my work hours now routes around your practices exactly like your classes — same 30 minutes of breathing room before and after — and the week view's ⚠️ overlap warnings check your planned work shifts against practices too.",
-        "The schedule summary splits your load by kind — Classes: X / week · Practice: Y / week · Work planned — and adding a practice tags those days as Practice days in the planner, same as classes always have.",
-        "Classes you already saved carry over untouched — anything without a kind is treated as a class, exactly as before."
+        "Practices count too: the Class Schedule form now has a Class / Practice toggle \u2014 add your practices with their start and end times (e.g. Track Practice, Mon/Wed/Fri 3:30\u20135:30 PM) and they appear in your week with a \ud83c\udfc3 marker, right alongside your classes.",
+        "\u2728 Suggest my work hours now routes around your practices exactly like your classes \u2014 same 30 minutes of breathing room before and after \u2014 and the week view's \u26a0\ufe0f overlap warnings check your planned work shifts against practices too.",
+        "The schedule summary splits your load by kind \u2014 Classes: X / week \u00b7 Practice: Y / week \u00b7 Work planned \u2014 and adding a practice tags those days as Practice days in the planner, same as classes always have.",
+        "Classes you already saved carry over untouched \u2014 anything without a kind is treated as a class, exactly as before."
       ]
     },
     {
@@ -133,9 +151,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "NEW ✨ Suggest my work hours in the Class Schedule: pick a weekly target — Light 12h, Typical 16h, or Max 20h — and the app fits work shifts around your classes for you.",
-        "Every shift keeps 30 minutes of breathing room before and after each class, Sundays and meet days stay off, and shifts run 2–6 hours between 7:00 AM and 10:00 PM.",
-        "You preview the whole suggested week first — if your classes only leave room for less than the target, it tells you. Nothing changes until you tap Apply, which drops the week into your school planner with real start/end times you can still edit day by day."
+        "NEW \u2728 Suggest my work hours in the Class Schedule: pick a weekly target \u2014 Light 12h, Typical 16h, or Max 20h \u2014 and the app fits work shifts around your classes for you.",
+        "Every shift keeps 30 minutes of breathing room before and after each class, Sundays and meet days stay off, and shifts run 2\u20136 hours between 7:00 AM and 10:00 PM.",
+        "You preview the whole suggested week first \u2014 if your classes only leave room for less than the target, it tells you. Nothing changes until you tap Apply, which drops the week into your school planner with real start/end times you can still edit day by day."
       ]
     },
     {
@@ -143,9 +161,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "Exact times fixed: durations are now figured to the minute — a class or shift from 8:00 to 8:50 AM shows 50 min (0.83 hrs) instead of rounding down to 0.75 hrs. Hours you type keep their exact value too (0–12, to the minute).",
-        "NEW Class Schedule in the Hours tab: add as many classes as you have — a name, the days it meets, and its start and end times — and edit or delete any of them whenever your schedule changes.",
-        "Week view: your classes and your planned school-week work shifts side by side for the whole week, with ⚠️ overlap warnings whenever a work shift runs into a class, plus your total class time and planned work hours per week.",
+        "Exact times fixed: durations are now figured to the minute \u2014 a class or shift from 8:00 to 8:50 AM shows 50 min (0.83 hrs) instead of rounding down to 0.75 hrs. Hours you type keep their exact value too (0\u201312, to the minute).",
+        "NEW Class Schedule in the Hours tab: add as many classes as you have \u2014 a name, the days it meets, and its start and end times \u2014 and edit or delete any of them whenever your schedule changes.",
+        "Week view: your classes and your planned school-week work shifts side by side for the whole week, with \u26a0\ufe0f overlap warnings whenever a work shift runs into a class, plus your total class time and planned work hours per week.",
         "Adding a class also tags those days as Class days in the planner above, so your plan and your schedule stay in sync."
       ]
     },
@@ -154,10 +172,10 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "Type your hours in the Possible Hours planner — the sliders are gone. Every day in the school-week and break-week planners (and the selected day in the Break Calendar) is now a field: tap it and type, 0–12 hrs in quarter-hour steps.",
-        "Optional shift times per day: tap '+ times', set a start and an end, and the hours fill in from the shift length using the exact Paycheck-tab rule — 30 min unpaid meal on shifts over 6 hrs, paid breaks never subtracted. Type hours manually any time to override.",
-        "NEW Work Log in the Hours tab: log the hours you actually worked each week (type them day by day, set shift times, or copy your school plan in as worked) and look back at your records — most hours in a week with its date, average hours per week, total hours and total take-home logged, with per-day detail for every saved week.",
-        "Break countdown: the Break Calendar now shows a countdown chip for the break you're viewing — 'Starts in N days', 'Happening now — ends in N days', or 'Ended …' — and every saved break carries its own countdown tag ('starts in 23 days', '12 days left', 'done')."
+        "Type your hours in the Possible Hours planner \u2014 the sliders are gone. Every day in the school-week and break-week planners (and the selected day in the Break Calendar) is now a field: tap it and type, 0\u201312 hrs in quarter-hour steps.",
+        "Optional shift times per day: tap '+ times', set a start and an end, and the hours fill in from the shift length using the exact Paycheck-tab rule \u2014 30 min unpaid meal on shifts over 6 hrs, paid breaks never subtracted. Type hours manually any time to override.",
+        "NEW Work Log in the Hours tab: log the hours you actually worked each week (type them day by day, set shift times, or copy your school plan in as worked) and look back at your records \u2014 most hours in a week with its date, average hours per week, total hours and total take-home logged, with per-day detail for every saved week.",
+        "Break countdown: the Break Calendar now shows a countdown chip for the break you're viewing \u2014 'Starts in N days', 'Happening now \u2014 ends in N days', or 'Ended \u2026' \u2014 and every saved break carries its own countdown tag ('starts in 23 days', '12 days left', 'done')."
       ]
     },
     {
@@ -166,9 +184,9 @@
       "notify": true,
       "notes": [
         "NEW Break Calendar in the Possible Hours tab: choose when your school break starts and when you return, and every day in between becomes a tappable calendar cell. Days start filled from your break-week pattern (Sundays off); tap to switch a day on or off and fine-tune its hours with steppers.",
-        "Whole-break pay estimate: total work days, total hours, gross and take-home for the entire break — figured week by week through the same pay-stub math as the Paycheck tab, with a per-week breakdown when a break spans multiple weeks.",
-        "Save multiple breaks by name (Winter Break, Spring Break…) and load or delete them anytime — everything stays on your device.",
-        "School weeks improved: one-tap Normal Week / Meet Week / Exam Week templates (Meet Week lightens Friday for travel and zeroes Saturday), Class / Practice / Meet tags on each day that persist with the plan, and a one-line load summary — Work Xh · Practice days: N · Meet: day."
+        "Whole-break pay estimate: total work days, total hours, gross and take-home for the entire break \u2014 figured week by week through the same pay-stub math as the Paycheck tab, with a per-week breakdown when a break spans multiple weeks.",
+        "Save multiple breaks by name (Winter Break, Spring Break\u2026) and load or delete them anytime \u2014 everything stays on your device.",
+        "School weeks improved: one-tap Normal Week / Meet Week / Exam Week templates (Meet Week lightens Friday for travel and zeroes Saturday), Class / Practice / Meet tags on each day that persist with the plan, and a one-line load summary \u2014 Work Xh \u00b7 Practice days: N \u00b7 Meet: day."
       ]
     },
     {
@@ -176,9 +194,9 @@
       "date": "Oct 20, 2026",
       "notify": true,
       "notes": [
-        "NEW Possible Hours tab: a what-if week planner for students whose hours change with classes and track. Set the hours you could work each day (Mon–Sun) and see the week's gross and take-home using the exact same pay-stub math as the Paycheck tab.",
-        "School weeks and break weeks each keep their own saved plan — flip the toggle and both are remembered on your device.",
-        "One-tap scenarios — Light 12h, Typical 16h, Max 20h, Break week 28h — plus a compare strip showing weekly/monthly take-home and how fast each pace reaches your savings goal.",
+        "NEW Possible Hours tab: a what-if week planner for students whose hours change with classes and track. Set the hours you could work each day (Mon\u2013Sun) and see the week's gross and take-home using the exact same pay-stub math as the Paycheck tab.",
+        "School weeks and break weeks each keep their own saved plan \u2014 flip the toggle and both are remembered on your device.",
+        "One-tap scenarios \u2014 Light 12h, Typical 16h, Max 20h, Break week 28h \u2014 plus a compare strip showing weekly/monthly take-home and how fast each pace reaches your savings goal.",
         "Athlete guardrails: school weeks over ~20 hrs get a gentle warning about sleep and recovery, and any single day over 8 hrs is flagged."
       ]
     },
@@ -186,7 +204,7 @@
       "v": "2.4.4",
       "date": "Oct 19, 2026",
       "notes": [
-        "Donut center label reworked: \"REMAINING\" (small, muted gold) above the amount, \"this month\" below — cleaner than the old wording."
+        "Donut center label reworked: \"REMAINING\" (small, muted gold) above the amount, \"this month\" below \u2014 cleaner than the old wording."
       ]
     },
     {
@@ -204,14 +222,14 @@
       "notify": true,
       "notes": [
         "Fixed white bar behind the status bar on mobile.",
-        "Header title is now solid champagne — crisper, no washed-out gradient."
+        "Header title is now solid champagne \u2014 crisper, no washed-out gradient."
       ]
     },
     {
       "v": "2.4.1",
       "date": "Oct 19, 2026",
       "notes": [
-        "Earn tab: every option now links to its real signup site — tap a name to open it."
+        "Earn tab: every option now links to its real signup site \u2014 tap a name to open it."
       ]
     },
     {
@@ -219,14 +237,14 @@
       "date": "2026-10-19",
       "notify": true,
       "notes": [
-        "Sovereign visual rework: noir-lux banking theme — champagne gold (#d4af6a) on warm charcoal/near-black, hairline gold dividers, serif display numerals for the donut and all money figures, subtle film grain + vignette. True fullscreen on mobile: dynamic viewport (100dvh), edge-to-edge backgrounds, notch/safe-area padding on header, banners, and tab bar. Manifest display → fullscreen (falls back to standalone). CSS-only — all 8 tabs, paycheck math, Earn tab, Stocks, Discounts, and sync codes untouched."
+        "Sovereign visual rework: noir-lux banking theme \u2014 champagne gold (#d4af6a) on warm charcoal/near-black, hairline gold dividers, serif display numerals for the donut and all money figures, subtle film grain + vignette. True fullscreen on mobile: dynamic viewport (100dvh), edge-to-edge backgrounds, notch/safe-area padding on header, banners, and tab bar. Manifest display \u2192 fullscreen (falls back to standalone). CSS-only \u2014 all 8 tabs, paycheck math, Earn tab, Stocks, Discounts, and sync codes untouched."
       ]
     },
     {
       "version": "2.3.0",
       "date": "2026-10-19",
       "notes": [
-        "NEW Earn tab: 29 dorm-friendly ways to make money in 6 groups (user testing sites, microtasks, freelance, selling, campus, gaming/PC) — each with a toggle and realistic monthly range, a live combined $/mo total bar, and one button that adds the midpoint as a separate side-income line (never touches paycheck math). Honest framing: $200–600/mo is a boost, not a paycheck replacement; second retail job, plasma, crypto/MLM/survey farms excluded."
+        "NEW Earn tab: 29 dorm-friendly ways to make money in 6 groups (user testing sites, microtasks, freelance, selling, campus, gaming/PC) \u2014 each with a toggle and realistic monthly range, a live combined $/mo total bar, and one button that adds the midpoint as a separate side-income line (never touches paycheck math). Honest framing: $200\u2013600/mo is a boost, not a paycheck replacement; second retail job, plasma, crypto/MLM/survey farms excluded."
       ],
       "notify": true
     },
@@ -235,7 +253,7 @@
       "date": "2026-10-19",
       "notify": true,
       "notes": [
-        "Duotone visual rework: mint + amber accents on a deeper layered dark background — stronger hierarchy on every tab, richer cards, and tighter spacing.",
+        "Duotone visual rework: mint + amber accents on a deeper layered dark background \u2014 stronger hierarchy on every tab, richer cards, and tighter spacing.",
         "Donut glow-up: soft halo behind the donut, slow rotating sheen (respects reduced-motion), larger on desktop.",
         "Goal progress bar now fades mint to amber; result boxes get an accent rail; hints read as info strips.",
         "Desktop sidebar active item gets an amber accent rail; bottom tab bar on phones is a tighter 7-item fit with a glowing active pill.",
@@ -247,7 +265,7 @@
       "date": "2026-10-19",
       "notify": true,
       "notes": [
-        "Full visual rework: a premium dark fintech look — deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.",
+        "Full visual rework: a premium dark fintech look \u2014 deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.",
         "New micro-details: gradient card titles with accent underlines, bolder money figures, smoother press feedback, and clearer focus states for keyboard users. All animations still respect your reduced-motion setting."
       ]
     },
@@ -255,7 +273,7 @@
       "version": "2.0.8",
       "date": "2026-10-19",
       "notes": [
-        "Home-screen logo now embedded directly in the app (same trick as StudyLens) — shows reliably when adding to Home Screen."
+        "Home-screen logo now embedded directly in the app (same trick as StudyLens) \u2014 shows reliably when adding to Home Screen."
       ],
       "notify": true
     },
@@ -280,7 +298,7 @@
       "version": "2.0.5",
       "date": "2026-10-19",
       "notes": [
-        "Fixed: the Install button could stay visible inside the installed app — the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web."
+        "Fixed: the Install button could stay visible inside the installed app \u2014 the stylesheet was overriding the hide signal. The install prompt now reliably hides when installed and shows only on the web."
       ],
       "notify": true
     },
@@ -288,7 +306,7 @@
       "version": "2.0.4",
       "date": "2026-10-19",
       "notes": [
-        "Hot-fix: the app's offline cache now always pulls fresh files from the network when a new version installs — the old installer could pack stale files into the new cache, which is how an update could leave you on the old build."
+        "Hot-fix: the app's offline cache now always pulls fresh files from the network when a new version installs \u2014 the old installer could pack stale files into the new cache, which is how an update could leave you on the old build."
       ],
       "notify": true
     },
@@ -296,7 +314,7 @@
       "version": "2.0.3",
       "date": "2026-10-19",
       "notes": [
-        "Fixed updates getting stuck: tapping Update now waits for the new version to actually install before reloading, and the update notice stays until the new version is confirmed running — no more 'latest version' while showing the old number. The footer version number is now written by the app itself, so it can never go stale."
+        "Fixed updates getting stuck: tapping Update now waits for the new version to actually install before reloading, and the update notice stays until the new version is confirmed running \u2014 no more 'latest version' while showing the old number. The footer version number is now written by the app itself, so it can never go stale."
       ],
       "notify": true
     },
@@ -304,8 +322,8 @@
       "version": "2.0.2",
       "date": "2026-10-19",
       "notes": [
-        "Install prompt now hides completely when the app is installed — it only shows on the web.",
-        "Paycheck auto-detections: overtime is now automatic — hours over 40/week are paid at 1.5x and the breakdown says so. A new Auto-detections card shows your next payday (pick your payday weekday; add your last payday date for every-2-weeks pay) and flags odd inputs, like hours over 80/week, a rate below federal minimum wage, or deductions higher than your gross."
+        "Install prompt now hides completely when the app is installed \u2014 it only shows on the web.",
+        "Paycheck auto-detections: overtime is now automatic \u2014 hours over 40/week are paid at 1.5x and the breakdown says so. A new Auto-detections card shows your next payday (pick your payday weekday; add your last payday date for every-2-weeks pay) and flags odd inputs, like hours over 80/week, a rate below federal minimum wage, or deductions higher than your gross."
       ],
       "notify": true
     },
@@ -321,9 +339,9 @@
       "version": "2.0.0",
       "date": "2026-10-19",
       "notes": [
-        "Where-you-work picker (Paycheck tab): Walmart Digital Personal Shopper, Target, Amazon warehouse, McDonald's, or Custom — one tap sets your rate. Presets are starting points; the rate stays editable.",
-        "NEW Stocks tab (educational): watchlist with prices you type in yourself, price-history charts with highs and lows, an allocation calculator against your savings, and beginner investing videos. Paper-trading only — nothing moves real money, and this is not financial advice.",
-        "Device sync code (My Money tab): generate a one-time code on your phone, paste it on your PC, and everything moves over. No server, no account — copy/paste it yourself.",
+        "Where-you-work picker (Paycheck tab): Walmart Digital Personal Shopper, Target, Amazon warehouse, McDonald's, or Custom \u2014 one tap sets your rate. Presets are starting points; the rate stays editable.",
+        "NEW Stocks tab (educational): watchlist with prices you type in yourself, price-history charts with highs and lows, an allocation calculator against your savings, and beginner investing videos. Paper-trading only \u2014 nothing moves real money, and this is not financial advice.",
+        "Device sync code (My Money tab): generate a one-time code on your phone, paste it on your PC, and everything moves over. No server, no account \u2014 copy/paste it yourself.",
         "Deal Watchlist upgrade: store presets (Best Buy, Walmart, Amazon, Target, Newegg), per-item price history with a mini highs/lows chart, and a target-hit alert when the price you see hits your buy price.",
         "Donut chart: tap any slice to see its category, amount, and share of the total; the center number pops up or down as your numbers change.",
         "Fixed empty states: the goal celebration only fires when you set a real goal and reach it; with no income entered, the budget says so plainly instead of showing a $0.00 math chain.",
@@ -342,65 +360,65 @@
     {
       "version": "1.3.0",
       "notes": [
-        "Savings goal date: the goal now recomputes on every keystroke — type hours, bills, or spending and the date moves right away. When you are saving, it says \"You'll hit $X by [Month Year]\" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it — never a made-up date.",
-        "Deal Watchlist in Discount Finder: add an item + the price you would buy at. \"Check price now\" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type — the app never pretends to check a store by itself.",
-        "State tax picker in the Paycheck tab: pick your state and the estimate uses that state's real 2025 standard deduction + brackets (single filer). States with no wage income tax come out $0. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. If you entered a real pay stub, the stub numbers still win. Estimate only — not tax advice, no city/local tax.",
+        "Savings goal date: the goal now recomputes on every keystroke \u2014 type hours, bills, or spending and the date moves right away. When you are saving, it says \"You'll hit $X by [Month Year]\" with the math. When spending eats the whole paycheck, it tells you exactly how short you are per month and how many extra hours/week would fix it \u2014 never a made-up date.",
+        "Deal Watchlist in Discount Finder: add an item + the price you would buy at. \"Check price now\" opens the store page; type the price you see and the app says Deal or Not yet, with a Last checked stamp and a Refresh deals button. Prices are ones you type \u2014 the app never pretends to check a store by itself.",
+        "State tax picker in the Paycheck tab: pick your state and the estimate uses that state's real 2025 standard deduction + brackets (single filer). States with no wage income tax come out $0. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. If you entered a real pay stub, the stub numbers still win. Estimate only \u2014 not tax advice, no city/local tax.",
         "Animations: money numbers count up when they change, the donut glides to its new shape, the goal bar fills smoothly, tabs fade in, buttons give a little press feedback. All of it turns off automatically if your device prefers reduced motion, and it stays light on phones."
       ]
     },
     {
       "version": "1.2.2",
       "notes": [
-        "Every number now shows how it was worked out — the take-home line shows your paid hours × rate → take-home/week → monthly, so you can check it yourself.",
-        "The Budget tab shows an “Updated HH:MM:SS” stamp that refreshes on every change, so you can see the numbers are live.",
-        "“Money I have right now” now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.",
+        "Every number now shows how it was worked out \u2014 the take-home line shows your paid hours \u00d7 rate \u2192 take-home/week \u2192 monthly, so you can check it yourself.",
+        "The Budget tab shows an \u201cUpdated HH:MM:SS\u201d stamp that refreshes on every change, so you can see the numbers are live.",
+        "\u201cMoney I have right now\u201d now says plainly whether it is using your typed number or following your My Money balances, with a Clear button to go back to following your balances.",
         "Typing a bill amount or a shift meal break updates the budget right away instead of waiting until you tap away.",
-        "Fixed: a number once typed in “Money I have right now” used to keep overriding your balances with no visible sign — now the source is always shown."
+        "Fixed: a number once typed in \u201cMoney I have right now\u201d used to keep overriding your balances with no visible sign \u2014 now the source is always shown."
       ]
     },
     {
       "version": "1.2.1",
       "notes": [
-        "Savings update your budget right away — typing your saved balance or checking balance updates “You’ll have left” immediately, no tab switch needed.",
-        "Phone layout — the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar."
+        "Savings update your budget right away \u2014 typing your saved balance or checking balance updates \u201cYou\u2019ll have left\u201d immediately, no tab switch needed.",
+        "Phone layout \u2014 the top header no longer hides under the iPhone status bar, and the last card no longer hides behind the bottom tab bar."
       ]
     },
     {
       "notes": [
-        "Paycheck now shows every line from a real pay stub — federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase — each with a plain-words explanation.",
-        "Use my real pay stub — enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.",
-        "Your budget starts from the money you actually have — \"Money I have right now\" at the top of the Budget tab, filled in from your balances, editable in place.",
-        "Installable — tap \"Install app\" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.",
-        "Everyone starts blank — your numbers stay on your own device only. Nobody else sees them."
+        "Paycheck now shows every line from a real pay stub \u2014 federal tax, NY state tax, NY FLI, Social Security, Medicare, 401K, membership fee, company stock contribution, and stock purchase \u2014 each with a plain-words explanation.",
+        "Use my real pay stub \u2014 enter each line from your stub once and the app uses your real rates from then on. Reset to estimates anytime.",
+        "Your budget starts from the money you actually have \u2014 \"Money I have right now\" at the top of the Budget tab, filled in from your balances, editable in place.",
+        "Installable \u2014 tap \"Install app\" at the top of the Budget tab to add it to your phone or PC home screen. Works offline once installed.",
+        "Everyone starts blank \u2014 your numbers stay on your own device only. Nobody else sees them."
       ],
       "version": "1.2.0"
     },
     {
       "notes": [
-        "What's New actually shows the notes now — the box used to open empty.",
+        "What's New actually shows the notes now \u2014 the box used to open empty.",
         "Typing a category amount no longer kicks you out of the box after each number.",
-        "Bills can now be edited in place — name, amount, due date, and auto-pay — instead of delete-and-retype.",
+        "Bills can now be edited in place \u2014 name, amount, due date, and auto-pay \u2014 instead of delete-and-retype.",
         "Switching between Total hours and My shifts no longer wipes the tip calculator's %.",
         "New rate box says plainly to type a rate instead of showing $0.00.",
         "New: Check for updates button in the footer.",
-        "Balances no longer start with a made-up date — empty until you set it."
+        "Balances no longer start with a made-up date \u2014 empty until you set it."
       ],
       "version": "1.1.1"
     },
     {
       "notes": [
-        "Dark background — easier on the eyes, day and night.",
-        "Bank statement import — drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.",
-        "Meal breaks count — shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.",
-        "Simpler to read — plain words, one main action per tab, extra details tucked behind “Show details”.",
-        "Update notices — the app tells you when a new version is out, once per version.",
+        "Dark background \u2014 easier on the eyes, day and night.",
+        "Bank statement import \u2014 drop in a CSV from your bank and the app fills in your balance. Nothing leaves your device, no bank login.",
+        "Meal breaks count \u2014 shifts over 6 hours start with a 30-minute unpaid meal break, taken off your paid hours.",
+        "Simpler to read \u2014 plain words, one main action per tab, extra details tucked behind \u201cShow details\u201d.",
+        "Update notices \u2014 the app tells you when a new version is out, once per version.",
         "Polished on PC and phone."
       ],
       "version": "1.1.0"
     },
     {
       "notes": [
-        "First version — budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators."
+        "First version \u2014 budget donut, paycheck calculator with tax breakdown, My Money, bills, discount finder, and calculators."
       ],
       "version": "1.0.0"
     }

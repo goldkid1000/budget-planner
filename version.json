@@ -1,1 +1,9 @@
-{"notes": ["Work shifts now say their hours: whenever a shift has start/end times, the week view and the 'Your week' export show it like the other lines — 'Work · 4:30 PM – 8:00 PM · 3.5 hrs' — instead of 'hrs planned (no times set)'. Shifts without times keep the old fallback (times are never invented).", "Suggested work is now editable: in the ✨ Suggest preview, type any day's start/end times, remove a shift, or add one to a day off — totals, pay and overlap checks update live as you type, and Apply writes your edits, not the original suggestion.", "Weekend rule: a suggestion never leaves Saturday AND Sunday both off — Walmart only allows one weekend day off. When Saturday can take work, the suggestion moves a 2-hour block there; when it can't (meet day, busy day, or no free stretch), the preview warns instead of staying silent.", "The same weekend warning now shows on your week view and week exports whenever your applied plan has work planned but both weekend days empty."], "notify": true, "updated": "2026-10-24", "version": "2.20.1"}
+{
+  "version": "2.22.0",
+  "updated": "2026-10-26",
+  "notify": true,
+  "notes": [
+    "New Loans tab: add each loan (balance, yearly rate, minimum payment) and see its payoff date and total interest \u2014 plus a payoff plan where extra money each month goes to your highest-rate loan first, showing the new payoff date and exactly how much interest you save vs minimums only. A 'use half/all my leftover' button fills the extra from your Budget tab's monthly leftover, so 'what can I put in' comes from your real budget.",
+    "Also includes the v2.21.0 paycheck fixes: flat per-check fees no longer multiply on every-2-weeks/monthly pay, and the monthly next-payday countdown no longer skips payday-today."
+  ]
+}

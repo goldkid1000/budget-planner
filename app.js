@@ -1,7 +1,7 @@
-/* Budget Planner v2.4.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.22.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.20.1';
+var APP_VERSION = '2.22.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -438,7 +438,13 @@ function parseStatementCSV(text){
 }
 /* paycheck: hours per week, rate, ded profile, freq.
    ded: { ss, medicare, federal, ny, fli, k401 } are % of gross;
-        { membership, stockContrib, stockPurch } are flat $ per pay period.
+        { membership, stockContrib, stockPurch } are flat $ per check.
+   v2.21.0: the flat lines are NOT scaled by freq — a biweekly check
+   carries one membership fee, not two (the old code multiplied them
+   by the weeks-per-period, so biweekly/monthly checks were
+   underpaid by the extra fees). The UI labels them "$ per check"
+   and a saved pay stub stores them per check, so one fee per check
+   is also what makes a stub round-trip exactly.
    Each line is rounded to cents first (like a real pay stub), then summed,
    so the totals match the lines exactly.
    estimate: when passed { stateCode }, federal + state tax come from the
@@ -465,9 +471,10 @@ function calcPaycheck(hours, rate, ded, freq, estimate){
   }
   var fliAmt = round2(periodGross * num0(d.fli) / 100);
   var k401Amt = round2(periodGross * num0(d.k401) / 100);
-  var memberAmt = round2(num0(d.membership) * mult);
-  var stockContribAmt = round2(num0(d.stockContrib) * mult);
-  var stockPurchAmt = round2(num0(d.stockPurch) * mult);
+  /* flat $ per check — never scaled by freq (see header note above) */
+  var memberAmt = round2(num0(d.membership));
+  var stockContribAmt = round2(num0(d.stockContrib));
+  var stockPurchAmt = round2(num0(d.stockPurch));
   var taxesTotal = round2(ssAmt + medicareAmt + fedAmt + nyAmt + fliAmt);
   var dedTotal = round2(k401Amt + memberAmt + stockContribAmt + stockPurchAmt);
   var totalDed = round2(taxesTotal + dedTotal);
@@ -573,6 +580,95 @@ function calcDiscount(price, d1, d2, cashbackPct){
   var cashback = after2 * (cashbackPct / 100);
   var finalPay = after2 - cashback;
   return { after1: after1, after2: after2, cashback: cashback, finalPay: finalPay, saved: price - finalPay };
+}
+
+/* ---------- v2.22.0: loan payoff math — pure amortization, no state -----
+   A loan is { balance, apr (yearly %), min (monthly minimum payment) }.
+   simulateLoan: one loan at its minimum, month by month — interest
+   accrues first, then the payment lands. If the payment doesn't cover a
+   month's interest the balance grows forever, so it reports never: true
+   (never invented: with a positive rate, a payment at or below the first
+   month's interest can never pay it off). 0% APR divides cleanly.
+   Payoff dates come from addMonthsClamped, so a payoff counted from the
+   31st never skips a month. Returns { months, totalPaid, totalInterest,
+   payoff ('Month Year' | ''), never }. */
+function loanPayoffDateStr(months){
+  return addMonthsClamped(new Date(), months).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+function simulateLoan(balance, aprPct, monthlyPayment){
+  var bal = Math.max(0, num0(balance));
+  var r = Math.max(0, num0(aprPct)) / 100 / 12;
+  var pay = Math.max(0, num0(monthlyPayment));
+  if(bal <= 0) return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: false };
+  if(pay <= 0) return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: true };
+  if(r > 0 && pay <= bal * r) return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: true };
+  var months = 0, paid = 0, interest = 0;
+  while(bal > 0 && months < 1200){
+    var intr = bal * r;
+    interest += intr; bal += intr;
+    var p = Math.min(pay, bal);
+    bal -= p; paid += p; months++;
+    if(bal < 0.005) bal = 0;
+  }
+  if(bal > 0) return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: true };
+  return { months: months, totalPaid: round2(paid), totalInterest: round2(interest),
+    payoff: loanPayoffDateStr(months), never: false };
+}
+/* simulateLoanPlan: every loan at its minimum, plus one extra amount a
+   month. Extra — plus the minimum of any loan already paid off, which
+   rolls into the attack — always goes to the highest-APR loan still
+   standing (avalanche: highest rate first = least total interest).
+   Returns { months, totalPaid, totalInterest, payoff, never, base },
+   where base is the same run with extra = 0, so the UI can show months
+   and interest saved vs minimums only. */
+function simulateLoanPlan(loans, extra){
+  function run(extraAmt){
+    var ls = (loans || []).map(function(l){
+      return { bal: Math.max(0, num0(l.balance)), r: Math.max(0, num0(l.apr)) / 100 / 12,
+        min: Math.max(0, num0(l.min)) };
+    }).filter(function(l){ return l.bal > 0; });
+    if(!ls.length) return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: false };
+    var ex = Math.max(0, num0(extraAmt));
+    /* a loan whose minimum doesn't cover its interest can only be saved
+       by extra money — with no extra at all it never pays off */
+    if(ex <= 0){
+      for(var i = 0; i < ls.length; i++){
+        if(ls[i].min <= 0 || (ls[i].r > 0 && ls[i].min <= ls[i].bal * ls[i].r))
+          return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: true };
+      }
+    }
+    var freed = 0, months = 0, paid = 0, interest = 0;
+    while(months < 1200){
+      var open = ls.filter(function(l){ return l.bal > 0; });
+      if(!open.length) break;
+      var newlyFreed = 0;
+      open.forEach(function(l){
+        var intr = l.bal * l.r; interest += intr; l.bal += intr;
+        var p = Math.min(l.min, l.bal); l.bal -= p; paid += p;
+        if(l.bal < 0.005){ newlyFreed += l.min; l.bal = 0; }
+      });
+      var pool = ex + freed;
+      if(pool > 0){
+        var targets = ls.filter(function(l){ return l.bal > 0; })
+          .sort(function(a, b){ return b.r - a.r; });
+        for(var t = 0; t < targets.length && pool > 0; t++){
+          var l2 = targets[t];
+          var p2 = Math.min(pool, l2.bal); l2.bal -= p2; paid += p2; pool -= p2;
+          if(l2.bal < 0.005){ newlyFreed += l2.min; l2.bal = 0; }
+        }
+      }
+      freed += newlyFreed;
+      months++;
+    }
+    var stillOpen = ls.some(function(l){ return l.bal > 0; });
+    if(stillOpen) return { months: 0, totalPaid: 0, totalInterest: 0, payoff: '', never: true };
+    return { months: months, totalPaid: round2(paid), totalInterest: round2(interest),
+      payoff: loanPayoffDateStr(months), never: false };
+  }
+  var base = run(0);
+  var plan = run(extra);
+  return { months: plan.months, totalPaid: plan.totalPaid, totalInterest: plan.totalInterest,
+    payoff: plan.payoff, never: plan.never, base: base };
 }
 
 /* ---------- v2.19.0: bills due soon — pure date math, no state ----------
@@ -735,6 +831,7 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
+    simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
     FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
@@ -767,6 +864,10 @@ var DEFAULTS = {
   ],
   goal: 0, saved: 0,
   bills: [],
+  /* v2.22.0: Loans tab — blank repo defaults, like every other number:
+     the user types their own loans on their device; nothing real ships */
+  loans: [],
+  loanExtra: 0,
   stateCode: 'NY',
   watchlist: [],
   dealsRefreshedAt: null,
@@ -896,6 +997,26 @@ function normClasses(v){
   return out;
 }
 
+/* v2.22.0: Loans tab state — sanitize so a mistyped or synced loan
+   can't break the payoff math (negatives clamp to 0, nameless loans
+   get a plain name, missing ids get one). */
+function newLoanId(){
+  return 'ln' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+}
+function normLoans(v){
+  if(!Array.isArray(v)) return [];
+  var out = [];
+  v.forEach(function(l){
+    if(!l || typeof l !== 'object') return;
+    var name = typeof l.name === 'string' ? l.name.trim() : '';
+    if(!name) name = 'Loan';
+    out.push({ id: (typeof l.id === 'string' && l.id) ? l.id : newLoanId(),
+      name: name, balance: Math.max(0, num(l.balance)), apr: Math.max(0, num(l.apr)),
+      min: Math.max(0, num(l.min)) });
+  });
+  return out;
+}
+
 function normalizeState(){
   /* v2.17.0: ONE normalization for first load AND sync import.
      An imported state may predate any field below (planner, Work
@@ -903,6 +1024,11 @@ function normalizeState(){
      here so both paths always land on the same complete shape. */
   if(!Array.isArray(S.categories)) S.categories = [];
   if(!Array.isArray(S.bills)) S.bills = [];
+/* v2.22.0: Loans tab state — backfill + sanitize so old saves keep working */
+if(!Array.isArray(S.loans)) S.loans = [];
+S.loans = normLoans(S.loans);
+if(S.loanExtra === undefined || S.loanExtra === null) S.loanExtra = 0;
+S.loanExtra = Math.max(0, num(S.loanExtra));
 /* fill in fields added in later versions so old saved data keeps working */
 if(!S.ded) S.ded = { ss: 6.2, medicare: 1.45, federal: 0, ny: 0, fli: 0, k401: 0, membership: 0, stockContrib: 0, stockPurch: 0 };
 /* v2.3.0: Earn tab state */
@@ -1086,13 +1212,18 @@ function nextPaydayInfo(nowOpt){
     if(d2 <= t){ var diff = Math.ceil((t - d2) / 86400000 / 14); d2.setDate(d2.getDate() + diff * 14); }
     return { date: d2, daysAway: Math.round((d2 - t) / 86400000) };
   }
-  /* monthly: same calendar date next month, rolling forward while past.
+  /* monthly: same calendar date next month, rolling forward while before today.
      Stepped from the anchor (not from the previous candidate) so a 31st
      payday clamps to Feb 28 and comes back to Mar 31 instead of skipping
-     February — see addMonthsClamped. */
+     February — see addMonthsClamped.
+     v2.21.0: a future anchor IS the next payday (same as biweekly), and
+     a monthly anniversary that falls today counts as today (same as
+     weekly/biweekly) — the old loop always stepped at least once, so
+     payday-today read as next month. */
   var t2 = atNoon(today);
+  if(anchor >= t2) return { date: anchor, daysAway: Math.round((anchor - t2) / 86400000) };
   var steps = 1, m = addMonthsClamped(anchor, steps);
-  while(m <= t2){ steps++; m = addMonthsClamped(anchor, steps); }
+  while(m < t2){ steps++; m = addMonthsClamped(anchor, steps); }
   return { date: m, daysAway: Math.round((m - t2) / 86400000) };
 }
 function fmtPayday(d){
@@ -3363,7 +3494,7 @@ function renderDonut(slices, total){
 }
 
 function renderAll(){
-  renderBudget(); renderPaycheck(); renderMyMoney(); renderBills();
+  renderBudget(); renderPaycheck(); renderMyMoney(); renderBills(); renderLoans();
   renderDiscountsStatic(); renderDiscountCalc();
   renderCalculators(); renderWatchlist(); renderEarn();
   renderPlanHours(true);
@@ -4066,6 +4197,73 @@ function renderBills(){
   if(!sorted.length) list.innerHTML = '<p class="hint">No bills yet — add one above.</p>';
 }
 
+/* ---------- v2.22.0: Loans tab ----------
+   Loans are NOT bills: a loan payment only belongs in Bills once
+   repayment actually starts, so nothing here touches the budget totals.
+   The plan card reads the Budget tab's monthly leftover (take-home −
+   unpaid bills − planned spending) so "what can I put in" is grounded
+   in his real budget, not a guess. List inputs follow the bills pattern:
+   typing updates state + the plan without rebuilding (focus-safe),
+   blur rebuilds so per-loan payoff lines refresh. */
+function loanLeftover(){
+  return monthlyIncome() - unpaidBillsTotal() - plannedSpend();
+}
+function renderLoans(){
+  var list = document.getElementById('loanList'); if(!list) return;
+  list.innerHTML = '';
+  var total = 0;
+  S.loans.forEach(function(l, idx){
+    total += num(l.balance);
+    var r = simulateLoan(l.balance, l.apr, l.min);
+    var row = document.createElement('div'); row.className = 'bill-row';
+    row.innerHTML = '<input type="text" value="' + esc(l.name) + '" data-loan-name="' + idx + '" aria-label="Loan name">' +
+      '<input type="number" min="0" step="0.01" value="' + num(l.balance) + '" data-loan-bal="' + idx + '" aria-label="Loan balance">' +
+      '<input type="number" min="0" step="0.01" value="' + num(l.apr) + '" data-loan-apr="' + idx + '" aria-label="Interest rate percent per year">' +
+      '<input type="number" min="0" step="0.01" value="' + num(l.min) + '" data-loan-min="' + idx + '" aria-label="Minimum payment per month">' +
+      '<button class="btn-mini danger" data-loan-del="' + idx + '" type="button">Delete</button>' +
+      '<span class="bill-note">' + (r.never
+        ? '⚠️ This minimum doesn\u2019t cover a month\u2019s interest, so the balance would grow instead of shrinking — a bigger payment (or extra below) is the fix.'
+        : (l.balance > 0 ? 'At this minimum: paid off by ' + esc(r.payoff) + ' · ' + money(r.totalInterest) + ' interest.' : 'Paid off.')) + '</span>';
+    list.appendChild(row);
+  });
+  document.getElementById('loanTotal').textContent = money(total);
+  if(!S.loans.length) list.innerHTML = '<p class="hint">No loans yet — add one above. Start with the balance, the yearly interest rate, and the minimum payment.</p>';
+  /* don't clobber the extra field the user is currently typing in */
+  var exEl = document.getElementById('loanExtraInput');
+  if(exEl && document.activeElement !== exEl) exEl.value = S.loanExtra ? S.loanExtra : '';
+  renderLoanPlan();
+}
+function renderLoanPlan(){
+  var left = loanLeftover();
+  var leftEl = document.getElementById('loanLeftoverLine');
+  if(leftEl) leftEl.textContent = left > 0
+    ? 'Your budget says you have ' + money(left) + ' left each month. That\u2019s the same money your savings goal draws from — splitting it between the goal and extra loan payments is fine.'
+    : 'Your budget shows nothing left each month right now, so any extra here has to come from somewhere else (more hours, less spending) — don\u2019t type in money you don\u2019t have.';
+  var out = document.getElementById('loanPlanOut'); if(!out) return;
+  if(!S.loans.length || !S.loans.some(function(l){ return num(l.balance) > 0; })){
+    out.innerHTML = '<p class="hint">Add a loan above to see its payoff date.</p>'; return;
+  }
+  var plan = simulateLoanPlan(S.loans, S.loanExtra);
+  var base = plan.base;
+  var html = '';
+  if(base.never && plan.never){
+    html = '<p class="warning">⚠️ At these minimums (and this extra), the loan never pays off — the payments don\u2019t cover the monthly interest. Raise the payment or the extra until this warning clears.</p>';
+  } else {
+    if(!base.never) html += '<p>Minimums only: all paid off by <strong>' + esc(base.payoff) + '</strong> · ' + money(base.totalInterest) + ' interest.</p>';
+    else html += '<p>Minimums only: never paid off — the minimums don\u2019t cover the interest.</p>';
+    if(S.loanExtra > 0 && !plan.never){
+      html += '<p>With ' + money(S.loanExtra) + ' extra a month: all paid off by <strong>' + esc(plan.payoff) + '</strong> · ' + money(plan.totalInterest) + ' interest.</p>';
+      if(!base.never && (base.months > plan.months || base.totalInterest > plan.totalInterest)){
+        html += '<p class="result-line">✅ You save <strong>' + money(round2(base.totalInterest - plan.totalInterest)) + '</strong> in interest and finish <strong>' + (base.months - plan.months) + ' months sooner</strong>.</p>';
+      }
+    } else if(S.loanExtra > 0 && plan.never){
+      html += '<p class="warning">⚠️ Even with this extra, the loan never pays off — raise the extra until this clears.</p>';
+    }
+  }
+  html += '<p class="hint">Extra always goes to your highest-rate loan first (and a paid-off loan\u2019s minimum rolls into the attack) — that\u2019s the cheapest order.</p>';
+  out.innerHTML = html;
+}
+
 function renderDiscountsStatic(){
   var sl = document.getElementById('studentList');
   if(!sl.dataset.done){
@@ -4468,6 +4666,53 @@ function bind(){
   document.getElementById('billList').addEventListener('click', function(e){
     var t = e.target;
     if(t.dataset.billDel !== undefined){ S.bills.splice(+t.dataset.billDel, 1); save(); renderBills(); renderMyMoney(); renderBudgetSummary(); }
+  });
+
+  /* v2.22.0: loans inputs — same typing-safe pattern as bills: typing
+     updates state + the plan without rebuilding, blur rebuilds */
+  document.getElementById('addLoanBtn').addEventListener('click', function(){
+    var name = document.getElementById('loanName').value.trim() || 'Loan';
+    S.loans.push({ id: newLoanId(), name: name,
+      balance: Math.max(0, num(document.getElementById('loanBalance').value)),
+      apr: Math.max(0, num(document.getElementById('loanApr').value)),
+      min: Math.max(0, num(document.getElementById('loanMin').value)) });
+    document.getElementById('loanName').value = '';
+    document.getElementById('loanBalance').value = '';
+    document.getElementById('loanApr').value = '';
+    document.getElementById('loanMin').value = '';
+    save(); renderLoans();
+  });
+  document.getElementById('loanList').addEventListener('input', function(e){
+    var t = e.target, l;
+    if(t.dataset.loanName !== undefined){ l = S.loans[+t.dataset.loanName]; if(l) l.name = t.value.trim() || 'Loan'; }
+    else if(t.dataset.loanBal !== undefined){ l = S.loans[+t.dataset.loanBal]; if(l) l.balance = Math.max(0, num(t.value)); }
+    else if(t.dataset.loanApr !== undefined){ l = S.loans[+t.dataset.loanApr]; if(l) l.apr = Math.max(0, num(t.value)); }
+    else if(t.dataset.loanMin !== undefined){ l = S.loans[+t.dataset.loanMin]; if(l) l.min = Math.max(0, num(t.value)); }
+    else return;
+    save(); renderLoanPlan();
+  });
+  document.getElementById('loanList').addEventListener('change', function(e){
+    var t = e.target;
+    if(t.dataset.loanName !== undefined || t.dataset.loanBal !== undefined || t.dataset.loanApr !== undefined || t.dataset.loanMin !== undefined){
+      save(); renderLoans();
+    }
+  });
+  document.getElementById('loanList').addEventListener('click', function(e){
+    var t = e.target;
+    if(t.dataset.loanDel !== undefined){ S.loans.splice(+t.dataset.loanDel, 1); save(); renderLoans(); }
+  });
+  document.getElementById('loanExtraInput').addEventListener('input', function(e){
+    S.loanExtra = Math.max(0, num(e.target.value)); save(); renderLoanPlan();
+  });
+  document.getElementById('loanUseHalfBtn').addEventListener('click', function(){
+    var left = loanLeftover();
+    S.loanExtra = left > 0 ? round2(left / 2) : 0;
+    document.getElementById('loanExtraInput').value = S.loanExtra; save(); renderLoanPlan();
+  });
+  document.getElementById('loanUseAllBtn').addEventListener('click', function(){
+    var left = loanLeftover();
+    S.loanExtra = left > 0 ? round2(left) : 0;
+    document.getElementById('loanExtraInput').value = S.loanExtra; save(); renderLoanPlan();
   });
 
   /* state picker: estimate mode follows the picked state */
