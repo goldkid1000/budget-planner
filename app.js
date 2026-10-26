@@ -1,7 +1,7 @@
-/* Budget Planner v2.22.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.23.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.22.0';
+var APP_VERSION = '2.23.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -501,6 +501,28 @@ function deriveDedFromStub(gross, lines){
            membership: round2(lines.membership), stockContrib: round2(lines.stockContrib),
            stockPurch: round2(lines.stockPurch) };
 }
+/* v2.0.2 auto-detect: sanity flags on odd paycheck inputs. Returns string[].
+   v2.23.0: the wage-floor flag now uses the picked state when one is
+   known. New York (the default state) has its own 2026 minimum wage:
+   $16.00/hr for most of the state, $17.00 in NYC, Long Island and
+   Westchester (NY AG / NY DOL, Jan 1 2026) \u2014 so a NY rate between the
+   federal $7.25 and the NY floor used to pass silently. The app knows
+   the state but not the region, so the flag fires below the lower NY
+   floor and names both tiers; a downstate rate between $16.00 and
+   $17.00 is a miss, never a false flag. Other states keep the federal
+   floor check. stateCode is optional \u2014 old 3-arg calls keep the old
+   federal behavior. Moved to the pure section in v2.23.0 so tests can
+   call it directly (it touches no DOM). */
+function paycheckFlags(hours, rate, net, stateCode){
+  var flags = [];
+  if(hours > 80) flags.push(fmtHrs(hours) + ' hrs/week is very high \u2014 double-check your hours.');
+  if(rate > 0){
+    if(stateCode === 'NY' && rate < 16) flags.push(money(rate) + '/hr is below New York\u2019s minimum wage \u2014 $16.00/hr for most of the state in 2026 ($17.00 in NYC, Long Island and Westchester) \u2014 check your rate.');
+    else if(stateCode !== 'NY' && rate < 7.25) flags.push(money(rate) + '/hr is below the federal minimum wage ($7.25) \u2014 check your rate.');
+  }
+  if(net < 0 && (hours > 0 || rate > 0)) flags.push('Deductions are higher than gross pay \u2014 check your deduction entries.');
+  return flags;
+}
 /* v2.12.0: sanitize a Work Log week's stored pay breakdown (built by
    wlPayBreakdown in the app section from one calcPaycheck run). Returns
    null for anything unusable so the renderer can fall back to computing
@@ -831,7 +853,7 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
-    simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan,
+    simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
     FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
@@ -1228,14 +1250,6 @@ function nextPaydayInfo(nowOpt){
 }
 function fmtPayday(d){
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-/* v2.0.2 auto-detect: sanity flags on odd paycheck inputs. Returns string[]. */
-function paycheckFlags(hours, rate, net){
-  var flags = [];
-  if(hours > 80) flags.push(fmtHrs(hours) + ' hrs/week is very high \u2014 double-check your hours.');
-  if(rate > 0 && rate < 7.25) flags.push(money(rate) + '/hr is below the federal minimum wage ($7.25) \u2014 check your rate.');
-  if(net < 0 && (hours > 0 || rate > 0)) flags.push('Deductions are higher than gross pay \u2014 check your deduction entries.');
-  return flags;
 }
 function currentPaycheck(){
   /* No pay stub entered → estimate mode: federal + state tax from the 2025
@@ -3852,7 +3866,7 @@ function renderPaycheckOutputs(){
       lines.push('<p><strong>Next payday:</strong> ' + fmtPayday(pd.date) +
         (pd.daysAway === 0 ? ' \u2014 today!' : pd.daysAway === 1 ? ' \u2014 tomorrow.' : ' \u2014 in ' + pd.daysAway + ' days.') + '</p>');
     }
-    paycheckFlags(hrs, S.rate, p.net).forEach(function(f){
+    paycheckFlags(hrs, S.rate, p.net, S.stateCode || 'NY').forEach(function(f){
       lines.push('<p class="flag">\u26a0\ufe0f ' + esc(f) + '</p>');
     });
     box.innerHTML = lines.length ? lines.join('') : '<p class="explain">No detections \u2014 everything looks normal.</p>';

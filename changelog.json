@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "v": "2.23.0",
+      "date": "Oct 26, 2026",
+      "notify": true,
+      "notes": [
+        "Paycheck auto-detections now check your rate against New York\u2019s 2026 minimum wage ($16.00/hr for most of the state; $17.00 in NYC, Long Island and Westchester) when New York is your picked state \u2014 a rate between the old federal $7.25 floor and the NY floor used to pass silently. Other states keep the federal floor check."
+      ]
+    },
+    {
       "v": "2.22.0",
       "date": "Oct 26, 2026",
       "notify": true,

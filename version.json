@@ -1,9 +1,8 @@
 {
-  "version": "2.22.0",
+  "version": "2.23.0",
   "updated": "2026-10-26",
   "notify": true,
   "notes": [
-    "New Loans tab: add each loan (balance, yearly rate, minimum payment) and see its payoff date and total interest \u2014 plus a payoff plan where extra money each month goes to your highest-rate loan first, showing the new payoff date and exactly how much interest you save vs minimums only. A 'use half/all my leftover' button fills the extra from your Budget tab's monthly leftover, so 'what can I put in' comes from your real budget.",
-    "Also includes the v2.21.0 paycheck fixes: flat per-check fees no longer multiply on every-2-weeks/monthly pay, and the monthly next-payday countdown no longer skips payday-today."
+    "Paycheck auto-detections now check your rate against New York\u2019s 2026 minimum wage ($16.00/hr for most of the state; $17.00 in NYC, Long Island and Westchester) when New York is your picked state \u2014 a rate between the old federal $7.25 floor and the NY floor used to pass silently. Other states keep the federal floor check."
   ]
 }
