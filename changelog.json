@@ -1,6 +1,22 @@
 {
   "versions": [
     {
+      "v": "2.25.0",
+      "date": "Oct 28, 2026",
+      "notify": true,
+      "notes": [
+        "The Plan tab's monthly take-home now counts flat per-check fees at your real pay schedule: a biweekly check carries one fee for two weeks, a monthly check one fee a month. Before, the planner counted the fee every week, so biweekly pay showed too low versus the Paycheck tab — and the Plan goal date came out later than the Budget tab's for the same week. Weekly pay and weeks with no flat fees are unchanged."
+      ]
+    },
+    {
+      "v": "2.24.0",
+      "date": "Oct 27, 2026",
+      "notify": true,
+      "notes": [
+        "The savings-goal date now counts only the money actually free for saving: your monthly leftover minus the extra loan payment you set on the Loans tab. Before, the same dollars were promised twice — the goal date assumed the whole leftover was being saved even when part of it was already going to a loan, so the date came out too soon. The Plan tab's goal line uses the same number, so both tabs agree."
+      ]
+    },
+    {
       "v": "2.23.0",
       "date": "Oct 26, 2026",
       "notify": true,

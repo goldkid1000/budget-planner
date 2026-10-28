@@ -1,7 +1,7 @@
-/* Budget Planner v2.23.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.25.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.23.0';
+var APP_VERSION = '2.25.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -586,6 +586,45 @@ function calcGoalProjection(goal, saved, monthlyLeftover, rate, effRate){
   var extraHours = perHourMonth > 0 ? shortfall / perHourMonth : 0;
   return { status: 'short', toGo: toGo, months: 0, dateStr: '', shortfall: shortfall, extraHours: extraHours };
 }
+/* v2.24.0: money actually free for the savings goal = budget leftover
+   minus the extra loan payment already committed on the Loans tab.
+   The Loans tab fills that extra FROM this same leftover ("use half/all
+   my leftover"), so counting the whole leftover as savings double-counts
+   it: the goal date would promise dollars already promised to a loan.
+   No floor: if the extra overshoots the leftover, the negative result
+   flows into calcGoalProjection's 'short' branch honestly instead of
+   hiding the overshoot behind a zero. */
+function goalAvailableLeftover(monthlyLeftover, loanExtra){
+  return num0(monthlyLeftover) - Math.max(0, num0(loanExtra));
+}
+/* v2.25.0: monthly take-home for a planned week, on the user's real pay
+   frequency. The planner forces a weekly paycheck (one week of hours),
+   so weeklyNet × 52 ÷ 12 counts a flat per-check fee 52 times a year —
+   but a biweekly check carries ONE fee for two weeks (26/yr) and a
+   monthly check one fee a month (12/yr). The Paycheck tab's monthlyNet
+   already spreads the fee correctly, so a biweekly user with $35/check
+   in flat fees saw the Plan tab $75.88/mo BELOW the Budget tab for the
+   same week (a monthly-paid user, $116.70/mo below). The weekly net
+   already paid the fee every week, so the fix adds back the over-counted
+   fees: flat × (52 − checksPerYear) ÷ 12. With no flat fees, or on
+   weekly pay, this is exactly the old formula — nothing else moves.
+   Pure section, so node tests can call it (the planner itself lives in
+   the browser-only block below and must not host testable math). */
+function flatPerCheck(p){
+  return round2(num0(p.memberAmt) + num0(p.stockContribAmt) + num0(p.stockPurchAmt));
+}
+function checksPerYear(freq){
+  return freq === 'biweekly' ? 26 : (freq === 'monthly' ? 12 : 52);
+}
+function planMonthlyNet(weeklyNet, flat, freq){
+  /* zero-hours week: weeklyNet is just −flat (fees with no pay), and
+     calcPaycheck's own monthlyNet is 0 there (its effRate guard returns
+     0 when period gross is 0) — so return 0 instead of a negative
+     monthly figure like −$151.67. weeklyNet + flat is exactly 0 only in
+     that case (gross minus % lines), so worked weeks are untouched. */
+  if(num0(weeklyNet) + num0(flat) === 0) return 0;
+  return round2(num0(weeklyNet) * 52 / 12 + num0(flat) * (52 - checksPerYear(freq)) / 12);
+}
 /* Deal Watchlist status from the last price the user typed in.
    The app never checks a store's price by itself — every price here is
    one the user entered after opening the link. */
@@ -852,7 +891,8 @@ if (typeof module !== 'undefined' && module.exports){
     suggestWeekendOk: suggestWeekendOk, suggestShiftOverlaps: suggestShiftOverlaps,
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
-    calcGoalProjection: calcGoalProjection, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
+    calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
+    flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
@@ -1402,12 +1442,12 @@ function togglePlanTag(i, key){
    ones. No goal set → fall back to the monthly surplus itself. */
 function planGoalLine(hours){
   var p = planScenarioPaycheck(hours);
-  var monthlyNet = round2(p.net * 52 / 12);
+  var monthlyNet = planMonthlyNet(p.net, flatPerCheck(p), S.freq);
   var leftover = round2(monthlyNet - unpaidBillsTotal() - plannedSpend());
   if(!(num(S.goal) > 0)){
     return 'Surplus ≈ ' + money(leftover) + '/mo after your bills + planned spending';
   }
-  var proj = calcGoalProjection(S.goal, S.saved, leftover, S.rate, p.effRate);
+  var proj = calcGoalProjection(S.goal, S.saved, goalAvailableLeftover(leftover, S.loanExtra), S.rate, p.effRate);
   if(proj.status === 'reached') return 'Goal already reached 🎉';
   if(proj.status === 'date') return 'Hits ' + money0(S.goal) + ' in ≈ ' + proj.months + ' mo · ' + proj.dateStr;
   if(proj.status === 'far') return 'Goal would take 50+ yrs at this pace';
@@ -1981,7 +2021,7 @@ function renderPlanHours(rebuildDays){
   var total = planTotal(days);
   document.getElementById('planTotalOut').textContent = fmtPlanHrs(total) + ' / week';
   var p = planScenarioPaycheck(total);
-  var monthlyNet = round2(p.net * 52 / 12);
+  var monthlyNet = planMonthlyNet(p.net, flatPerCheck(p), S.freq);
   document.getElementById('planNetWeek').textContent = money(p.net);
   document.getElementById('planGrossWeek').textContent = money(p.weeklyGross);
   document.getElementById('planNetPayday').textContent = money(p.net);
@@ -1992,7 +2032,7 @@ function renderPlanHours(rebuildDays){
   } else {
     note.textContent = 'Same math as your Paycheck tab at ' + money(S.rate) + '/hr' +
       (p.estimateUsed ? ' (taxes estimated from the 2025 brackets — enter a pay stub there for exact numbers)' : ' (using your saved pay-stub deductions)') +
-      '. Monthly is the weekly take-home × 52 ÷ 12.';
+      '. Monthly is the weekly take-home × 52 ÷ 12, except flat per-check fees, which count once per real paycheck (26 a year if biweekly, 12 if monthly) — so it matches the Paycheck tab.';
   }
 
   /* athlete guardrails — v2.16.0: when a 😴 sleep schedule is set,
@@ -2049,7 +2089,7 @@ function renderPlanHours(rebuildDays){
     row.innerHTML =
       '<div class="plan-compare-head"><strong>' + preset.label + ' · ' + fmtPlanHrs(hrs) + '/wk</strong>' +
       '<span class="plan-compare-net">' + money(pp.net) + ' /wk</span></div>' +
-      '<div class="plan-compare-sub">' + money(round2(pp.net * 52 / 12)) + ' take-home/mo · ' + planGoalLine(hrs) + '</div>';
+      '<div class="plan-compare-sub">' + money(planMonthlyNet(pp.net, flatPerCheck(pp), S.freq)) + ' take-home/mo · ' + planGoalLine(hrs) + '</div>';
     cmp.appendChild(row);
   });
 
@@ -2261,6 +2301,7 @@ function wlPayBreakdown(hours){
       { label: 'Stock purchase', amt: p.stockPurchAmt }
     ],
     dedTotal: p.dedTotal, totalTaken: p.totalDed, net: p.net,
+    flatPerCheck: flatPerCheck(p),
     estimate: !!p.estimateUsed };
 }
 /* an entry's breakdown: the one stored at save time when present,
@@ -3126,7 +3167,7 @@ function refreshSuggestSummary(){
   html += sgPayRow('Deductions total', money(bd.dedTotal), 'wl-pay-sub');
   html += sgPayRow('Total taken', money(bd.totalTaken), 'wl-pay-taken');
   html += sgPayRow('Net pay — take-home', money(bd.net), 'wl-pay-net');
-  html += sgPayRow('Take-home / month (avg)', '≈ ' + money0(bd.net * 52 / 12), 'wl-pay-sub');
+  html += sgPayRow('Take-home / month (avg)', '≈ ' + money0(planMonthlyNet(bd.net, bd.flatPerCheck, S.freq)), 'wl-pay-sub');
   if(bd.estimate) html += '<p class="hint wl-pay-note">Estimated from tax tables — set up your pay stub in the Paycheck tab for exact numbers.</p>';
   html += '</div>';
   sumEl.innerHTML = html;
@@ -3705,26 +3746,41 @@ function renderGoal(){
   document.getElementById('goalPct').textContent = pct + '%';
   document.getElementById('goalToGo').textContent = money(toGo) + ' to go';
   /* monthly leftover is what can actually go toward the goal:
-     take-home − unpaid bills − planned spending */
+     take-home − unpaid bills − planned spending, minus the extra loan
+     payment already committed on the Loans tab (v2.24.0: the same dollar
+     can't be both saved and sent to a loan). */
   var monthlyLeftover = monthlyIncome() - unpaidBillsTotal() - plannedSpend();
+  var loanExtra = Math.max(0, num(S.loanExtra));
+  var goalLeftover = goalAvailableLeftover(monthlyLeftover, loanExtra);
   var p = currentPaycheck();
-  var proj = calcGoalProjection(S.goal, S.saved, monthlyLeftover, S.rate, p.effRate);
+  var proj = calcGoalProjection(S.goal, S.saved, goalLeftover, S.rate, p.effRate);
   var pace = document.getElementById('paceLine');
   if(proj.status === 'reached'){ pace.textContent = '🎉 Goal reached — nice work.'; }
   else if(proj.status === 'noset'){ pace.textContent = 'Set a savings goal above and this will project the date you\'ll reach it.'; }
   else if(proj.status === 'date'){
     pace.textContent = 'You\'ll hit ' + money0(S.goal) + ' by ' + proj.dateStr +
-      ' — saving about ' + money(monthlyLeftover) + '/month, about ' + proj.months +
-      ' month' + (proj.months === 1 ? '' : 's') + ' to go.';
+      ' — saving about ' + money(goalLeftover) + '/month' +
+      (loanExtra > 0 ? ' (after your ' + money(loanExtra) + '/mo extra loan payment)' : '') +
+      ', about ' + proj.months + ' month' + (proj.months === 1 ? '' : 's') + ' to go.';
   }
   else if(proj.status === 'far'){
-    pace.textContent = 'At about ' + money(monthlyLeftover) + '/month it would take over 50 years to reach ' +
+    pace.textContent = 'At about ' + money(goalLeftover) + '/month' +
+      (loanExtra > 0 ? ' after the extra loan payment' : '') + ' it would take over 50 years to reach ' +
       money0(S.goal) + ' — the math is real, but the goal needs a bigger monthly leftover. Cut spending or add hours to move it sooner.';
+  }
+  else if(proj.shortfall === 0){
+    /* leftover-after-extra is exactly zero: nothing is "short" by a
+       dollar amount, there is simply nothing left to save. The old line
+       here read "$0.00/month short — cut spending by $0.00". */
+    pace.textContent = 'Nothing is left for the savings goal right now — ' +
+      (loanExtra > 0 ? 'your whole monthly leftover is going to extra loan payments. ' : 'planned spending uses up your whole monthly leftover. ') +
+      'Free up money (more hours, less spending' + (loanExtra > 0 ? ', or a smaller extra loan payment' : '') + ') to start saving.';
   }
   else {
     var msg = 'At this pace you are not saving — planned spending is at or above your income, so there is no date to show yet. ' +
       'You\'re ' + money(proj.shortfall) + '/month short — cut planned spending by ' + money(proj.shortfall);
     if(proj.extraHours > 0) msg += ', or add about ' + (Math.round(proj.extraHours * 10) / 10) + ' hrs/week at your rate';
+    if(loanExtra > 0) msg += ', or lower the extra loan payment';
     msg += ', to start saving.';
     pace.textContent = msg;
   }
