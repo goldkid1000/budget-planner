@@ -1,7 +1,7 @@
-/* Budget Planner v2.25.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.26.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.25.0';
+var APP_VERSION = '2.26.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -1555,7 +1555,18 @@ function bkSetDayTime(which, val){
   save(); renderBreakCal();
 }
 /* totals for one break-shaped object ({ start, end, days }): work days,
-   hours, gross + net — net summed week by week through calcPaycheck */
+   hours, gross + net — net summed week by week through calcPaycheck.
+   v2.26.0: whole-break take-home counts flat per-check fees once per
+   paycheck, not once per calendar week — the same correction the Plan
+   tab's planMonthlyNet already makes for a month. Weekly chunking stays
+   (overtime is weekly, so gross and the per-week rows are unchanged),
+   but the total is rebuilt as (weekly nets + flat fees back) minus one
+   fee per real paycheck: worked weeks × checksPerYear ÷ 52. A biweekly
+   2-week break used to charge a $35 fee twice ($1,210 on 2 × 40h @ $16);
+   it now charges it once ($1,245). Weeks with no hours add no fee at
+   all — they used to subtract a whole fee from the total. feeAdjust is
+   the total minus the displayed weekly rows added up, so the renderer
+   can explain the gap honestly instead of hiding it. */
 function bkSummary(cal){
   var start = bkParseDate(cal.start), end = bkParseDate(cal.end);
   if(!start || !end || end < start) return null;
@@ -1569,16 +1580,24 @@ function bkSummary(cal){
     if(!byWeek[key]){ byWeek[key] = { monday: monday, hours: 0 }; order.push(key); }
     byWeek[key].hours += h;
   }
-  var gross = 0, net = 0, weeks = [];
+  var gross = 0, netBeforeFlat = 0, rowsNet = 0, flat = 0, workedWeeks = 0, weeks = [];
   order.forEach(function(k){
     var w = byWeek[k];
     var p = planScenarioPaycheck(w.hours);
     gross = round2(gross + p.weeklyGross);
-    net = round2(net + p.net);
+    /* a week's net already paid the flat fee once; add it back here so
+       the total below can charge fees at the real pay frequency */
+    netBeforeFlat = round2(netBeforeFlat + p.net + flatPerCheck(p));
+    if(w.hours > 0) rowsNet = round2(rowsNet + p.net);
+    /* a week only counts toward a paycheck when it actually paid out —
+       a zero-gross week (no rate set, or no hours) carries no fee */
+    if(p.weeklyGross > 0){ workedWeeks++; if(!flat) flat = flatPerCheck(p); }
     weeks.push({ monday: w.monday, sunday: bkAddDays(w.monday, 6),
                  hours: w.hours, gross: p.weeklyGross, net: p.net });
   });
-  return { workDays: workDays, totalHours: totalHours, gross: gross, net: net, weeks: weeks };
+  var net = round2(netBeforeFlat - flat * workedWeeks * checksPerYear(S.freq) / 52);
+  return { workDays: workDays, totalHours: totalHours, gross: gross, net: net, weeks: weeks,
+           feeAdjust: round2(net - rowsNet) };
 }
 function bkTapDay(ds){
   var cal = bkDraft();
@@ -1792,6 +1811,7 @@ function renderBreakCal(){
       '<div class="plan-pay-cell"><p class="plan-pay-label">Gross · whole break</p><p class="plan-pay-num">' + money(sum.gross) + '</p></div>' +
       '<div class="plan-pay-cell"><p class="plan-pay-label">Take-home · whole break</p><p class="plan-pay-num">' + money(sum.net) + '</p></div>' +
       '</div>' +
+      (num(S.rate) > 0 && sum.feeAdjust > 0.005 ? '<p class="explain">Flat fees are counted once per paycheck — not once a week — and weeks with no hours add no fee, so the whole-break take-home is ' + money(sum.feeAdjust) + ' above the weekly rows added up.</p>' : '') +
       (num(S.rate) > 0 ? '' : '<p class="explain">Set your hourly rate on the Paycheck tab and these previews fill in with your real rate and deductions.</p>');
     var whtml = '';
     var workedWeeks = sum.weeks.filter(function(w){ return w.hours > 0; });
