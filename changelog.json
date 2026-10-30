@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "v": "2.27.0",
+      "date": "Oct 30, 2026",
+      "notify": true,
+      "notes": [
+        "Extra-hours advice now uses the take-home rate on one more hour, not the paycheck's average rate: a flat per-check fee (like the membership fee) doesn't grow when you add hours, so it no longer drags the advice down — a 16.75-hour week at $16/hr with $35/check in flat fees used to show +5 hrs as $48.63/week instead of $59.08, and a $100/month shortfall as 2.37 extra hrs/week instead of 1.95. The Paycheck tab's what-if and both goal tabs' 'add hours' lines use the same corrected rate. Averages for the week you already worked are unchanged."
+      ]
+    },
+    {
       "v": "2.26.0",
       "date": "Oct 29, 2026",
       "notify": true,

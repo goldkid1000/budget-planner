@@ -1,7 +1,7 @@
-/* Budget Planner v2.26.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.27.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.26.0';
+var APP_VERSION = '2.27.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -566,7 +566,7 @@ function addMonthsClamped(fromDate, months){
    bills − planned spending). Never invents a date when leftover <= 0.
    Returns { status: 'reached' | 'date' | 'far' | 'short', toGo, months,
    dateStr, shortfall, extraHours }. 'far' = over 50 years at this pace. */
-function calcGoalProjection(goal, saved, monthlyLeftover, rate, effRate){
+function calcGoalProjection(goal, saved, monthlyLeftover, rate, margRate){
   var toGo = Math.max(num0(goal) - num0(saved), 0);
   /* v2.0.0: a $0 goal is not "reached" — it means no goal was set yet */
   if(toGo <= 0) return num0(goal) > 0
@@ -582,7 +582,10 @@ function calcGoalProjection(goal, saved, monthlyLeftover, rate, effRate){
       shortfall: 0, extraHours: 0 };
   }
   var shortfall = -leftover;
-  var perHourMonth = num0(rate) * (1 - num0(effRate)) * (52 / 12);
+  /* v2.27.0: perHourMonth uses the MARGINAL rate (see marginalRate below),
+     not the paycheck's average effRate — callers must pass the marginal
+     rate, so a flat per-check fee is never charged against extra hours. */
+  var perHourMonth = num0(rate) * (1 - num0(margRate)) * (52 / 12);
   var extraHours = perHourMonth > 0 ? shortfall / perHourMonth : 0;
   return { status: 'short', toGo: toGo, months: 0, dateStr: '', shortfall: shortfall, extraHours: extraHours };
 }
@@ -615,6 +618,26 @@ function flatPerCheck(p){
 }
 function checksPerYear(freq){
   return freq === 'biweekly' ? 26 : (freq === 'monthly' ? 12 : 52);
+}
+/* v2.27.0: the take-home rate on ONE MORE hour of work. The paycheck's
+   effRate is an average — it spreads the flat $ per-check fees over the
+   period's gross — but an extra hour does not create another fee, so the
+   marginal rate is only the % lines: (totalDed − flat) ÷ period gross.
+   With a pay stub saved this is exact (every % line is a true % of
+   gross); in estimate mode the table-derived federal/state lines make it
+   the same effective-% approximation the app already uses elsewhere.
+   Used for the goal shortfall's "add hours" advice and the Paycheck tab's
+   "+X hrs/week" what-if — both used to use effRate, so a $35/check flat
+   fee made extra hours look worse than they are: a 16.75h @ $16 week
+   showed +5 hrs as $48.63/week instead of $59.08, and a $100/mo shortfall
+   as 2.37 extra hrs/week instead of 1.95. Average-rate displays (the
+   Budget breakdown's "% taken off", the Paycheck tab's totals) still use
+   effRate — that number describes the week you already worked, where the
+   fee really was paid. */
+function marginalRate(p){
+  var gross = num0(p.periodGross);
+  if(gross <= 0) return 0;
+  return (num0(p.totalDed) - flatPerCheck(p)) / gross;
 }
 function planMonthlyNet(weeklyNet, flat, freq){
   /* zero-hours week: weeklyNet is just −flat (fees with no pay), and
@@ -892,7 +915,7 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
-    flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet,
+    flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, marginalRate: marginalRate,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
@@ -1447,7 +1470,7 @@ function planGoalLine(hours){
   if(!(num(S.goal) > 0)){
     return 'Surplus ≈ ' + money(leftover) + '/mo after your bills + planned spending';
   }
-  var proj = calcGoalProjection(S.goal, S.saved, goalAvailableLeftover(leftover, S.loanExtra), S.rate, p.effRate);
+  var proj = calcGoalProjection(S.goal, S.saved, goalAvailableLeftover(leftover, S.loanExtra), S.rate, marginalRate(p));
   if(proj.status === 'reached') return 'Goal already reached 🎉';
   if(proj.status === 'date') return 'Hits ' + money0(S.goal) + ' in ≈ ' + proj.months + ' mo · ' + proj.dateStr;
   if(proj.status === 'far') return 'Goal would take 50+ yrs at this pace';
@@ -3773,7 +3796,7 @@ function renderGoal(){
   var loanExtra = Math.max(0, num(S.loanExtra));
   var goalLeftover = goalAvailableLeftover(monthlyLeftover, loanExtra);
   var p = currentPaycheck();
-  var proj = calcGoalProjection(S.goal, S.saved, goalLeftover, S.rate, p.effRate);
+  var proj = calcGoalProjection(S.goal, S.saved, goalLeftover, S.rate, marginalRate(p));
   var pace = document.getElementById('paceLine');
   if(proj.status === 'reached'){ pace.textContent = '🎉 Goal reached — nice work.'; }
   else if(proj.status === 'noset'){ pace.textContent = 'Set a savings goal above and this will project the date you\'ll reach it.'; }
@@ -3980,7 +4003,7 @@ function renderPaycheckOutputs(){
   }
 
   var extraH = num(document.getElementById('extraHours').value, 0);
-  var extraNet = extraH * S.rate * (1 - p.effRate);
+  var extraNet = extraH * S.rate * (1 - marginalRate(p));
   document.getElementById('extraHoursOut').textContent = '+' + extraH + ' hrs/week → about ' + money(extraNet) +
     ' more take-home per week (' + money(extraNet * 52 / 12) + ' / month).';
   var newRate = num(document.getElementById('newRate').value, 0);
