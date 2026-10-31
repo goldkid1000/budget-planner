@@ -1,7 +1,7 @@
-/* Budget Planner v2.27.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.28.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.27.0';
+var APP_VERSION = '2.28.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -566,7 +566,7 @@ function addMonthsClamped(fromDate, months){
    bills − planned spending). Never invents a date when leftover <= 0.
    Returns { status: 'reached' | 'date' | 'far' | 'short', toGo, months,
    dateStr, shortfall, extraHours }. 'far' = over 50 years at this pace. */
-function calcGoalProjection(goal, saved, monthlyLeftover, rate, margRate){
+function calcGoalProjection(goal, saved, monthlyLeftover, rate, margRate, currentHrs){
   var toGo = Math.max(num0(goal) - num0(saved), 0);
   /* v2.0.0: a $0 goal is not "reached" — it means no goal was set yet */
   if(toGo <= 0) return num0(goal) > 0
@@ -582,11 +582,16 @@ function calcGoalProjection(goal, saved, monthlyLeftover, rate, margRate){
       shortfall: 0, extraHours: 0 };
   }
   var shortfall = -leftover;
-  /* v2.27.0: perHourMonth uses the MARGINAL rate (see marginalRate below),
+  /* v2.27.0: extra hours use the MARGINAL rate (see marginalRate below),
      not the paycheck's average effRate — callers must pass the marginal
-     rate, so a flat per-check fee is never charged against extra hours. */
-  var perHourMonth = num0(rate) * (1 - num0(margRate)) * (52 / 12);
-  var extraHours = perHourMonth > 0 ? shortfall / perHourMonth : 0;
+     rate, so a flat per-check fee is never charged against extra hours.
+     v2.28.0: the hours also respect the 1.5x OT kink — extraHoursForNet
+     prices straight hours up to 40/week and OT beyond it, so a shortfall
+     that pushes past 40 no longer asks for more hours than needed.
+     currentHrs is the week the advice builds on (callers pass it); when
+     omitted it defaults to 0, which is exactly the old straight-time
+     behavior, so old 5-arg calls are unchanged. */
+  var extraHours = extraHoursForNet(shortfall * 12 / 52, currentHrs, rate, margRate);
   return { status: 'short', toGo: toGo, months: 0, dateStr: '', shortfall: shortfall, extraHours: extraHours };
 }
 /* v2.24.0: money actually free for the savings goal = budget leftover
@@ -638,6 +643,31 @@ function marginalRate(p){
   var gross = num0(p.periodGross);
   if(gross <= 0) return 0;
   return (num0(p.totalDed) - flatPerCheck(p)) / gross;
+}
+/* v2.28.0: extra-hours math with the 1.5x OT kink. The v2.27.0 marginal
+   rate fixed the flat-fee drag, but both advice lines still priced every
+   added hour at straight time — a user already at 38 hrs/week who adds 5
+   was told +$60.00/week take-home at $16/hr with 25% taken off, when the
+   true figure is $78.00 (2 straight hrs + 3 OT hrs at 1.5x), and a
+   $200/mo shortfall was answered with 3.85 hrs/week instead of 3.23.
+   These helpers price hours up to 40/week straight and hours beyond it
+   at 1.5x, all at the marginal rate (flat per-check fees still excluded
+   — an extra hour creates no extra fee). Inverse pair: extraHoursNet
+   prices a given number of added hours, extraHoursForNet solves for the
+   hours needed to reach a weekly take-home target. Pure, node-testable. */
+function extraHoursNet(extraH, currentHrs, rate, margRate){
+  var straight = Math.max(0, 40 - num0(currentHrs));
+  var straightH = Math.min(Math.max(0, num0(extraH)), straight);
+  var otH = Math.max(0, num0(extraH) - straight);
+  return (straightH + otH * 1.5) * num0(rate) * (1 - num0(margRate));
+}
+function extraHoursForNet(weeklyNet, currentHrs, rate, margRate){
+  var perHour = num0(rate) * (1 - num0(margRate));
+  if(perHour <= 0 || num0(weeklyNet) <= 0) return 0;
+  var straight = Math.max(0, 40 - num0(currentHrs));
+  var straightNet = straight * perHour;
+  if(num0(weeklyNet) <= straightNet) return num0(weeklyNet) / perHour;
+  return straight + (num0(weeklyNet) - straightNet) / (perHour * 1.5);
 }
 function planMonthlyNet(weeklyNet, flat, freq){
   /* zero-hours week: weeklyNet is just −flat (fees with no pay), and
@@ -916,6 +946,7 @@ if (typeof module !== 'undefined' && module.exports){
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
     flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, marginalRate: marginalRate,
+    extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
@@ -1470,7 +1501,7 @@ function planGoalLine(hours){
   if(!(num(S.goal) > 0)){
     return 'Surplus ≈ ' + money(leftover) + '/mo after your bills + planned spending';
   }
-  var proj = calcGoalProjection(S.goal, S.saved, goalAvailableLeftover(leftover, S.loanExtra), S.rate, marginalRate(p));
+  var proj = calcGoalProjection(S.goal, S.saved, goalAvailableLeftover(leftover, S.loanExtra), S.rate, marginalRate(p), hours);
   if(proj.status === 'reached') return 'Goal already reached 🎉';
   if(proj.status === 'date') return 'Hits ' + money0(S.goal) + ' in ≈ ' + proj.months + ' mo · ' + proj.dateStr;
   if(proj.status === 'far') return 'Goal would take 50+ yrs at this pace';
@@ -3796,7 +3827,7 @@ function renderGoal(){
   var loanExtra = Math.max(0, num(S.loanExtra));
   var goalLeftover = goalAvailableLeftover(monthlyLeftover, loanExtra);
   var p = currentPaycheck();
-  var proj = calcGoalProjection(S.goal, S.saved, goalLeftover, S.rate, marginalRate(p));
+  var proj = calcGoalProjection(S.goal, S.saved, goalLeftover, S.rate, marginalRate(p), effectiveHours());
   var pace = document.getElementById('paceLine');
   if(proj.status === 'reached'){ pace.textContent = '🎉 Goal reached — nice work.'; }
   else if(proj.status === 'noset'){ pace.textContent = 'Set a savings goal above and this will project the date you\'ll reach it.'; }
@@ -4003,9 +4034,12 @@ function renderPaycheckOutputs(){
   }
 
   var extraH = num(document.getElementById('extraHours').value, 0);
-  var extraNet = extraH * S.rate * (1 - marginalRate(p));
+  /* v2.28.0: OT-aware — hours past 40/week pay 1.5x (see extraHoursNet) */
+  var extraNet = extraHoursNet(extraH, effectiveHours(), S.rate, marginalRate(p));
+  var otPart = Math.max(0, effectiveHours() + extraH - 40);
   document.getElementById('extraHoursOut').textContent = '+' + extraH + ' hrs/week → about ' + money(extraNet) +
-    ' more take-home per week (' + money(extraNet * 52 / 12) + ' / month).';
+    ' more take-home per week (' + money(extraNet * 52 / 12) + ' / month)' +
+    (otPart > 0 ? ' — includes ' + fmtHrs(otPart) + ' hrs overtime.' : '');
   var newRate = num(document.getElementById('newRate').value, 0);
   if(newRate > 0){
     var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly');

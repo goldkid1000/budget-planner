@@ -1,6 +1,14 @@
 {
   "versions": [
     {
+      "v": "2.28.0",
+      "date": "Oct 31, 2026",
+      "notify": true,
+      "notes": [
+        "Extra-hours advice now respects overtime: hours past 40/week pay 1.5×, so the Paycheck tab's what-if and the savings-goal 'add hours' line no longer price overtime hours at straight time — a week already at 38 hours adding 5 used to show +$60.00/week take-home instead of $78.00, and a $200/month shortfall was answered with 3.85 hrs/week instead of 3.23. Weeks under 40 hours are unchanged, and the flat-fee fix from v2.27.0 still applies."
+      ]
+    },
+    {
       "v": "2.27.0",
       "date": "Oct 30, 2026",
       "notify": true,
