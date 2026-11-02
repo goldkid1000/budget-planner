@@ -1,11 +1,35 @@
 {
   "versions": [
     {
+      "v": "2.31.0",
+      "version": "2.31.0",
+      "date": "Nov 2, 2026",
+      "notify": true,
+      "notes": [
+        "NEW \ud83d\udcca Spending insights on the My money tab: import a bank statement and see where your money really went \u2014 money in, money out, net and spent-per-day; spending by category (food, transport, fun, subscriptions, clothes, shopping, bills, cash, fees), sorted from the store names on your statement; your top 5 places; and every subscription or repeat monthly charge with what it costs you a year. Pick a month to compare, and with 3+ weeks of history one tap sets your Budget tab's planned spending from your real average (with Undo). All of it stays on this device.",
+        "Statement imports now add up instead of replacing: import October, then November, and both stay (exact duplicates are skipped). Transfers between your own accounts are left out of spending.",
+        "Fixed What's New: the last 30 updates were listed as \"vundefined\" because their version number was stored under a different name. Every update now shows its real version.",
+        "The Paycheck tab's 'try a new rate' what-if now uses the same tax math as the paycheck above it: with no pay stub saved it runs the 2025 estimate brackets instead of silently dropping the estimated state and federal tax. Before, the what-if read higher than the paycheck at your own current rate (a 20-hour week at $18/hr in NY read $332.46 when the paycheck shows $316.85), and a raise to $21/hr looked like +$55.41/week instead of the true +$46.40 \u2014 about $39/month overstated. With a pay stub saved, nothing changes: the what-if already used your stub percentages.",
+        "The Plan tab's 'Per paycheck' figure now uses your real pay schedule: it used to repeat the weekly take-home for everyone, so a biweekly paycheck read as one week's net ($211.15 on a 16.75-hour week at $16/hr with a $35 flat fee) when the actual check is $457.32 \u2014 two weeks of gross with the flat fee charged once per check, not twice. Weekly pay is unchanged, and the label now names the schedule (weekly / every 2 weeks / monthly) so a check never reads as a week."
+      ]
+    },
+    {
+      "v": "2.29.0",
+      "version": "2.29.0",
+      "date": "Nov 2, 2026",
+      "notify": true,
+      "notes": [
+        "NEW \ud83d\udcca Spending insights on the My money tab: import a bank statement and see where your money really went \u2014 money in, money out, net and spent-per-day; spending by category (food, transport, fun, subscriptions, clothes, shopping, bills, cash, fees), sorted from the store names on your statement; your top 5 places; and every subscription or repeat monthly charge with what it costs you a year. Pick a month to compare, and with 3+ weeks of history one tap sets your Budget tab's planned spending from your real average (with Undo). All of it stays on this device.",
+        "Statement imports now add up instead of replacing: import October, then November, and both stay (exact duplicates are skipped). Transfers between your own accounts are left out of spending.",
+        "Fixed What's New: the last 30 updates were listed as \"vundefined\" because their version number was stored under a different name. Every update now shows its real version."
+      ]
+    },
+    {
       "v": "2.28.0",
       "date": "Oct 31, 2026",
       "notify": true,
       "notes": [
-        "Extra-hours advice now respects overtime: hours past 40/week pay 1.5×, so the Paycheck tab's what-if and the savings-goal 'add hours' line no longer price overtime hours at straight time — a week already at 38 hours adding 5 used to show +$60.00/week take-home instead of $78.00, and a $200/month shortfall was answered with 3.85 hrs/week instead of 3.23. Weeks under 40 hours are unchanged, and the flat-fee fix from v2.27.0 still applies."
+        "Extra-hours advice now respects overtime: hours past 40/week pay 1.5\u00d7, so the Paycheck tab's what-if and the savings-goal 'add hours' line no longer price overtime hours at straight time \u2014 a week already at 38 hours adding 5 used to show +$60.00/week take-home instead of $78.00, and a $200/month shortfall was answered with 3.85 hrs/week instead of 3.23. Weeks under 40 hours are unchanged, and the flat-fee fix from v2.27.0 still applies."
       ]
     },
     {
@@ -13,7 +37,7 @@
       "date": "Oct 30, 2026",
       "notify": true,
       "notes": [
-        "Extra-hours advice now uses the take-home rate on one more hour, not the paycheck's average rate: a flat per-check fee (like the membership fee) doesn't grow when you add hours, so it no longer drags the advice down — a 16.75-hour week at $16/hr with $35/check in flat fees used to show +5 hrs as $48.63/week instead of $59.08, and a $100/month shortfall as 2.37 extra hrs/week instead of 1.95. The Paycheck tab's what-if and both goal tabs' 'add hours' lines use the same corrected rate. Averages for the week you already worked are unchanged."
+        "Extra-hours advice now uses the take-home rate on one more hour, not the paycheck's average rate: a flat per-check fee (like the membership fee) doesn't grow when you add hours, so it no longer drags the advice down \u2014 a 16.75-hour week at $16/hr with $35/check in flat fees used to show +5 hrs as $48.63/week instead of $59.08, and a $100/month shortfall as 2.37 extra hrs/week instead of 1.95. The Paycheck tab's what-if and both goal tabs' 'add hours' lines use the same corrected rate. Averages for the week you already worked are unchanged."
       ]
     },
     {
@@ -29,7 +53,7 @@
       "date": "Oct 28, 2026",
       "notify": true,
       "notes": [
-        "The Plan tab's monthly take-home now counts flat per-check fees at your real pay schedule: a biweekly check carries one fee for two weeks, a monthly check one fee a month. Before, the planner counted the fee every week, so biweekly pay showed too low versus the Paycheck tab — and the Plan goal date came out later than the Budget tab's for the same week. Weekly pay and weeks with no flat fees are unchanged."
+        "The Plan tab's monthly take-home now counts flat per-check fees at your real pay schedule: a biweekly check carries one fee for two weeks, a monthly check one fee a month. Before, the planner counted the fee every week, so biweekly pay showed too low versus the Paycheck tab \u2014 and the Plan goal date came out later than the Budget tab's for the same week. Weekly pay and weeks with no flat fees are unchanged."
       ]
     },
     {
@@ -37,7 +61,7 @@
       "date": "Oct 27, 2026",
       "notify": true,
       "notes": [
-        "The savings-goal date now counts only the money actually free for saving: your monthly leftover minus the extra loan payment you set on the Loans tab. Before, the same dollars were promised twice — the goal date assumed the whole leftover was being saved even when part of it was already going to a loan, so the date came out too soon. The Plan tab's goal line uses the same number, so both tabs agree."
+        "The savings-goal date now counts only the money actually free for saving: your monthly leftover minus the extra loan payment you set on the Loans tab. Before, the same dollars were promised twice \u2014 the goal date assumed the whole leftover was being saved even when part of it was already going to a loan, so the date came out too soon. The Plan tab's goal line uses the same number, so both tabs agree."
       ]
     },
     {

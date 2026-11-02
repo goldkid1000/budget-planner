@@ -485,7 +485,7 @@
             <p class="plan-pay-num" id="planGrossWeek">$0</p>
           </div>
           <div class="plan-pay-cell">
-            <p class="plan-pay-label">Per payday (weekly)</p>
+            <p class="plan-pay-label" id="planNetPaydayLabel">Per paycheck (weekly)</p>
             <p class="plan-pay-num" id="planNetPayday">$0</p>
           </div>
           <div class="plan-pay-cell">
@@ -620,6 +620,15 @@
         </div>
         <p class="warning" id="moneyWarn" hidden>⚠️ Your bills + planned spending add up to more than your balances. Trim spending or hold off on extras until the next paycheck.</p>
         <p class="hint" id="moneyUpdatedLine"></p>
+      </div>
+
+      <div class="card" id="insightsCard">
+        <h3>📊 Spending insights</h3>
+        <p class="hint">Built from the transactions in your imported statements — every number is from your own bank lines, sorted by what the store name says. Nothing leaves this device. Import another month and it adds on (duplicates are skipped).</p>
+        <label class="field" hidden>Show
+          <select id="insMonth" aria-label="Which month to show"></select>
+        </label>
+        <div id="insightsBody"></div>
       </div>
 
       <div class="card">
@@ -824,5 +833,6 @@
 </div>
 
 <script src="app.js"></script>
+<script src="insights.js"></script>
 </body>
 </html>

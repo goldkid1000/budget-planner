@@ -3,11 +3,12 @@
    see the newest version. Offline, navigations fall back to the cached shell. */
 'use strict';
 
-var CACHE = 'budget-planner-v2.28.0';
+var CACHE = 'budget-planner-v2.31.0';
 var SHELL = [
   './',
   'index.html',
   'app.js',
+  'insights.js',
   'style.css',
   'manifest.json',
   'icons/icon.svg'

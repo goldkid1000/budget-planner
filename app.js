@@ -1,7 +1,7 @@
-/* Budget Planner v2.28.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.31.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.28.0';
+var APP_VERSION = '2.31.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -406,7 +406,7 @@ function parseStatementCSV(text){
   if(headerIdx === -1) return { ok: false, error: "Couldn't find a header row with Date, Description, Amount and Balance. Your bank's CSV download usually has one — try that file." };
   var dateCol = findCol(headers, ['date'], []);
   var descCol = findCol(headers, ['description', 'memo', 'payee', 'details'], [dateCol]);
-  var balCol = findCol(headers, ['runningbalance', 'endingbalance', 'balance'], [dateCol, descCol]);
+  var balCol = findCol(headers, ['runningbalance', 'endingbalance', 'balance', 'runningbal', 'availablebal'], [dateCol, descCol]);
   var debitCol = findCol(headers, ['debit', 'withdrawal', 'moneyout', 'amountdebit'], [dateCol, descCol, balCol]);
   var creditCol = findCol(headers, ['credit', 'deposit', 'moneyin', 'amountcredit'], [dateCol, descCol, balCol, debitCol]);
   var amtCol = -1;
@@ -668,6 +668,19 @@ function extraHoursForNet(weeklyNet, currentHrs, rate, margRate){
   var straightNet = straight * perHour;
   if(num0(weeklyNet) <= straightNet) return num0(weeklyNet) / perHour;
   return straight + (num0(weeklyNet) - straightNet) / (perHour * 1.5);
+}
+/* v2.29.0 (merged into 2.31.0): one paycheck's take-home for a planned week, on the user's
+   real pay schedule. The Plan tab's "Per payday" cell used to repeat
+   the weekly net for everyone — a biweekly user saw one week's net
+   ($211.15 on a 16.75h @ $16 week with a $35 flat fee) where their
+   actual check is $457.32: two weeks of gross, % lines on the two-week
+   gross, and the flat fee charged ONCE per check, not twice. This runs
+   the same calcPaycheck path as the Paycheck tab at the real frequency
+   (estimate mode included, stub mode included), so the figure matches
+   what the check will actually be. Weekly pay is exactly the old value. */
+function planPerPaycheck(hours, rate, ded, freq, stateCode, stubSaved){
+  if(stubSaved) return calcPaycheck(hours, rate, ded, freq);
+  return calcPaycheck(hours, rate, ded, freq, { stateCode: stateCode || 'NY' });
 }
 function planMonthlyNet(weeklyNet, flat, freq){
   /* zero-hours week: weeklyNet is just −flat (fees with no pay), and
@@ -945,7 +958,7 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
-    flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, marginalRate: marginalRate,
+    flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, planPerPaycheck: planPerPaycheck, marginalRate: marginalRate,
     extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
@@ -2098,7 +2111,14 @@ function renderPlanHours(rebuildDays){
   var monthlyNet = planMonthlyNet(p.net, flatPerCheck(p), S.freq);
   document.getElementById('planNetWeek').textContent = money(p.net);
   document.getElementById('planGrossWeek').textContent = money(p.weeklyGross);
-  document.getElementById('planNetPayday').textContent = money(p.net);
+  /* v2.29.0 (merged into 2.31.0): per-paycheck net on the real pay schedule, not the weekly
+     net repeated — see planPerPaycheck. The label names the schedule
+     so a biweekly check never reads as a weekly one. */
+  var pPay = planPerPaycheck(total, S.rate, S.ded, S.freq, S.stateCode || 'NY', !!S.stubSaved);
+  document.getElementById('planNetPayday').textContent = money(pPay.net);
+  var ppLabel = document.getElementById('planNetPaydayLabel');
+  if(ppLabel) ppLabel.textContent = 'Per paycheck' +
+    (S.freq === 'biweekly' ? ' (every 2 weeks)' : (S.freq === 'monthly' ? ' (monthly)' : ' (weekly)'));
   document.getElementById('planNetMonth').textContent = money(monthlyNet);
   var note = document.getElementById('planPayNote');
   if(!(num(S.rate) > 0)){
@@ -3641,6 +3661,8 @@ function renderBudget(){
   renderBudgetSummary();
   renderCategoryList();
   renderGoal();
+  /* v2.29.0: let add-on modules (insights.js) refresh with the app */
+  if(typeof window.onBudgetRender === 'function'){ try{ window.onBudgetRender(); }catch(e){} }
 }
 
 /* v2.4.3: auto-shrink the donut center amount so big numbers never
@@ -4042,8 +4064,17 @@ function renderPaycheckOutputs(){
     (otPart > 0 ? ' — includes ' + fmtHrs(otPart) + ' hrs overtime.' : '');
   var newRate = num(document.getElementById('newRate').value, 0);
   if(newRate > 0){
-    var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly');
-    var oldP = calcPaycheck(effectiveHours(), S.rate, S.ded, 'weekly');
+    /* v2.30.0 (merged into 2.31.0): same tax mode as the paycheck above — estimate mode (no
+       stub saved) runs the 2025 brackets, stub mode runs the stub %s.
+       The old code always ran the stub %s, so with no stub saved the
+       what-if silently dropped the estimated state tax (and federal at
+       higher incomes): a week at its own current rate read HIGHER than
+       the paycheck displayed just above it, and a raise looked bigger
+       than it is. Weekly framing is unchanged — the line still quotes
+       take-home / week. */
+    var rateEst = !S.stubSaved ? { stateCode: S.stateCode || 'NY' } : undefined;
+    var newP = calcPaycheck(effectiveHours(), newRate, S.ded, 'weekly', rateEst);
+    var oldP = calcPaycheck(effectiveHours(), S.rate, S.ded, 'weekly', rateEst);
     document.getElementById('newRateOut').textContent = 'At $' + newRate.toFixed(2) + '/hr with the same hours: ' +
       money(newP.net) + ' take-home / week — that is ' + money(newP.net - oldP.net) +
       ' more per week (' + money((newP.net - oldP.net) * 52 / 12) + ' / month).';
@@ -4142,7 +4173,18 @@ function applyStatement(){
     else S.saved = pendingImport.balance;
   }
   if(pendingImport.statementDate) S.balanceDate = pendingImport.statementDate;
-  S.statementTxns = pendingImport.transactions.slice(-100);
+  /* v2.29.0: imports now ADD to what's already here (duplicates skipped),
+     so a few monthly statements build up real spending history for the
+     Spending insights card. Undo still restores the previous list. */
+  var seenTx = {}, merged = [];
+  (S.statementTxns || []).concat(pendingImport.transactions.map(function(t){
+    return { date: t.date, description: t.description, amount: t.amount, balance: t.balance, account: account };
+  })).forEach(function(t){
+    var k = t.date + '|' + t.amount + '|' + String(t.description || '').toLowerCase();
+    if(seenTx[k]) return; seenTx[k] = 1; merged.push(t);
+  });
+  merged.sort(function(a, b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  S.statementTxns = merged.slice(-1500);
   S.statementInfo = { balance: pendingImport.balance, date: pendingImport.statementDate, count: pendingImport.count, account: account };
   save(); renderAll();
   document.getElementById('csvStatus').textContent = 'Done — ' +
@@ -4169,6 +4211,7 @@ function undoStatement(){
 /* ---------- update system: banner once per version, manual What's New ---------- */
 var UPDATE_SEEN_PREFIX = 'budgetPlanner.update.seen.v';
 var CHANGELOG_FALLBACK = [
+  { version: '2.29.0', notes: ["NEW 📊 Spending insights on the My money tab: import a bank statement and see where your money really went — money in, money out, net and spent-per-day; spending by category (food, transport, fun, subscriptions, clothes, shopping, bills, cash, fees), sorted from the store names on your statement; your top 5 places; and every subscription or repeat monthly charge with what it costs you a year. Pick a month to compare, and with 3+ weeks of history one tap sets your Budget tab's planned spending from your real average (with Undo). All of it stays on this device.", "Statement imports now add up instead of replacing: import October, then November, and both stay (exact duplicates are skipped). Transfers between your own accounts are left out of spending.", "Fixed What's New: the last 30 updates were listed as \"vundefined\" because their version number was stored under a different name. Every update now shows its real version."] },
   { version: '2.1.0', notes: [
     'Full visual rework: a premium dark fintech look \u2014 deeper layered backgrounds, a refined mint accent system, gradient cards and buttons, a glassy bottom tab bar on phones, polished inputs with glowing focus rings, and a richer header. Every feature works exactly as before.',
     'New micro-details: gradient card titles with accent underlines, bolder money figures, smoother press feedback, and clearer focus states for keyboard users. All animations still respect your reduced-motion setting.'
@@ -4297,7 +4340,8 @@ function renderWhatsNewNotes(versions){
   body.innerHTML = '';
   versions.forEach(function(v){
     var div = document.createElement('div'); div.className = 'whatsnew-version';
-    var h = document.createElement('h4'); h.textContent = 'v' + v.version + (v.version === APP_VERSION ? ' — you have this one' : '');
+    var ver = v.version || v.v || '';
+    var h = document.createElement('h4'); h.textContent = 'v' + ver + (ver === APP_VERSION ? ' — you have this one' : '');
     div.appendChild(h);
     var ul = document.createElement('ul');
     (v.notes || []).forEach(function(n){ var li = document.createElement('li'); li.textContent = n; ul.appendChild(li); });
@@ -5233,4 +5277,6 @@ if('serviceWorker' in navigator && window.location.protocol !== 'file:'){
   }catch(e){}
 })();
 checkForUpdate(false);
+/* v2.29.0: hooks for insights.js (browser-only code lives in this block) */
+window.BudgetApp = { save: save, renderAll: renderAll, esc: esc };
 }
