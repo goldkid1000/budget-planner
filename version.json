@@ -7,6 +7,6 @@
     "The Plan tab's 'Per paycheck' figure now uses your real pay schedule: it used to repeat the weekly take-home for everyone, so a biweekly paycheck read as one week's net ($211.15 on a 16.75-hour week at $16/hr with a $35 flat fee) when the actual check is $457.32 \u2014 two weeks of gross with the flat fee charged once per check, not twice. Weekly pay is unchanged, and the label now names the schedule (weekly / every 2 weeks / monthly) so a check never reads as a week."
   ],
   "notify": true,
-  "updated": "2026-11-02",
-  "version": "2.31.0"
+  "updated": "2026-11-05",
+  "version": "2.34.0"
 }

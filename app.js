@@ -1,7 +1,7 @@
-/* Budget Planner v2.31.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.34.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.31.0';
+var APP_VERSION = '2.34.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -385,7 +385,9 @@ function findCol(headers, tests, skip){
 }
 /* Parse a bank statement CSV. Returns {ok, transactions, balance, statementDate, count}
    or {ok:false, error}. Tolerant of column order/casing, quoted fields, $ and commas,
-   (parentheses) negatives, trailing-minus negatives, and separate debit/credit columns. */
+   (parentheses) negatives, trailing-minus negatives, and separate debit/credit columns.
+   The reported balance is the running balance of the latest transaction, whichever
+   order the file lists rows in (newest-first or oldest-first). */
 function parseStatementCSV(text){
   var rows = parseCSVText(String(text || ''));
   if(!rows.length) return { ok: false, error: "Couldn't read that — the file looks empty. Try downloading the CSV again from your bank." };
@@ -415,7 +417,7 @@ function parseStatementCSV(text){
   }
   if(dateCol === -1) return { ok: false, error: "Couldn't find a Date column in your statement." };
   if(amtCol === -1 && (debitCol === -1 || creditCol === -1)) return { ok: false, error: "Couldn't find an Amount column (or Debit/Credit columns) in your statement." };
-  var txns = [], balance = null, latestDate = null;
+  var txns = [], balRows = [], latestDate = null;
   for(var i = headerIdx + 1; i < rows.length; i++){
     var row = rows[i];
     var date = parseDateLoose(row[dateCol]);
@@ -429,9 +431,28 @@ function parseStatementCSV(text){
     if(amt == null) continue;
     var desc = descCol !== -1 ? String(row[descCol] == null ? '' : row[descCol]).trim() : '';
     var bal = balCol !== -1 ? parseAmount(row[balCol]) : null;
-    if(bal != null) balance = bal;
+    /* v2.33.0: the balance must come from the LATEST transaction, not the
+       last row in the file — banks that export newest-first used to hand
+       back the OLDEST row's running balance (a newest-first file ending
+       at $930 dated Nov 1 reported $930 "as of Nov 3" when the true
+       balance was $900), and that wrong number then overwrote the saved
+       balance on import. File order decides which same-date row is
+       latest: first row when newest-first, last row when oldest-first. */
+    if(bal != null) balRows.push({ date: date, bal: bal });
     if(!latestDate || date > latestDate) latestDate = date;
     txns.push({ date: date, description: desc, amount: amt, balance: bal });
+  }
+  var balance = null;
+  if(balRows.length){
+    var maxBalDate = balRows[0].date;
+    balRows.forEach(function(b){ if(b.date > maxBalDate) maxBalDate = b.date; });
+    var newestFirst = txns.length > 1 && txns[0].date > txns[txns.length - 1].date;
+    for(var bi = 0; bi < balRows.length; bi++){
+      if(balRows[bi].date === maxBalDate){
+        balance = balRows[bi].bal;
+        if(newestFirst) break;
+      }
+    }
   }
   if(!txns.length) return { ok: false, error: "Found the columns but no transactions with a date and amount. Try the CSV download from your bank." };
   return { ok: true, transactions: txns, balance: balance, statementDate: latestDate, count: txns.length };
@@ -448,7 +469,7 @@ function parseStatementCSV(text){
    Each line is rounded to cents first (like a real pay stub), then summed,
    so the totals match the lines exactly.
    estimate: when passed { stateCode }, federal + state tax come from the
-   2025 bracket tables instead of ded.federal / ded.ny (estimate mode —
+   2026 bracket tables instead of ded.federal / ded.ny (estimate mode —
    no pay stub entered). FICA, FLI, 401K and flat lines still use ded. */
 function calcPaycheck(hours, rate, ded, freq, estimate){
   /* v2.0.2 auto-detect: overtime — hours over 40/week are paid at 1.5x.
@@ -828,76 +849,87 @@ function dueSoonBills(bills, nowMs){
 }
 function calcUnit(price, size){ return size > 0 ? price / size : 0; }
 
-/* ---------- 2025 income-tax estimate tables (single filer) ----------
+/* ---------- 2026 income-tax estimate tables (single filer) ----------
    Source: Tax Foundation, "State Individual Income Tax Rates and Brackets,
-   2025" (single-filer columns). Each state: ded = 2025 standard deduction
-   for a single filer PLUS any plain-dollar personal exemption from the same
-   table; credit = single-filer personal-exemption credit where the state
-   gives one instead of a deduction (CA, UT, IA, NE, OR, DE); brackets =
-   [upper bound, rate] pairs, rate applying up to that bound (last = Infinity).
+   2026" (single-filer columns, as of Jan 1, 2026); federal per IRS Rev. Proc.
+   2025-32. Each state: ded = 2026 standard deduction for a single filer
+   PLUS any plain-dollar personal exemption from the same table; credit =
+   single-filer personal-exemption credit where the state gives one instead
+   of a deduction (CA, UT, IA, NE, OR, DE); brackets = [upper bound, rate]
+   pairs, rate applying up to that bound (last = Infinity). A 0% first slice
+   covers states whose first listed rate starts above $0 (ND, OH, ID, MS, OK).
    States with no wage income tax (AK, FL, NV, NH, SD, TN, TX, WA, WY) are
    null — WA taxes capital gains only, so wage tax is $0 here.
    Deliberately NOT modeled (estimate only): personal-exemption phaseouts,
    itemized deductions, dependent credits/exemptions, local/city income tax,
    NY tax-benefit recapture, payroll taxes (CA disability, WA Cares, MA PFML).
-   Federal: 2025 single standard deduction $15,000 + 2025 brackets. */
+   2026 notes: NY's five lowest rates fell 0.1pt (FY2026 budget, Ch. 59 Laws
+   of 2025; thresholds unchanged) — verified against NYS DTF IT-2105-I (2026).
+   IA's deduction is the federal standard deduction ($16,100): Iowa starts
+   from federal taxable income, so the old table's $0 deduction overstated
+   Iowa tax by 3.8% of the deduction. AZ/ME/SC standard deductions are the
+   pre-OBBBA federal amount ($8,350): those states conform to a pre-OBBBA IRC
+   version and had not updated conformity when the table was published; they
+   may fix it retroactively. SC's top rate reverts from 6.0% to 6.2% on
+   Jul 1, 2026 (FY 2026 budget) — the table uses the Jan 1, 2026 rate.
+   Federal: 2026 single standard deduction $16,100 + 2026 brackets. */
 var NO_TAX_STATE_NAMES = { AK: 'Alaska', FL: 'Florida', NV: 'Nevada',
   NH: 'New Hampshire', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas',
   WA: 'Washington', WY: 'Wyoming' };
-var FEDERAL_STD_DED_2025 = 15000;
-var FEDERAL_BRACKETS_2025 = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [197300, 0.24],
-  [250525, 0.32], [626350, 0.35], [Infinity, 0.37]];
-var STATE_TAX_2025 = {
+var FEDERAL_STD_DED_2026 = 16100;
+var FEDERAL_BRACKETS_2026 = [[12400, 0.10], [50400, 0.12], [105700, 0.22], [201775, 0.24],
+  [256225, 0.32], [640600, 0.35], [Infinity, 0.37]];
+var STATE_TAX_2026 = {
   AL: { name: 'Alabama', ded: 4500, credit: 0, brackets: [[500, 0.02], [3000, 0.04], [Infinity, 0.05]] },
   AK: null,
-  AZ: { name: 'Arizona', ded: 15000, credit: 0, brackets: [[Infinity, 0.025]] },
-  AR: { name: 'Arkansas', ded: 2410, credit: 29, brackets: [[4500, 0.02], [Infinity, 0.039]] },
-  CA: { name: 'California', ded: 5540, credit: 149, brackets: [[10756, 0.01], [25499, 0.02], [40245, 0.04], [55866, 0.06], [70606, 0.08], [360659, 0.093], [432787, 0.103], [721314, 0.113], [1000000, 0.123], [Infinity, 0.133]] },
-  CO: { name: 'Colorado', ded: 15000, credit: 0, brackets: [[Infinity, 0.044]] },
+  AZ: { name: 'Arizona', ded: 8350, credit: 0, brackets: [[Infinity, 0.025]] },
+  AR: { name: 'Arkansas', ded: 2470, credit: 29, brackets: [[4600, 0.02], [Infinity, 0.039]] },
+  CA: { name: 'California', ded: 5540, credit: 153, brackets: [[11079, 0.01], [26264, 0.02], [41452, 0.04], [57542, 0.06], [72724, 0.08], [371479, 0.093], [445771, 0.103], [742953, 0.113], [1000000, 0.123], [Infinity, 0.133]] },
+  CO: { name: 'Colorado', ded: 16100, credit: 0, brackets: [[Infinity, 0.044]] },
   CT: { name: 'Connecticut', ded: 15000, credit: 0, brackets: [[10000, 0.02], [50000, 0.045], [100000, 0.055], [200000, 0.06], [250000, 0.065], [500000, 0.069], [Infinity, 0.0699]] },
   DE: { name: 'Delaware', ded: 3250, credit: 110, brackets: [[2000, 0], [5000, 0.022], [10000, 0.039], [20000, 0.048], [25000, 0.052], [60000, 0.0555], [Infinity, 0.066]] },
-  DC: { name: 'Washington DC', ded: 15000, credit: 0, brackets: [[10000, 0.04], [40000, 0.06], [60000, 0.065], [250000, 0.085], [500000, 0.0925], [1000000, 0.0975], [Infinity, 0.1075]] },
+  DC: { name: 'Washington DC', ded: 16100, credit: 0, brackets: [[10000, 0.04], [40000, 0.06], [60000, 0.065], [250000, 0.085], [500000, 0.0925], [1000000, 0.0975], [Infinity, 0.1075]] },
   FL: null,
-  GA: { name: 'Georgia', ded: 12000, credit: 0, brackets: [[Infinity, 0.0539]] },
+  GA: { name: 'Georgia', ded: 12000, credit: 0, brackets: [[Infinity, 0.0519]] },
   HI: { name: 'Hawaii', ded: 5544, credit: 0, brackets: [[9600, 0.014], [14400, 0.032], [19200, 0.055], [24000, 0.064], [36000, 0.068], [48000, 0.072], [125000, 0.076], [175000, 0.079], [225000, 0.0825], [275000, 0.09], [325000, 0.10], [Infinity, 0.11]] },
-  ID: { name: 'Idaho', ded: 15000, credit: 0, brackets: [[4673, 0], [Infinity, 0.05695]] },
-  IL: { name: 'Illinois', ded: 2850, credit: 0, brackets: [[Infinity, 0.0495]] },
-  IN: { name: 'Indiana', ded: 1000, credit: 0, brackets: [[Infinity, 0.03]] },
-  IA: { name: 'Iowa', ded: 0, credit: 40, brackets: [[Infinity, 0.038]] },
+  ID: { name: 'Idaho', ded: 16100, credit: 0, brackets: [[4811, 0], [Infinity, 0.053]] },
+  IL: { name: 'Illinois', ded: 2925, credit: 0, brackets: [[Infinity, 0.0495]] },
+  IN: { name: 'Indiana', ded: 1000, credit: 0, brackets: [[Infinity, 0.0295]] },
+  IA: { name: 'Iowa', ded: 16100, credit: 40, brackets: [[Infinity, 0.038]] },
   KS: { name: 'Kansas', ded: 12765, credit: 0, brackets: [[23000, 0.052], [Infinity, 0.0558]] },
-  KY: { name: 'Kentucky', ded: 3270, credit: 0, brackets: [[Infinity, 0.04]] },
-  LA: { name: 'Louisiana', ded: 12500, credit: 0, brackets: [[Infinity, 0.03]] },
-  ME: { name: 'Maine', ded: 20150, credit: 0, brackets: [[26800, 0.058], [63450, 0.0675], [Infinity, 0.0715]] },
-  MD: { name: 'Maryland', ded: 5900, credit: 0, brackets: [[1000, 0.02], [2000, 0.03], [3000, 0.04], [100000, 0.0475], [125000, 0.05], [150000, 0.0525], [250000, 0.055], [Infinity, 0.0575]] },
+  KY: { name: 'Kentucky', ded: 3360, credit: 0, brackets: [[Infinity, 0.035]] },
+  LA: { name: 'Louisiana', ded: 12875, credit: 0, brackets: [[Infinity, 0.03]] },
+  ME: { name: 'Maine', ded: 13650, credit: 0, brackets: [[27399, 0.058], [64849, 0.0675], [Infinity, 0.0715]] },
+  MD: { name: 'Maryland', ded: 6550, credit: 0, brackets: [[1000, 0.02], [2000, 0.03], [3000, 0.04], [100000, 0.0475], [125000, 0.05], [150000, 0.0525], [250000, 0.055], [500000, 0.0575], [1000000, 0.0625], [Infinity, 0.065]] },
   MA: { name: 'Massachusetts', ded: 4400, credit: 0, brackets: [[1083150, 0.05], [Infinity, 0.09]] },
-  MI: { name: 'Michigan', ded: 5800, credit: 0, brackets: [[Infinity, 0.0425]] },
-  MN: { name: 'Minnesota', ded: 14950, credit: 0, brackets: [[32570, 0.0535], [106990, 0.068], [198630, 0.0785], [Infinity, 0.0985]] },
-  MS: { name: 'Mississippi', ded: 8300, credit: 0, brackets: [[10000, 0], [Infinity, 0.044]] },
-  MO: { name: 'Missouri', ded: 15000, credit: 0, brackets: [[1313, 0], [2626, 0.02], [3939, 0.025], [5252, 0.03], [6565, 0.035], [7878, 0.04], [9191, 0.045], [Infinity, 0.047]] },
-  MT: { name: 'Montana', ded: 15000, credit: 0, brackets: [[21100, 0.047], [Infinity, 0.059]] },
-  NE: { name: 'Nebraska', ded: 8600, credit: 171, brackets: [[4030, 0.0246], [24120, 0.0351], [38870, 0.0501], [Infinity, 0.052]] },
+  MI: { name: 'Michigan', ded: 5900, credit: 0, brackets: [[Infinity, 0.0425]] },
+  MN: { name: 'Minnesota', ded: 15300, credit: 0, brackets: [[33310, 0.0535], [109430, 0.068], [203150, 0.0785], [Infinity, 0.0985]] },
+  MS: { name: 'Mississippi', ded: 8300, credit: 0, brackets: [[10000, 0], [Infinity, 0.04]] },
+  MO: { name: 'Missouri', ded: 16100, credit: 0, brackets: [[1348, 0], [2696, 0.02], [4044, 0.025], [5392, 0.03], [6740, 0.035], [8088, 0.04], [9436, 0.045], [Infinity, 0.047]] },
+  MT: { name: 'Montana', ded: 16100, credit: 0, brackets: [[47500, 0.047], [Infinity, 0.0565]] },
+  NE: { name: 'Nebraska', ded: 8850, credit: 176, brackets: [[4130, 0.0246], [24760, 0.0351], [Infinity, 0.0455]] },
   NV: null,
   NH: null,
   NJ: { name: 'New Jersey', ded: 1000, credit: 0, brackets: [[20000, 0.014], [35000, 0.0175], [40000, 0.035], [75000, 0.05525], [500000, 0.0637], [1000000, 0.0897], [Infinity, 0.1075]] },
-  NM: { name: 'New Mexico', ded: 15000, credit: 0, brackets: [[5500, 0.015], [16500, 0.032], [33500, 0.043], [66500, 0.047], [210000, 0.049], [Infinity, 0.059]] },
-  NY: { name: 'New York', ded: 8000, credit: 0, brackets: [[8500, 0.04], [11700, 0.045], [13900, 0.0525], [80650, 0.055], [215400, 0.06], [1077550, 0.0685], [5000000, 0.0965], [25000000, 0.103], [Infinity, 0.109]] },
-  NC: { name: 'North Carolina', ded: 12750, credit: 0, brackets: [[Infinity, 0.0425]] },
-  ND: { name: 'North Dakota', ded: 15000, credit: 0, brackets: [[48475, 0], [244825, 0.0195], [Infinity, 0.025]] },
-  OH: { name: 'Ohio', ded: 2400, credit: 0, brackets: [[26050, 0], [100000, 0.0275], [Infinity, 0.035]] },
-  OK: { name: 'Oklahoma', ded: 7350, credit: 0, brackets: [[1000, 0.0025], [2500, 0.0075], [3750, 0.0175], [4900, 0.0275], [7200, 0.0375], [Infinity, 0.0475]] },
-  OR: { name: 'Oregon', ded: 2800, credit: 250, brackets: [[4400, 0.0475], [11050, 0.0675], [125000, 0.0875], [Infinity, 0.099]] },
+  NM: { name: 'New Mexico', ded: 16100, credit: 0, brackets: [[5500, 0.015], [16500, 0.032], [33500, 0.043], [66500, 0.047], [210000, 0.049], [Infinity, 0.059]] },
+  NY: { name: 'New York', ded: 8000, credit: 0, brackets: [[8500, 0.039], [11700, 0.044], [13900, 0.0515], [80650, 0.054], [215400, 0.059], [1077550, 0.0685], [5000000, 0.0965], [25000000, 0.103], [Infinity, 0.109]] },
+  NC: { name: 'North Carolina', ded: 12750, credit: 0, brackets: [[Infinity, 0.0399]] },
+  ND: { name: 'North Dakota', ded: 16100, credit: 0, brackets: [[48475, 0], [244825, 0.0195], [Infinity, 0.025]] },
+  OH: { name: 'Ohio', ded: 2400, credit: 0, brackets: [[26050, 0], [Infinity, 0.0275]] },
+  OK: { name: 'Oklahoma', ded: 7350, credit: 0, brackets: [[3750, 0], [4900, 0.025], [7200, 0.035], [Infinity, 0.045]] },
+  OR: { name: 'Oregon', ded: 2910, credit: 256, brackets: [[4550, 0.0475], [11400, 0.0675], [125000, 0.0875], [Infinity, 0.099]] },
   PA: { name: 'Pennsylvania', ded: 0, credit: 0, brackets: [[Infinity, 0.0307]] },
-  RI: { name: 'Rhode Island', ded: 16000, credit: 0, brackets: [[79900, 0.0375], [181650, 0.0475], [Infinity, 0.0599]] },
-  SC: { name: 'South Carolina', ded: 15000, credit: 0, brackets: [[3560, 0], [17830, 0.03], [Infinity, 0.062]] },
+  RI: { name: 'Rhode Island', ded: 16450, credit: 0, brackets: [[82050, 0.0375], [186450, 0.0475], [Infinity, 0.0599]] },
+  SC: { name: 'South Carolina', ded: 8350, credit: 0, brackets: [[3640, 0], [18230, 0.03], [Infinity, 0.06]] },
   SD: null,
   TN: null,
   TX: null,
-  UT: { name: 'Utah', ded: 0, credit: 900, brackets: [[Infinity, 0.0455]] },
-  VT: { name: 'Vermont', ded: 12500, credit: 0, brackets: [[47900, 0.0335], [116000, 0.066], [242000, 0.076], [Infinity, 0.0875]] },
-  VA: { name: 'Virginia', ded: 9430, credit: 0, brackets: [[3000, 0.02], [5000, 0.03], [17000, 0.05], [Infinity, 0.0575]] },
+  UT: { name: 'Utah', ded: 0, credit: 966, brackets: [[Infinity, 0.045]] },
+  VT: { name: 'Vermont', ded: 12950, credit: 0, brackets: [[49400, 0.0335], [119700, 0.066], [249700, 0.076], [Infinity, 0.0875]] },
+  VA: { name: 'Virginia', ded: 9680, credit: 0, brackets: [[3000, 0.02], [5000, 0.03], [17000, 0.05], [Infinity, 0.0575]] },
   WA: null,
   WV: { name: 'West Virginia', ded: 2000, credit: 0, brackets: [[10000, 0.0222], [25000, 0.0296], [40000, 0.0333], [60000, 0.0444], [Infinity, 0.0482]] },
-  WI: { name: 'Wisconsin', ded: 14260, credit: 0, brackets: [[14680, 0.035], [29370, 0.044], [323290, 0.053], [Infinity, 0.0765]] },
+  WI: { name: 'Wisconsin', ded: 14660, credit: 0, brackets: [[15110, 0.035], [51950, 0.044], [332720, 0.053], [Infinity, 0.0765]] },
   WY: null
 };
 /* progressive tax on taxable income: each slice of income pays its own rate */
@@ -915,9 +947,9 @@ function calcBracketTax(taxable, brackets){
    Returns { federalAnnual, stateAnnual, stateName, noStateTax }. */
 function calcEstimateTaxes(weeklyGross, stateCode){
   var annual = Math.max(0, num0(weeklyGross)) * 52;
-  var fedTaxable = Math.max(0, annual - FEDERAL_STD_DED_2025);
-  var federalAnnual = calcBracketTax(fedTaxable, FEDERAL_BRACKETS_2025);
-  var st = STATE_TAX_2025[stateCode] || null;
+  var fedTaxable = Math.max(0, annual - FEDERAL_STD_DED_2026);
+  var federalAnnual = calcBracketTax(fedTaxable, FEDERAL_BRACKETS_2026);
+  var st = STATE_TAX_2026[stateCode] || null;
   if(!st) return { federalAnnual: federalAnnual, stateAnnual: 0,
     stateName: NO_TAX_STATE_NAMES[stateCode] || 'this state', noStateTax: true };
   var stateTaxable = Math.max(0, annual - st.ded);
@@ -962,8 +994,8 @@ if (typeof module !== 'undefined' && module.exports){
     extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
-    STATE_TAX_2025: STATE_TAX_2025, FEDERAL_BRACKETS_2025: FEDERAL_BRACKETS_2025,
-    FEDERAL_STD_DED_2025: FEDERAL_STD_DED_2025 };
+    STATE_TAX_2026: STATE_TAX_2026, FEDERAL_BRACKETS_2026: FEDERAL_BRACKETS_2026,
+    FEDERAL_STD_DED_2026: FEDERAL_STD_DED_2026 };
 }
 
 /* ---------- app (browser only) ---------- */
@@ -1359,7 +1391,7 @@ function fmtPayday(d){
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 function currentPaycheck(){
-  /* No pay stub entered → estimate mode: federal + state tax from the 2025
+  /* No pay stub entered → estimate mode: federal + state tax from the 2026
      bracket tables for the picked state. A saved pay stub wins over the
      estimate — the stub numbers are the real ones. */
   if(!S.stubSaved) return calcPaycheck(effectiveHours(), S.rate, S.ded, S.freq, { stateCode: S.stateCode || 'NY' });
@@ -2125,7 +2157,7 @@ function renderPlanHours(rebuildDays){
     note.textContent = 'Set your hourly rate on the Paycheck tab and these previews fill in with your real rate and deductions.';
   } else {
     note.textContent = 'Same math as your Paycheck tab at ' + money(S.rate) + '/hr' +
-      (p.estimateUsed ? ' (taxes estimated from the 2025 brackets — enter a pay stub there for exact numbers)' : ' (using your saved pay-stub deductions)') +
+      (p.estimateUsed ? ' (taxes estimated from the 2026 brackets — enter a pay stub there for exact numbers)' : ' (using your saved pay-stub deductions)') +
       '. Monthly is the weekly take-home × 52 ÷ 12, except flat per-check fees, which count once per real paycheck (26 a year if biweekly, 12 if monthly) — so it matches the Paycheck tab.';
   }
 
@@ -2377,7 +2409,7 @@ var wlTimesExpanded = {}, wlOpenEntry = null, wlPayOpen = {};
    the planner preview — line names/order mirror the Paycheck tab. */
 function wlPayBreakdown(hours){
   var p = planScenarioPaycheck(hours);
-  var st = STATE_TAX_2025[S.stateCode || 'NY'];
+  var st = STATE_TAX_2026[S.stateCode || 'NY'];
   var stateName = st ? st.name : (NO_TAX_STATE_NAMES[S.stateCode || 'NY'] || 'this state');
   return { gross: p.weeklyGross, regHrs: p.regHrs, otHrs: p.otHrs, otAmt: p.otAmt,
     taxes: [
@@ -3913,7 +3945,7 @@ function renderPaycheck(){
   var nyInput = document.getElementById('nyInput');
   var pNow = currentPaycheck();
   if(estimateMode){
-    /* federal + state come from the 2025 tables — show the effective %
+    /* federal + state come from the 2026 tables — show the effective %
        they work out to, read-only, so the breakdown stays checkable */
     if(fedInput){ fedInput.disabled = true; fedInput.value = pNow.periodGross > 0 ? (pNow.fedAmt / pNow.periodGross * 100).toFixed(4).replace(/\.?0+$/, '') : 0; }
     if(nyInput){ nyInput.disabled = true; nyInput.value = pNow.periodGross > 0 ? (pNow.nyAmt / pNow.periodGross * 100).toFixed(4).replace(/\.?0+$/, '') : 0; }
@@ -3969,7 +4001,7 @@ function renderPaycheck(){
    safe to call while typing (e.g. a shift meal break) without stealing focus */
 function renderPaycheckOutputs(){
   var p = currentPaycheck();
-  var st = STATE_TAX_2025[S.stateCode || 'NY'];
+  var st = STATE_TAX_2026[S.stateCode || 'NY'];
   var stateName = st ? st.name : (NO_TAX_STATE_NAMES[S.stateCode] || 'this state');
   var stateLabel = document.getElementById('stateTaxLabel');
   if(stateLabel) stateLabel.textContent = stateName + ' state tax';
@@ -3978,11 +4010,11 @@ function renderPaycheckOutputs(){
     if(S.stubSaved){
       noteEl.textContent = 'Using your real pay stub — the state estimate is not applied. Your stub numbers win.';
     } else if(!st){
-      noteEl.textContent = stateName + ' has no income tax on wages, so state tax is $0 here. Federal is estimated from the 2025 single-filer standard deduction ($15,000) + 2025 brackets. Estimate only — not tax advice, no city/local tax.';
+      noteEl.textContent = stateName + ' has no income tax on wages, so state tax is $0 here. Federal is estimated from the 2026 single-filer standard deduction ($16,100) + 2026 brackets. Estimate only — not tax advice, no city/local tax.';
     } else {
-      noteEl.textContent = 'Estimate for ' + stateName + ': single filer, 2025 tax year, state income tax only (no city/local tax). Standard deduction ' + money(st.ded) +
+      noteEl.textContent = 'Estimate for ' + stateName + ': single filer, 2026 tax year, state income tax only (no city/local tax). Standard deduction ' + money(st.ded) +
         (st.credit ? ' + ' + money(st.credit) + ' exemption credit' : '') +
-        ' + 2025 brackets. Federal uses the 2025 $15,000 standard deduction + 2025 brackets. Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
+        ' + 2026 brackets. Federal uses the 2026 $16,100 standard deduction + 2026 brackets. Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
     }
   }
   setMoneyText(document.getElementById('grossOut'), p.periodGross);
@@ -4065,7 +4097,7 @@ function renderPaycheckOutputs(){
   var newRate = num(document.getElementById('newRate').value, 0);
   if(newRate > 0){
     /* v2.30.0 (merged into 2.31.0): same tax mode as the paycheck above — estimate mode (no
-       stub saved) runs the 2025 brackets, stub mode runs the stub %s.
+       stub saved) runs the 2026 brackets, stub mode runs the stub %s.
        The old code always ran the stub %s, so with no stub saved the
        what-if silently dropped the estimated state tax (and federal at
        higher incomes): a week at its own current rate read HIGHER than

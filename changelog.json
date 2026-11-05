@@ -1,6 +1,34 @@
 {
   "versions": [
     {
+      "v": "2.34.0",
+      "version": "2.34.0",
+      "date": "Nov 5, 2026",
+      "notify": true,
+      "notes": [
+        "Tax estimates now use the 2026 brackets: federal standard deduction $16,100 (was $15,000) with the 2026 IRS brackets, and every state's 2026 standard deduction and brackets (Tax Foundation, as of Jan 1, 2026). New York's five lowest rates fell 0.1 point for 2026, and Georgia, Indiana, Kentucky, Mississippi, North Carolina, Idaho, Montana, Nebraska and Oklahoma all cut rates or restructured brackets. If you only use the estimate (no pay stub saved), your take-home estimate moves a little \u2014 a $352/week NY paycheck now estimates $4.24/week federal (was $6.35) and $7.90/week NY state (was $8.10). With a pay stub saved, nothing changes: your stub numbers are still the real ones.",
+        "Fixed Iowa's estimate: Iowa starts from federal taxable income, so it now gets the $16,100 federal standard deduction like the other states that do \u2014 before, Iowa was taxed on the full gross, overstating its tax by about $11/week at a $500/week wage."
+      ]
+    },
+    {
+      "v": "2.33.0",
+      "version": "2.33.0",
+      "date": "Nov 4, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed statement import balances: a bank file listed newest-first used to report the oldest row's running balance as your current balance (and that wrong number then overwrote your saved balance on import). The import now takes the running balance from the latest transaction, whichever order the file lists rows in."
+      ]
+    },
+    {
+      "v": "2.32.0",
+      "version": "2.32.0",
+      "date": "Nov 3, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed Spending insights grouping: merchants with an apostrophe in the name (Trader Joe's, Dunkin' Donuts, McDonald's) were split under a stub name \u2014 Trader Joe's showed up as just \"Trader\" \u2014 so Top places and repeat-charge detection could split one store into two. Names are now cleaned up before grouping, so each store counts as one place."
+      ]
+    },
+    {
       "v": "2.31.0",
       "version": "2.31.0",
       "date": "Nov 2, 2026",

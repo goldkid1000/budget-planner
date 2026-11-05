@@ -39,7 +39,7 @@ var KNOWN_SUBS = RULES[3][1];
 function $(id){ return document.getElementById(id); }
 function m$(n){ return typeof money === 'function' ? money(n) : '$' + Number(n).toFixed(2); }
 function e$(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-var TWO_WORD = /^(trader joe|uber eats|whole foods|taco bell|burger king|best buy|home depot|old navy|foot locker|five guys|shake shack|key food|stop shop|bed bath|dollar tree|dollar general|five below|urban outfitters|new balance|under armour|apple cash|cash app|game stop|epic games|state farm|national grid|con ed|mint mobile|boost mobile|whole foods|seven eleven|duane reade|rite aid|panda express|jersey mike|jimmy john|little caesars|papa john|dunkin donuts|chick fil|sweet green|amazon prime|prime video|apple music|youtube premium|disney plus|paramount plus)$/;
+var TWO_WORD = /^(trader joe|uber eats|whole foods|taco bell|burger king|best buy|home depot|old navy|foot locker|five guys|shake shack|key food|stop shop|bed bath|dollar tree|dollar general|five below|urban outfitters|new balance|under armour|apple cash|cash app|game stop|epic games|state farm|national grid|con ed|mint mobile|boost mobile|seven eleven|duane reade|rite aid|panda express|jersey mike|jimmy john|little caesars|papa john|dunkin donuts|chick fil|sweet green|amazon prime|prime video|apple music|youtube premium|disney plus|paramount plus)$/;
 function categorize(t){
   var d = String(t.description || '').toLowerCase();
   if(t.amount > 0){
@@ -57,7 +57,7 @@ function merchantKey(desc){
     .replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, ' ')
     .replace(/[#*][\w-]*/g, ' ')
     .replace(/\b\d+\b/g, ' ')
-    .replace(/[^a-z&.' ]/g, ' ')
+    .replace(/[^a-z&. ]/g, ' ')
     .replace(/\s+/g, ' ').trim();
   var words = d.split(' ').map(function(w){ return w.replace(/\.(com|net|org|co)$/,'').replace(/^www\./,''); })
     .filter(function(w){ return w.length > 1 && !/^(com|inc|llc|usa|us|ny|nj|ca|wa|tx|fl|help|bill|store|the)$/.test(w); });
