@@ -1,12 +1,8 @@
 {
   "notes": [
-    "NEW \ud83d\udcca Spending insights on the My money tab: import a bank statement and see where your money really went \u2014 money in, money out, net and spent-per-day; spending by category (food, transport, fun, subscriptions, clothes, shopping, bills, cash, fees), sorted from the store names on your statement; your top 5 places; and every subscription or repeat monthly charge with what it costs you a year. Pick a month to compare, and with 3+ weeks of history one tap sets your Budget tab's planned spending from your real average (with Undo). All of it stays on this device.",
-    "Statement imports now add up instead of replacing: import October, then November, and both stay (exact duplicates are skipped). Transfers between your own accounts are left out of spending.",
-    "Fixed What's New: the last 30 updates were listed as \"vundefined\" because their version number was stored under a different name. Every update now shows its real version.",
-    "The Paycheck tab's 'try a new rate' what-if now uses the same tax math as the paycheck above it: with no pay stub saved it runs the 2025 estimate brackets instead of silently dropping the estimated state and federal tax. Before, the what-if read higher than the paycheck at your own current rate (a 20-hour week at $18/hr in NY read $332.46 when the paycheck shows $316.85), and a raise to $21/hr looked like +$55.41/week instead of the true +$46.40 \u2014 about $39/month overstated. With a pay stub saved, nothing changes: the what-if already used your stub percentages.",
-    "The Plan tab's 'Per paycheck' figure now uses your real pay schedule: it used to repeat the weekly take-home for everyone, so a biweekly paycheck read as one week's net ($211.15 on a 16.75-hour week at $16/hr with a $35 flat fee) when the actual check is $457.32 \u2014 two weeks of gross with the flat fee charged once per check, not twice. Weekly pay is unchanged, and the label now names the schedule (weekly / every 2 weeks / monthly) so a check never reads as a week."
+    "Fixed Spending insights grouping again: a store whose name sometimes has an apostrophe and sometimes doesn't (McDonald's vs MCDONALDS, O'Reilly vs OREILLY, Trader Joe's vs TRADER JOES) was still split into two places in Top places, with the apostrophe version showing a stub name like \u201cMcDonald\u201d or \u201cReilly\u201d. Both spellings now count as one store. Same fix for WAL-MART vs WALMART and 7-Eleven vs SEVEN ELEVEN \u2014 each of those now counts as one place too."
   ],
   "notify": true,
-  "updated": "2026-11-05",
-  "version": "2.34.0"
+  "updated": "2026-11-06",
+  "version": "2.35.0"
 }

@@ -39,7 +39,7 @@ var KNOWN_SUBS = RULES[3][1];
 function $(id){ return document.getElementById(id); }
 function m$(n){ return typeof money === 'function' ? money(n) : '$' + Number(n).toFixed(2); }
 function e$(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-var TWO_WORD = /^(trader joe|uber eats|whole foods|taco bell|burger king|best buy|home depot|old navy|foot locker|five guys|shake shack|key food|stop shop|bed bath|dollar tree|dollar general|five below|urban outfitters|new balance|under armour|apple cash|cash app|game stop|epic games|state farm|national grid|con ed|mint mobile|boost mobile|seven eleven|duane reade|rite aid|panda express|jersey mike|jimmy john|little caesars|papa john|dunkin donuts|chick fil|sweet green|amazon prime|prime video|apple music|youtube premium|disney plus|paramount plus)$/;
+var TWO_WORD = /^(trader joe|trader joes|uber eats|whole foods|taco bell|burger king|best buy|home depot|old navy|foot locker|five guys|shake shack|key food|stop shop|bed bath|dollar tree|dollar general|five below|urban outfitters|new balance|under armour|apple cash|cash app|game stop|epic games|state farm|national grid|con ed|mint mobile|boost mobile|seven eleven|duane reade|rite aid|panda express|jersey mike|jimmy john|little caesars|papa john|dunkin donuts|chick fil|sweet green|amazon prime|prime video|apple music|youtube premium|disney plus|paramount plus)$/;
 function categorize(t){
   var d = String(t.description || '').toLowerCase();
   if(t.amount > 0){
@@ -53,6 +53,17 @@ function categorize(t){
 /* "POS DEBIT 10/14 STARBUCKS #1234 NEW YORK NY" -> "starbucks" */
 function merchantKey(desc){
   var d = String(desc || '').toLowerCase()
+    /* Apostrophes vanish instead of splitting a word: MCDONALD'S and
+       MCDONALDS must be the same store (v2.32.0 turned the apostrophe into
+       a space, so "MCDONALD'S" keyed "mcdonald" while "MCDONALDS" keyed
+       "mcdonalds" — one store, two Top-places entries). Same for O'REILLY
+       (was "reilly", losing the O) and TRADER JOE'S (now "trader joes"). */
+    .replace(/['\u2019]/g, '')
+    /* Same-store spellings: WAL-MART / WAL MART = WALMART, and 7-ELEVEN /
+       7 ELEVEN = SEVEN ELEVEN (the digit strip below would otherwise eat
+       the 7 and leave a bare "eleven"). */
+    .replace(/\bwal[ -]?mart\b/g, 'walmart')
+    .replace(/\b7[ -]?eleven\b/g, 'seven eleven')
     .replace(/(pos|debit|credit|card|purchase|recurring|checkcard|visa|mastercard|ach|web|online|payment|pmt|ppd|id:?)\b/g, ' ')
     .replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, ' ')
     .replace(/[#*][\w-]*/g, ' ')
