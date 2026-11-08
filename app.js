@@ -1,7 +1,7 @@
-/* Budget Planner v2.35.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.37.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.35.0';
+var APP_VERSION = '2.37.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -544,6 +544,29 @@ function paycheckFlags(hours, rate, net, stateCode){
   if(net < 0 && (hours > 0 || rate > 0)) flags.push('Deductions are higher than gross pay \u2014 check your deduction entries.');
   return flags;
 }
+/* v2.37.0: a biweekly last-payday date that falls on a different weekday
+   than the picked payday weekday means one of the two is wrong — and the
+   countdown silently follows the date, not the picker, so the "next
+   payday" can land on the wrong weekday with no warning. Biweekly
+   paydays always land on the same weekday, so any disagreement is a
+   real mistake (stale picker after a schedule change, or a mistyped
+   date), never a legitimate setup. Returns the flag text, or null when
+   there is nothing to flag. Monthly paydays are a calendar date, not a
+   weekday, so they are never flagged; weekly pay needs no anchor at
+   all. Pure (no DOM, no fmtPayday/num — those live in the browser-only
+   section) so tests can call it directly. */
+function paydayAnchorMismatch(freq, lastPayday, paydayWeekday){
+  if(freq !== 'biweekly') return null;
+  if(!lastPayday) return null;
+  var pa = new Date(String(lastPayday) + 'T12:00:00');
+  if(!isFinite(pa)) return null;
+  var wd = (paydayWeekday === undefined || paydayWeekday === null) ? 2 : num0(paydayWeekday);
+  if(pa.getDay() === wd) return null;
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var when = pa.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return 'Your last payday (' + when + ') is a ' + DAYS[pa.getDay()] + ', not a ' + DAYS[wd] +
+    ' \u2014 the countdown follows that date, so fix the payday weekday above or the last-payday date.';
+}
 /* v2.12.0: sanitize a Work Log week's stored pay breakdown (built by
    wlPayBreakdown in the app section from one calcPaycheck run). Returns
    null for anything unusable so the renderer can fall back to computing
@@ -862,16 +885,33 @@ function calcUnit(price, size){ return size > 0 ? price / size : 0; }
    null — WA taxes capital gains only, so wage tax is $0 here.
    Deliberately NOT modeled (estimate only): personal-exemption phaseouts,
    itemized deductions, dependent credits/exemptions, local/city income tax,
-   NY tax-benefit recapture, payroll taxes (CA disability, WA Cares, MA PFML).
+   NY tax-benefit recapture, payroll taxes (CA disability, WA Cares, MA PFML),
+   the SC SCIAD phase-out above $40,000 AGI and the UT credit phase-out
+   above ~$18,200 (both shrink the deduction/credit for higher earners;
+   the table gives the full amount, so high earners' estimates run low).
    2026 notes: NY's five lowest rates fell 0.1pt (FY2026 budget, Ch. 59 Laws
    of 2025; thresholds unchanged) — verified against NYS DTF IT-2105-I (2026).
    IA's deduction is the federal standard deduction ($16,100): Iowa starts
    from federal taxable income, so the old table's $0 deduction overstated
-   Iowa tax by 3.8% of the deduction. AZ/ME/SC standard deductions are the
+   Iowa tax by 3.8% of the deduction. AZ/ME standard deductions are the
    pre-OBBBA federal amount ($8,350): those states conform to a pre-OBBBA IRC
    version and had not updated conformity when the table was published; they
-   may fix it retroactively. SC's top rate reverts from 6.0% to 6.2% on
-   Jul 1, 2026 (FY 2026 budget) — the table uses the Jan 1, 2026 rate.
+   may fix it retroactively.
+   v2.36.0 mid-year refresh: four states cut rates AFTER the Jan 1 table was
+   built, all retroactive to Jan 1, 2026 — SC rewrote its whole system under
+   H.4216 (Act 110, signed Mar 30, 2026; SCDOR + governor.sc.gov): two rates,
+   1.99% to $30,000 and 5.21% above, with the new $15,000 SC Income Adjusted
+   Deduction (SCIAD) replacing the federal standard deduction. The bracket
+   form [[30000, 0.0199], [Inf, 0.0521]] is exactly the statute's
+   "5.21% minus $966 above $30,000" (both give $597 at $30,000 taxable).
+   AR's top rate fell 3.9% to 3.7% (HB1001/SB1, May 2026; DFA fiscal note):
+   the standard table now reads 0% to $5,599, 2%, 3%, 3.4%, 3.7% above
+   $26,400 — the old entry was the pre-cut upper-table shortcut. Above
+   $94,700 of taxable income AR switches to a separate upper table (2% to
+   $4,700, 3.7% above); not modeled, the standard table is extrapolated.
+   GA's flat rate fell 5.19% to 4.99% (HB 463, May 2026; GA DOR / EY).
+   UT's flat rate fell 4.5% to 4.45% (SB 60, Mar 2026; UT Tax Commission);
+   the $966 taxpayer credit is unchanged (6% of the $16,100 federal std ded).
    Federal: 2026 single standard deduction $16,100 + 2026 brackets. */
 var NO_TAX_STATE_NAMES = { AK: 'Alaska', FL: 'Florida', NV: 'Nevada',
   NH: 'New Hampshire', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas',
@@ -883,14 +923,14 @@ var STATE_TAX_2026 = {
   AL: { name: 'Alabama', ded: 4500, credit: 0, brackets: [[500, 0.02], [3000, 0.04], [Infinity, 0.05]] },
   AK: null,
   AZ: { name: 'Arizona', ded: 8350, credit: 0, brackets: [[Infinity, 0.025]] },
-  AR: { name: 'Arkansas', ded: 2470, credit: 29, brackets: [[4600, 0.02], [Infinity, 0.039]] },
+  AR: { name: 'Arkansas', ded: 2470, credit: 29, brackets: [[5599, 0], [11199, 0.02], [15999, 0.03], [26399, 0.034], [Infinity, 0.037]] },
   CA: { name: 'California', ded: 5540, credit: 153, brackets: [[11079, 0.01], [26264, 0.02], [41452, 0.04], [57542, 0.06], [72724, 0.08], [371479, 0.093], [445771, 0.103], [742953, 0.113], [1000000, 0.123], [Infinity, 0.133]] },
   CO: { name: 'Colorado', ded: 16100, credit: 0, brackets: [[Infinity, 0.044]] },
   CT: { name: 'Connecticut', ded: 15000, credit: 0, brackets: [[10000, 0.02], [50000, 0.045], [100000, 0.055], [200000, 0.06], [250000, 0.065], [500000, 0.069], [Infinity, 0.0699]] },
   DE: { name: 'Delaware', ded: 3250, credit: 110, brackets: [[2000, 0], [5000, 0.022], [10000, 0.039], [20000, 0.048], [25000, 0.052], [60000, 0.0555], [Infinity, 0.066]] },
   DC: { name: 'Washington DC', ded: 16100, credit: 0, brackets: [[10000, 0.04], [40000, 0.06], [60000, 0.065], [250000, 0.085], [500000, 0.0925], [1000000, 0.0975], [Infinity, 0.1075]] },
   FL: null,
-  GA: { name: 'Georgia', ded: 12000, credit: 0, brackets: [[Infinity, 0.0519]] },
+  GA: { name: 'Georgia', ded: 12000, credit: 0, brackets: [[Infinity, 0.0499]] },
   HI: { name: 'Hawaii', ded: 5544, credit: 0, brackets: [[9600, 0.014], [14400, 0.032], [19200, 0.055], [24000, 0.064], [36000, 0.068], [48000, 0.072], [125000, 0.076], [175000, 0.079], [225000, 0.0825], [275000, 0.09], [325000, 0.10], [Infinity, 0.11]] },
   ID: { name: 'Idaho', ded: 16100, credit: 0, brackets: [[4811, 0], [Infinity, 0.053]] },
   IL: { name: 'Illinois', ded: 2925, credit: 0, brackets: [[Infinity, 0.0495]] },
@@ -920,11 +960,11 @@ var STATE_TAX_2026 = {
   OR: { name: 'Oregon', ded: 2910, credit: 256, brackets: [[4550, 0.0475], [11400, 0.0675], [125000, 0.0875], [Infinity, 0.099]] },
   PA: { name: 'Pennsylvania', ded: 0, credit: 0, brackets: [[Infinity, 0.0307]] },
   RI: { name: 'Rhode Island', ded: 16450, credit: 0, brackets: [[82050, 0.0375], [186450, 0.0475], [Infinity, 0.0599]] },
-  SC: { name: 'South Carolina', ded: 8350, credit: 0, brackets: [[3640, 0], [18230, 0.03], [Infinity, 0.06]] },
+  SC: { name: 'South Carolina', ded: 15000, credit: 0, brackets: [[30000, 0.0199], [Infinity, 0.0521]] },
   SD: null,
   TN: null,
   TX: null,
-  UT: { name: 'Utah', ded: 0, credit: 966, brackets: [[Infinity, 0.045]] },
+  UT: { name: 'Utah', ded: 0, credit: 966, brackets: [[Infinity, 0.0445]] },
   VT: { name: 'Vermont', ded: 12950, credit: 0, brackets: [[49400, 0.0335], [119700, 0.066], [249700, 0.076], [Infinity, 0.0875]] },
   VA: { name: 'Virginia', ded: 9680, credit: 0, brackets: [[3000, 0.02], [5000, 0.03], [17000, 0.05], [Infinity, 0.0575]] },
   WA: null,
@@ -993,6 +1033,7 @@ if (typeof module !== 'undefined' && module.exports){
     flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, planPerPaycheck: planPerPaycheck, marginalRate: marginalRate,
     extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
+    paydayAnchorMismatch: paydayAnchorMismatch,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2026: STATE_TAX_2026, FEDERAL_BRACKETS_2026: FEDERAL_BRACKETS_2026,
     FEDERAL_STD_DED_2026: FEDERAL_STD_DED_2026 };
@@ -4050,6 +4091,9 @@ function renderPaycheckOutputs(){
       lines.push('<p><strong>Next payday:</strong> ' + fmtPayday(pd.date) +
         (pd.daysAway === 0 ? ' \u2014 today!' : pd.daysAway === 1 ? ' \u2014 tomorrow.' : ' \u2014 in ' + pd.daysAway + ' days.') + '</p>');
     }
+    /* v2.37.0: last-payday date and payday weekday disagree (biweekly only) */
+    var mismatch = paydayAnchorMismatch(S.freq, S.lastPayday, S.paydayWeekday);
+    if(mismatch) lines.push('<p class="flag">\u26a0\ufe0f ' + esc(mismatch) + '</p>');
     paycheckFlags(hrs, S.rate, p.net, S.stateCode || 'NY').forEach(function(f){
       lines.push('<p class="flag">\u26a0\ufe0f ' + esc(f) + '</p>');
     });

@@ -1,6 +1,25 @@
 {
   "versions": [
     {
+      "v": "2.37.0",
+      "version": "2.37.0",
+      "date": "Nov 8, 2026",
+      "notify": true,
+      "notes": [
+        "If your last payday date falls on a different weekday than your picked payday weekday (every-2-weeks pay), the Auto-detections box now flags it \u2014 before, the countdown silently followed the date and the next payday could land on the wrong weekday with no warning. Monthly paydays are a calendar date, not a weekday, so they are never flagged."
+      ]
+    },
+    {
+      "v": "2.36.0",
+      "version": "2.36.0",
+      "date": "Nov 7, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed the 2026 tax estimates for four states that cut rates after the January table was built (all retroactive to Jan 1, 2026): South Carolina rewrote its whole system \u2014 now 1.99% up to $30,000 and 5.21% above, with a new $15,000 state deduction instead of the old 0%/3%/6% brackets; Arkansas's top rate fell 3.9% to 3.7%; Georgia's flat rate fell 5.19% to 4.99%; Utah's flat rate fell 4.5% to 4.45%. At a $500/week wage the South Carolina estimate drops from $420/year to $219/year \u2014 the old number was overstating it by about $3.87/week. With a pay stub saved, nothing changes: your stub numbers are still the real ones.",
+        "Also fixed in Spending insights: \u201cSTOP AND SHOP\u201d and \u201cSTOP & SHOP\u201d now count as one place in Top places (before, the AND spelling showed up as a stub entry called \u201cStop\u201d)."
+      ]
+    },
+    {
       "v": "2.35.0",
       "version": "2.35.0",
       "date": "Nov 6, 2026",

@@ -1,8 +1,8 @@
 {
   "notes": [
-    "Fixed Spending insights grouping again: a store whose name sometimes has an apostrophe and sometimes doesn't (McDonald's vs MCDONALDS, O'Reilly vs OREILLY, Trader Joe's vs TRADER JOES) was still split into two places in Top places, with the apostrophe version showing a stub name like \u201cMcDonald\u201d or \u201cReilly\u201d. Both spellings now count as one store. Same fix for WAL-MART vs WALMART and 7-Eleven vs SEVEN ELEVEN \u2014 each of those now counts as one place too."
+    "If your last payday date falls on a different weekday than your picked payday weekday (every-2-weeks pay), the Auto-detections box now flags it \u2014 before, the countdown silently followed the date and the next payday could land on the wrong weekday with no warning. Monthly paydays are a calendar date, not a weekday, so they are never flagged."
   ],
   "notify": true,
-  "updated": "2026-11-06",
-  "version": "2.35.0"
+  "updated": "2026-11-08",
+  "version": "2.37.0"
 }

@@ -64,6 +64,10 @@ function merchantKey(desc){
        the 7 and leave a bare "eleven"). */
     .replace(/\bwal[ -]?mart\b/g, 'walmart')
     .replace(/\b7[ -]?eleven\b/g, 'seven eleven')
+    /* "STOP AND SHOP" must key like "STOP & SHOP" ("stop shop", via the
+       TWO_WORD list) — without this the &-spelling keyed "stop shop"
+       while the AND-spelling fell through to the bare word "stop". */
+    .replace(/\bstop and shop\b/g, 'stop shop')
     .replace(/(pos|debit|credit|card|purchase|recurring|checkcard|visa|mastercard|ach|web|online|payment|pmt|ppd|id:?)\b/g, ' ')
     .replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, ' ')
     .replace(/[#*][\w-]*/g, ' ')
