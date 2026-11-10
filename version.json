@@ -1,8 +1,8 @@
 {
   "notes": [
-    "If your last payday date falls on a different weekday than your picked payday weekday (every-2-weeks pay), the Auto-detections box now flags it \u2014 before, the countdown silently followed the date and the next payday could land on the wrong weekday with no warning. Monthly paydays are a calendar date, not a weekday, so they are never flagged."
+    "New York's estimate now includes the tax-benefit recapture for higher earners: above $107,650 of NY AGI the benefit of the lower brackets is taken back in $50,000 steps until the tax is a flat 5.90% (then 6.85%, 9.65%, 10.3% at higher incomes). At ordinary wages nothing changes; with a pay stub saved, nothing changes."
   ],
   "notify": true,
-  "updated": "2026-11-08",
-  "version": "2.37.0"
+  "updated": "2026-11-10",
+  "version": "2.39.0"
 }

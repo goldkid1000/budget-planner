@@ -1,7 +1,7 @@
-/* Budget Planner v2.37.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.39.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.37.0';
+var APP_VERSION = '2.39.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -885,10 +885,27 @@ function calcUnit(price, size){ return size > 0 ? price / size : 0; }
    null — WA taxes capital gains only, so wage tax is $0 here.
    Deliberately NOT modeled (estimate only): personal-exemption phaseouts,
    itemized deductions, dependent credits/exemptions, local/city income tax,
-   NY tax-benefit recapture, payroll taxes (CA disability, WA Cares, MA PFML),
-   the SC SCIAD phase-out above $40,000 AGI and the UT credit phase-out
-   above ~$18,200 (both shrink the deduction/credit for higher earners;
-   the table gives the full amount, so high earners' estimates run low).
+   payroll taxes (CA disability, WA Cares, MA PFML).
+   v2.39.0 models the NY tax-benefit recapture this table used to skip
+   (Form IT-201 worksheets 7–11, IT-201-I (2025); 2026 flat rate 5.90% per
+   IT-2105-I (2026)): above $107,650 NY AGI the benefit of the lower
+   brackets is taken back in $50,000 AGI steps until the tax is flat at the
+   filer's top rate — see newYorkTax. The $25,000,000-AGI jump from the
+   10.3% flat to the 10.9% flat is the form's own design (worksheet 11 has
+   no phase-in); the estimator reproduces it faithfully.
+   v2.38.0 models the three phase-outs this table used to skip: the SC SCIAD
+   phase-out (single: full $15,000 at federal AGI <= $40,000, shrinking by
+   $15,000 x (AGI - $40,000) / $55,000 — reduction rounded down to the next
+   $10 — gone at $95,000; SCDOR Info Letter #26-20 / H.4216 Act 110), the UT
+   taxpayer-credit phase-out ($966 minus 1.3% of Utah taxable income above
+   $18,213 single; UT TC-40 instructions — the $18,213 base is the Tax
+   Commission's published amount, retained for the 2026 estimate pending
+   final 2026 TC-40 instructions), and the AR upper table above $94,700 of
+   taxable income (2% to $4,700, 3.7% above, minus the $94,701–$97,600
+   bracket adjustment; HB1001, Act 1 of the 2026 First Extraordinary Session).
+   Phase-outs key off federal AGI / Utah taxable income; the estimator uses
+   annualized gross wages as that income, the same proxy the rest of the
+   table already uses.
    2026 notes: NY's five lowest rates fell 0.1pt (FY2026 budget, Ch. 59 Laws
    of 2025; thresholds unchanged) — verified against NYS DTF IT-2105-I (2026).
    IA's deduction is the federal standard deduction ($16,100): Iowa starts
@@ -908,7 +925,7 @@ function calcUnit(price, size){ return size > 0 ? price / size : 0; }
    the standard table now reads 0% to $5,599, 2%, 3%, 3.4%, 3.7% above
    $26,400 — the old entry was the pre-cut upper-table shortcut. Above
    $94,700 of taxable income AR switches to a separate upper table (2% to
-   $4,700, 3.7% above); not modeled, the standard table is extrapolated.
+   $4,700, 3.7% above) — modeled since v2.38.0, see arkansasTax.
    GA's flat rate fell 5.19% to 4.99% (HB 463, May 2026; GA DOR / EY).
    UT's flat rate fell 4.5% to 4.45% (SB 60, Mar 2026; UT Tax Commission);
    the $966 taxpayer credit is unchanged (6% of the $16,100 federal std ded).
@@ -983,18 +1000,108 @@ function calcBracketTax(taxable, brackets){
   });
   return tax;
 }
+/* v2.38.0 — SC SCIAD for a single filer (H.4216, Act 110; SCDOR Info Letter
+   #26-20): full $15,000 while federal AGI is $40,000 or less, then reduced
+   by $15,000 x (AGI - $40,000) / $55,000 with the reduction rounded DOWN to
+   the next $10, gone at $95,000 AGI. `annual` here is the estimator's AGI
+   proxy (annualized gross wages). */
+function sciadDeduction(annual){
+  var agi = Math.max(0, num0(annual));
+  if(agi <= 40000) return 15000;
+  var reduction = Math.floor(15000 * (agi - 40000) / 55000 / 10) * 10;
+  return Math.max(0, 15000 - reduction);
+}
+/* v2.38.0 — UT taxpayer tax credit, phased out (UT TC-40 instructions):
+   $966 (6% of the $16,100 federal standard deduction) minus 1.3% of Utah
+   taxable income above the $18,213 single base amount, floored at $0.
+   The $18,213 base is the Tax Commission's published TC-40 amount,
+   retained for the 2026 estimate pending final 2026 TC-40 instructions. */
+function utahCredit(stateTaxable){
+  return Math.max(0, 966 - 0.013 * Math.max(0, num0(stateTaxable) - 18213));
+}
+/* v2.38.0 — AR tax before the $29 credit (HB1001, Act 1 of the 2026 First
+   Extraordinary Session): the standard five-bracket table up to $94,700 of
+   taxable income; above that the upper table applies to the WHOLE taxable
+   income — 2% of the first $4,700 plus 3.7% of the rest (0.037 x income −
+   $79.90) — minus the bracket adjustment for $94,701–$97,600, which starts
+   at $290 and falls $10 per $100 band to $10 at $97,501–$97,600. */
+function arkansasTax(stateTaxable){
+  var t = Math.max(0, num0(stateTaxable));
+  if(t <= 94700) return calcBracketTax(t, STATE_TAX_2026.AR.brackets);
+  var adj = Math.max(0, 290 - 10 * Math.floor((t - 94701) / 100));
+  return Math.max(0, 0.037 * t - 79.90 - adj);
+}
+/* v2.39.0 — NY tax-benefit recapture for a single filer (Form IT-201,
+   Tax computation worksheets 7–11, IT-201-I (2025); the 2026 flat rate is
+   5.90% per IT-2105-I (2026), the first five 2026 rates having fallen 0.1pt).
+   Above NY AGI $107,650 the graduated rates stop applying on their own:
+   the benefit of the lower brackets is taken back in steps, each phased in
+   over a $50,000 AGI band (the worksheet rounds each phase-in fraction to
+   four decimals):
+     step 1 — rates below 5.90% on the first $215,400 of taxable income,
+       phased over AGI $107,650–$157,650; at/above $157,650 the tax on
+       income up to $215,400 is a flat 5.90%;
+     step 2 — 5.90% to 6.85% on that same first $215,400, phased over AGI
+       $215,400–$265,400 (only when taxable income tops $215,400);
+     step 3 — 6.85% to 9.65% on the first $1,077,550, phased over AGI
+       $1,077,550–$1,127,550 (only when taxable income tops $1,077,550);
+     step 4 — 9.65% to 10.3% on the first $5,000,000, phased over AGI
+       $5,000,000–$5,050,000 (only when taxable income tops $5,000,000).
+   Above $25,000,000 AGI worksheet 11 taxes ALL taxable income at a flat
+   10.9% — the form has no phase-in for that last step, so the tax jumps
+   from the 10.3% flat to the 10.9% flat right at $25,000,000 AGI; that
+   cliff is the form's own design, not an app bug.
+   `annual` is the estimator's NY-AGI proxy (annualized gross wages), the
+   same proxy the rest of the table already uses. */
+function newYorkTax(annual, stateTaxable){
+  var t = Math.max(0, num0(stateTaxable));
+  var agi = Math.max(0, num0(annual));
+  var nyB = STATE_TAX_2026.NY.brackets;
+  var graduated = calcBracketTax(t, nyB);
+  if(t <= 0 || agi <= 107650) return graduated;
+  /* worksheet 11: AGI over $25,000,000 — flat 10.9% on all taxable income */
+  if(agi > 25000000) return 0.109 * t;
+  /* each phase-in fraction is the AGI excess over the band start, capped
+     at $50,000, divided by $50,000, rounded to four decimals (the form). */
+  function phase(start){
+    var f = Math.min(Math.max(agi - start, 0), 50000) / 50000;
+    return Math.round(f * 10000) / 10000;
+  }
+  var tax = graduated;
+  var t1 = Math.min(t, 215400);
+  tax += phase(107650) * Math.max(0, 0.059 * t1 - calcBracketTax(t1, nyB));
+  if(t > 215400) tax += phase(215400) * (0.0685 - 0.059) * 215400;
+  if(t > 1077550) tax += phase(1077550) * (0.0965 - 0.0685) * 1077550;
+  if(t > 5000000) tax += phase(5000000) * (0.103 - 0.0965) * 5000000;
+  return tax;
+}
 /* annual federal + state income-tax estimate from a weekly gross (single filer).
-   Returns { federalAnnual, stateAnnual, stateName, noStateTax }. */
+   Returns { federalAnnual, stateAnnual, stateName, noStateTax, stateDed,
+   stateCredit, stateRecapture } — stateDed/stateCredit are the EFFECTIVE
+   deduction/credit actually used, after any phase-out (SC SCIAD, UT credit),
+   so callers that describe the estimate can show the real numbers;
+   stateRecapture is the NY tax-benefit recapture added on top of the
+   graduated NY tax ($0 for every other state and below $107,650 NY AGI). */
 function calcEstimateTaxes(weeklyGross, stateCode){
   var annual = Math.max(0, num0(weeklyGross)) * 52;
   var fedTaxable = Math.max(0, annual - FEDERAL_STD_DED_2026);
   var federalAnnual = calcBracketTax(fedTaxable, FEDERAL_BRACKETS_2026);
   var st = STATE_TAX_2026[stateCode] || null;
   if(!st) return { federalAnnual: federalAnnual, stateAnnual: 0,
-    stateName: NO_TAX_STATE_NAMES[stateCode] || 'this state', noStateTax: true };
-  var stateTaxable = Math.max(0, annual - st.ded);
-  var stateAnnual = Math.max(0, calcBracketTax(stateTaxable, st.brackets) - st.credit);
-  return { federalAnnual: federalAnnual, stateAnnual: stateAnnual, stateName: st.name, noStateTax: false };
+    stateName: NO_TAX_STATE_NAMES[stateCode] || 'this state', noStateTax: true,
+    stateDed: 0, stateCredit: 0, stateRecapture: 0 };
+  var effDed = stateCode === 'SC' ? sciadDeduction(annual) : st.ded;
+  var stateTaxable = Math.max(0, annual - effDed);
+  var effCredit = stateCode === 'UT' ? utahCredit(stateTaxable) : st.credit;
+  var taxBeforeCredit = stateCode === 'AR' ? arkansasTax(stateTaxable)
+    : stateCode === 'NY' ? newYorkTax(annual, stateTaxable)
+    : calcBracketTax(stateTaxable, st.brackets);
+  var stateAnnual = Math.max(0, taxBeforeCredit - effCredit);
+  /* v2.39.0: the recapture is the NY tax above the graduated amount. */
+  var recapture = stateCode === 'NY'
+    ? Math.max(0, round2(taxBeforeCredit - calcBracketTax(stateTaxable, st.brackets))) : 0;
+  return { federalAnnual: federalAnnual, stateAnnual: stateAnnual, stateName: st.name,
+    noStateTax: false, stateDed: effDed, stateCredit: effCredit, stateRecapture: recapture };
 }
 
 /* v2.0.0 employer presets — starting points only, the rate stays editable.
@@ -1029,6 +1136,7 @@ if (typeof module !== 'undefined' && module.exports){
     suggestWeekendOk: suggestWeekendOk, suggestShiftOverlaps: suggestShiftOverlaps,
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
+    sciadDeduction: sciadDeduction, utahCredit: utahCredit, arkansasTax: arkansasTax, newYorkTax: newYorkTax,
     calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
     flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, planPerPaycheck: planPerPaycheck, marginalRate: marginalRate,
     extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
@@ -4053,9 +4161,20 @@ function renderPaycheckOutputs(){
     } else if(!st){
       noteEl.textContent = stateName + ' has no income tax on wages, so state tax is $0 here. Federal is estimated from the 2026 single-filer standard deduction ($16,100) + 2026 brackets. Estimate only — not tax advice, no city/local tax.';
     } else {
-      noteEl.textContent = 'Estimate for ' + stateName + ': single filer, 2026 tax year, state income tax only (no city/local tax). Standard deduction ' + money(st.ded) +
-        (st.credit ? ' + ' + money(st.credit) + ' exemption credit' : '') +
-        ' + 2026 brackets. Federal uses the 2026 $16,100 standard deduction + 2026 brackets. Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
+      /* v2.38.0: show the EFFECTIVE deduction/credit the estimate actually
+         used — after the SC SCIAD / UT credit phase-outs — not the table's
+         full amount, which no longer applies at higher incomes. */
+      var est = calcEstimateTaxes(p.weeklyGross, S.stateCode || 'NY');
+      var effDed = (est && typeof est.stateDed === 'number') ? est.stateDed : st.ded;
+      var effCredit = (est && typeof est.stateCredit === 'number') ? est.stateCredit : st.credit;
+      /* v2.39.0: name the NY recapture when it applies, so a higher earner
+         sees why the estimate is above the graduated brackets. */
+      var recapture = (est && typeof est.stateRecapture === 'number') ? est.stateRecapture : 0;
+      noteEl.textContent = 'Estimate for ' + stateName + ': single filer, 2026 tax year, state income tax only (no city/local tax). Standard deduction ' + money(effDed) +
+        (effCredit ? ' + ' + money(effCredit) + ' exemption credit' : '') +
+        ' + 2026 brackets' +
+        (recapture > 0 ? ', including ' + money(recapture) + '/yr NY tax-benefit recapture (NY AGI over $107,650)' : '') +
+        '. Federal uses the 2026 $16,100 standard deduction + 2026 brackets. Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
     }
   }
   setMoneyText(document.getElementById('grossOut'), p.periodGross);

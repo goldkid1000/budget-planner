@@ -1,6 +1,24 @@
 {
   "versions": [
     {
+      "v": "2.39.0",
+      "version": "2.39.0",
+      "date": "Nov 10, 2026",
+      "notify": true,
+      "notes": [
+        "New York's estimate now includes the tax-benefit recapture for higher earners \u2014 above $107,650 of NY AGI the state takes back the benefit of its lower brackets, phasing in over $50,000 bands until the tax is a flat 5.90% (then 6.85%, 9.65%, and 10.3% at higher incomes). At $2,500/week the NY estimate rises from $6,630/year to $6,884/year; at $3,000/week from $8,164/year to $8,713/year. At ordinary wages nothing changes \u2014 a $500/week paycheck still estimates $807/year. With a pay stub saved, nothing changes: your stub numbers are still the real ones."
+      ]
+    },
+    {
+      "v": "2.38.0",
+      "version": "2.38.0",
+      "date": "Nov 9, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed the 2026 state-tax estimates for higher earners in three states \u2014 the table used to give every filer the full deduction or credit, even where the law phases it out. South Carolina's new $15,000 SCIAD now shrinks once federal AGI passes $40,000 (gone at $95,000): at $1,000/week the SC estimate rises from $962/year to $1,132/year. Utah's $966 taxpayer credit now phases out 1.3\u00a2 per dollar above $18,213 of Utah taxable income: at $1,000/week the UT estimate rises from $1,348/year to $1,787/year. Arkansas now uses its separate upper table above $94,700 of taxable income (2% to $4,700, 3.7% above, with the $94,701\u2013$97,600 bracket adjustment smoothing the step): at $2,000/week the AR estimate rises from $3,360/year to $3,648/year. At ordinary wages nothing changes \u2014 a $500/week SC paycheck still estimates $219/year and New York is untouched. With a pay stub saved, nothing changes: your stub numbers are still the real ones."
+      ]
+    },
+    {
       "v": "2.37.0",
       "version": "2.37.0",
       "date": "Nov 8, 2026",
