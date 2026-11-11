@@ -1,7 +1,7 @@
-/* Budget Planner v2.39.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.40.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.39.0';
+var APP_VERSION = '2.40.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -486,6 +486,11 @@ function calcPaycheck(hours, rate, ded, freq, estimate){
     var est = calcEstimateTaxes(weeklyGross, estimate.stateCode);
     fedAmt = round2(est.federalAnnual * mult / 52);
     nyAmt = round2(est.stateAnnual * mult / 52);
+    /* v2.40.0: FICA from the capped estimate (see ficaAnnual), not the flat
+       6.2% / 1.45% lines — those overstate SS above $184,500/yr and miss
+       the 0.9% Additional Medicare Tax above $200,000/yr. */
+    ssAmt = round2(est.ssAnnual * mult / 52);
+    medicareAmt = round2(est.medicareAnnual * mult / 52);
   } else {
     fedAmt = round2(periodGross * num0(d.federal) / 100);
     nyAmt = round2(periodGross * num0(d.ny) / 100);
@@ -1051,6 +1056,14 @@ function arkansasTax(stateTaxable){
    10.9% — the form has no phase-in for that last step, so the tax jumps
    from the 10.3% flat to the 10.9% flat right at $25,000,000 AGI; that
    cliff is the form's own design, not an app bug.
+   v2.40.0 models the FICA caps the estimate used to skip: Social Security
+   stops at the 2026 wage base ($184,500, SSA — max $11,439/yr at 6.2%) and
+   Medicare adds the 0.9% Additional Medicare Tax on wages over $200,000
+   (single filer; IRS Topic 560 / Form 8959 — statutory, never indexed).
+   Before, the estimate charged 6.2% SS on every dollar (at $4,000/wk it
+   overstated SS by $1,457/yr) and never charged the 0.9% surtax (at
+   $4,000/wk it understated Medicare by $72/yr). Stub mode is untouched: a
+   saved pay stub's own percentages are the employer's real withholding.
    `annual` is the estimator's NY-AGI proxy (annualized gross wages), the
    same proxy the rest of the table already uses. */
 function newYorkTax(annual, stateTaxable){
@@ -1075,21 +1088,41 @@ function newYorkTax(annual, stateTaxable){
   if(t > 5000000) tax += phase(5000000) * (0.103 - 0.0965) * 5000000;
   return tax;
 }
+/* v2.40.0: FICA for the estimate, from annualized gross wages. Social
+   Security is 6.2% only up to the 2026 wage base ($184,500, SSA); Medicare
+   is 1.45% on all wages plus the 0.9% Additional Medicare Tax on wages over
+   $200,000 for a single filer (IRS Topic 560 — the threshold is statutory
+   and never adjusts for inflation). Pure, node-testable. */
+var SS_WAGE_BASE_2026 = 184500;
+var SS_RATE_2026 = 0.062;
+var MEDICARE_RATE_2026 = 0.0145;
+var ADDL_MEDICARE_THRESHOLD_2026 = 200000;
+var ADDL_MEDICARE_RATE_2026 = 0.009;
+function ficaAnnual(annual){
+  var a = Math.max(0, num0(annual));
+  return { ss: round2(SS_RATE_2026 * Math.min(a, SS_WAGE_BASE_2026)),
+    medicare: round2(MEDICARE_RATE_2026 * a +
+      ADDL_MEDICARE_RATE_2026 * Math.max(0, a - ADDL_MEDICARE_THRESHOLD_2026)) };
+}
 /* annual federal + state income-tax estimate from a weekly gross (single filer).
    Returns { federalAnnual, stateAnnual, stateName, noStateTax, stateDed,
-   stateCredit, stateRecapture } — stateDed/stateCredit are the EFFECTIVE
-   deduction/credit actually used, after any phase-out (SC SCIAD, UT credit),
-   so callers that describe the estimate can show the real numbers;
-   stateRecapture is the NY tax-benefit recapture added on top of the
-   graduated NY tax ($0 for every other state and below $107,650 NY AGI). */
+   stateCredit, stateRecapture, ssAnnual, medicareAnnual } — stateDed/
+   stateCredit are the EFFECTIVE deduction/credit actually used, after any
+   phase-out (SC SCIAD, UT credit), so callers that describe the estimate
+   can show the real numbers; stateRecapture is the NY tax-benefit recapture
+   added on top of the graduated NY tax ($0 for every other state and below
+   $107,650 NY AGI); ssAnnual/medicareAnnual are the capped FICA figures
+   (see ficaAnnual) the Paycheck tab uses in estimate mode. */
 function calcEstimateTaxes(weeklyGross, stateCode){
   var annual = Math.max(0, num0(weeklyGross)) * 52;
   var fedTaxable = Math.max(0, annual - FEDERAL_STD_DED_2026);
   var federalAnnual = calcBracketTax(fedTaxable, FEDERAL_BRACKETS_2026);
+  var fica = ficaAnnual(annual);
   var st = STATE_TAX_2026[stateCode] || null;
   if(!st) return { federalAnnual: federalAnnual, stateAnnual: 0,
     stateName: NO_TAX_STATE_NAMES[stateCode] || 'this state', noStateTax: true,
-    stateDed: 0, stateCredit: 0, stateRecapture: 0 };
+    stateDed: 0, stateCredit: 0, stateRecapture: 0,
+    ssAnnual: fica.ss, medicareAnnual: fica.medicare };
   var effDed = stateCode === 'SC' ? sciadDeduction(annual) : st.ded;
   var stateTaxable = Math.max(0, annual - effDed);
   var effCredit = stateCode === 'UT' ? utahCredit(stateTaxable) : st.credit;
@@ -1101,7 +1134,8 @@ function calcEstimateTaxes(weeklyGross, stateCode){
   var recapture = stateCode === 'NY'
     ? Math.max(0, round2(taxBeforeCredit - calcBracketTax(stateTaxable, st.brackets))) : 0;
   return { federalAnnual: federalAnnual, stateAnnual: stateAnnual, stateName: st.name,
-    noStateTax: false, stateDed: effDed, stateCredit: effCredit, stateRecapture: recapture };
+    noStateTax: false, stateDed: effDed, stateCredit: effCredit, stateRecapture: recapture,
+    ssAnnual: fica.ss, medicareAnnual: fica.medicare };
 }
 
 /* v2.0.0 employer presets — starting points only, the rate stays editable.
@@ -1137,14 +1171,15 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     sciadDeduction: sciadDeduction, utahCredit: utahCredit, arkansasTax: arkansasTax, newYorkTax: newYorkTax,
-    calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
+    calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, ficaAnnual: ficaAnnual, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
     flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, planPerPaycheck: planPerPaycheck, marginalRate: marginalRate,
     extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     paydayAnchorMismatch: paydayAnchorMismatch,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2026: STATE_TAX_2026, FEDERAL_BRACKETS_2026: FEDERAL_BRACKETS_2026,
-    FEDERAL_STD_DED_2026: FEDERAL_STD_DED_2026 };
+    FEDERAL_STD_DED_2026: FEDERAL_STD_DED_2026,
+    SS_WAGE_BASE_2026: SS_WAGE_BASE_2026, ADDL_MEDICARE_THRESHOLD_2026: ADDL_MEDICARE_THRESHOLD_2026 };
 }
 
 /* ---------- app (browser only) ---------- */
@@ -4146,6 +4181,17 @@ function renderPaycheck(){
   renderPaycheckOutputs();
 }
 
+/* v2.40.0: one sentence naming the FICA cap when the estimate actually
+   hits it, so a higher earner sees why Social Security stops growing (or
+   why Medicare ticks up). Empty string at ordinary wages. */
+function ficaNoteFor(weeklyGross){
+  var annual = Math.max(0, num0(weeklyGross)) * 52;
+  if(annual > ADDL_MEDICARE_THRESHOLD_2026)
+    return ' Social Security stops at the $184,500/yr wage base (max $11,439/yr) and Medicare adds 0.9% over $200,000/yr.';
+  if(annual > SS_WAGE_BASE_2026)
+    return ' Social Security stops at the $184,500/yr wage base (max $11,439/yr).';
+  return '';
+}
 /* paycheck result lines + stub form + what-if — no list rebuild, so it is
    safe to call while typing (e.g. a shift meal break) without stealing focus */
 function renderPaycheckOutputs(){
@@ -4159,7 +4205,7 @@ function renderPaycheckOutputs(){
     if(S.stubSaved){
       noteEl.textContent = 'Using your real pay stub — the state estimate is not applied. Your stub numbers win.';
     } else if(!st){
-      noteEl.textContent = stateName + ' has no income tax on wages, so state tax is $0 here. Federal is estimated from the 2026 single-filer standard deduction ($16,100) + 2026 brackets. Estimate only — not tax advice, no city/local tax.';
+      noteEl.textContent = stateName + ' has no income tax on wages, so state tax is $0 here. Federal is estimated from the 2026 single-filer standard deduction ($16,100) + 2026 brackets.' + ficaNoteFor(p.weeklyGross) + ' Estimate only — not tax advice, no city/local tax.';
     } else {
       /* v2.38.0: show the EFFECTIVE deduction/credit the estimate actually
          used — after the SC SCIAD / UT credit phase-outs — not the table's
@@ -4174,7 +4220,7 @@ function renderPaycheckOutputs(){
         (effCredit ? ' + ' + money(effCredit) + ' exemption credit' : '') +
         ' + 2026 brackets' +
         (recapture > 0 ? ', including ' + money(recapture) + '/yr NY tax-benefit recapture (NY AGI over $107,650)' : '') +
-        '. Federal uses the 2026 $16,100 standard deduction + 2026 brackets. Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
+        '. Federal uses the 2026 $16,100 standard deduction + 2026 brackets.' + ficaNoteFor(p.weeklyGross) + ' Estimate only — not tax advice. Your pay stub, when entered, is the real number.';
     }
   }
   setMoneyText(document.getElementById('grossOut'), p.periodGross);

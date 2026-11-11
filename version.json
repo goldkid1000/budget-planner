@@ -1,8 +1,8 @@
 {
   "notes": [
-    "New York's estimate now includes the tax-benefit recapture for higher earners: above $107,650 of NY AGI the benefit of the lower brackets is taken back in $50,000 steps until the tax is a flat 5.90% (then 6.85%, 9.65%, 10.3% at higher incomes). At ordinary wages nothing changes; with a pay stub saved, nothing changes."
+    "The estimate now models the FICA caps: Social Security stops at the 2026 wage base of $184,500 (max $11,439/year at 6.2%), and Medicare adds the 0.9% Additional Medicare Tax on wages over $200,000. At $4,000/week the estimate was overstating Social Security by $1,457/year and understating Medicare by $72/year. At ordinary wages nothing changes; with a pay stub saved, nothing changes."
   ],
   "notify": true,
-  "updated": "2026-11-10",
-  "version": "2.39.0"
+  "updated": "2026-11-11",
+  "version": "2.40.0"
 }

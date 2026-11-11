@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.40.0",
+      "version": "2.40.0",
+      "date": "Nov 11, 2026",
+      "notify": true,
+      "notes": [
+        "The estimate now models the FICA caps it used to skip \u2014 Social Security stops at the 2026 wage base of $184,500 (SSA, max $11,439/year at 6.2%), and Medicare adds the 0.9% Additional Medicare Tax on wages over $200,000 for a single filer (IRS Topic 560 / Form 8959, a fixed threshold that never adjusts for inflation). At $4,000/week the estimate was overstating Social Security by $1,457/year and understating Medicare by $72/year; at $5,000/week it was overstating Social Security by $4,681/year and understating Medicare by $540/year. The Paycheck tab names the cap in its estimate note when it applies. At ordinary wages nothing changes \u2014 a $500/week paycheck still estimates $1,612/year Social Security and $377/year Medicare. With a pay stub saved, nothing changes: your stub numbers are still the real ones."
+      ]
+    },
+    {
       "v": "2.39.0",
       "version": "2.39.0",
       "date": "Nov 10, 2026",
