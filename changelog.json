@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.41.0",
+      "version": "2.41.0",
+      "date": "Nov 12, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed Utah's 2026 taxpayer tax credit phase-out: it now starts from the Tax Commission's published 2026 base of $18,696 for a single filer (Utah Legislature, Revenue and Taxation Interim Committee, 2026 Tax Credit Review, Sep 16, 2026 — Utah Code § 59-10-1018; the final 2026 TC-40 instructions are not published yet) instead of the retained 2025 base of $18,213. The credit is $966 minus 1.3% of Utah taxable income above that base, so the fix is worth at most $6.28/year and only for Utah filers with taxable income between $18,213 and about $93,000. Everyone else's estimate is unchanged, and with a pay stub saved, nothing changes."
+      ]
+    },
+    {
       "v": "2.40.0",
       "version": "2.40.0",
       "date": "Nov 11, 2026",

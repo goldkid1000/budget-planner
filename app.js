@@ -1,7 +1,7 @@
-/* Budget Planner v2.40.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.41.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.40.0';
+var APP_VERSION = '2.41.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -903,9 +903,9 @@ function calcUnit(price, size){ return size > 0 ? price / size : 0; }
    $15,000 x (AGI - $40,000) / $55,000 — reduction rounded down to the next
    $10 — gone at $95,000; SCDOR Info Letter #26-20 / H.4216 Act 110), the UT
    taxpayer-credit phase-out ($966 minus 1.3% of Utah taxable income above
-   $18,213 single; UT TC-40 instructions — the $18,213 base is the Tax
-   Commission's published amount, retained for the 2026 estimate pending
-   final 2026 TC-40 instructions), and the AR upper table above $94,700 of
+   $18,696 single; the $18,696 base is the Tax Commission's published 2026
+   amount — Utah Legislature interim committee, Sep 16, 2026; the final
+   2026 TC-40 instructions are not published yet), and the AR upper table above $94,700 of
    taxable income (2% to $4,700, 3.7% above, minus the $94,701–$97,600
    bracket adjustment; HB1001, Act 1 of the 2026 First Extraordinary Session).
    Phase-outs key off federal AGI / Utah taxable income; the estimator uses
@@ -1018,11 +1018,14 @@ function sciadDeduction(annual){
 }
 /* v2.38.0 — UT taxpayer tax credit, phased out (UT TC-40 instructions):
    $966 (6% of the $16,100 federal standard deduction) minus 1.3% of Utah
-   taxable income above the $18,213 single base amount, floored at $0.
-   The $18,213 base is the Tax Commission's published TC-40 amount,
-   retained for the 2026 estimate pending final 2026 TC-40 instructions. */
+   taxable income above the $18,696 single base amount, floored at $0.
+   v2.41.0: the $18,696 base is the Tax Commission's published 2026 amount
+   (Utah Legislature, Revenue and Taxation Interim Committee, 2026 Tax
+   Credit Review, Sep 16, 2026 — Utah Code § 59-10-1018; the final 2026
+   TC-40 instructions are not published yet). It replaces the retained
+   2025 base of $18,213. */
 function utahCredit(stateTaxable){
-  return Math.max(0, 966 - 0.013 * Math.max(0, num0(stateTaxable) - 18213));
+  return Math.max(0, 966 - 0.013 * Math.max(0, num0(stateTaxable) - 18696));
 }
 /* v2.38.0 — AR tax before the $29 credit (HB1001, Act 1 of the 2026 First
    Extraordinary Session): the standard five-bracket table up to $94,700 of
