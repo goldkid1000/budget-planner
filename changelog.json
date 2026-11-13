@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.42.0",
+      "version": "2.42.0",
+      "date": "Nov 13, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed Spending insights missing purchases paid through a payment app: a subscription paid with PayPal (\"PAYPAL *NETFLIX\") used to count as a transfer between your own accounts, so it vanished from your spending total and from the subscriptions list — it now shows as Netflix, with its yearly cost. Purchases through Square, Toast, Clover, DoorDash and PayPal (\"SQ *STARBUCKS\", \"TST*CHIPOTLE\") also used to invent fake stores (\"Sq\", \"Tst\") and split one real store across two entries in Top places — the real store name is used now. Plain transfers (Transfer to savings, Venmo to a person, PayPal transfer to bank) are still left out of spending, and reference codes like AMZN Mktp US*2H3K4 are still cleaned up the same way."
+      ]
+    },
+    {
       "v": "2.41.0",
       "version": "2.41.0",
       "date": "Nov 12, 2026",

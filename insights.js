@@ -41,7 +41,15 @@ function m$(n){ return typeof money === 'function' ? money(n) : '$' + Number(n).
 function e$(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 var TWO_WORD = /^(trader joe|trader joes|uber eats|whole foods|taco bell|burger king|best buy|home depot|old navy|foot locker|five guys|shake shack|key food|stop shop|bed bath|dollar tree|dollar general|five below|urban outfitters|new balance|under armour|apple cash|cash app|game stop|epic games|state farm|national grid|con ed|mint mobile|boost mobile|seven eleven|duane reade|rite aid|panda express|jersey mike|jimmy john|little caesars|papa john|dunkin donuts|chick fil|sweet green|amazon prime|prime video|apple music|youtube premium|disney plus|paramount plus)$/;
 function categorize(t){
-  var d = String(t.description || '').toLowerCase();
+  /* v2.42.0: a payment-processor prefix is not the merchant — "PAYPAL
+     *NETFLIX" is a Netflix purchase paid through PayPal, not a transfer
+     between your own accounts, and "SQ *STARBUCKS" is Starbucks, not
+     "Sq". Strip "SQ *", "TST*", "PAYPAL *", "PP*", "PY *", "DD *",
+     "CKE*", "CASH APP*" before the rules run, so the real merchant is
+     what gets categorized. A plain "PAYPAL TRANSFER TO BANK" has no *
+     and still counts as a transfer. */
+  var d = String(t.description || '').toLowerCase()
+    .replace(/(?:^|\b)(sq|tst|cke|py|pp|dd|paypal|cash app)\s*\*/, '');
   if(t.amount > 0){
     /* money in: income unless it is clearly a transfer between your own accounts */
     for(var k = 0; k < 2; k++) if(RULES[k][1].test(d)) return RULES[k][0];
@@ -69,8 +77,20 @@ function merchantKey(desc){
        while the AND-spelling fell through to the bare word "stop". */
     .replace(/\bstop and shop\b/g, 'stop shop')
     .replace(/(pos|debit|credit|card|purchase|recurring|checkcard|visa|mastercard|ach|web|online|payment|pmt|ppd|id:?)\b/g, ' ')
+    /* v2.42.0: payment-processor prefixes ("SQ *", "TST*", "PAYPAL *",
+       "PP*", "PY *", "DD *", "CKE*", "CASH APP*") are not the merchant:
+       "SQ *STARBUCKS" is Starbucks. Strip the prefix so the real store
+       name keys the entry — a Square Starbucks now combines with a plain
+       Starbucks in Top places instead of inventing a "Sq" store. */
+    .replace(/(?:^|\b)(sq|tst|cke|py|pp|dd|paypal|cash app)\s*\*/, '')
     .replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, ' ')
-    .replace(/[#*][\w-]*/g, ' ')
+    .replace(/#[\w-]*/g, ' ')
+    /* v2.42.0: a * only deletes a reference code when the code carries a
+       digit ("AMZN Mktp US*2H3K4" loses the *2H3K4); a bare * before a
+       word is a separator ("SQ *STARBUCKS" keeps STARBUCKS — the old
+       rule ate it and left the fake merchant "Sq"). */
+    .replace(/\*[\w-]*\d[\w-]*/g, ' ')
+    .replace(/\*/g, ' ')
     .replace(/\b\d+\b/g, ' ')
     .replace(/[^a-z&. ]/g, ' ')
     .replace(/\s+/g, ' ').trim();

@@ -1,7 +1,7 @@
-/* Budget Planner v2.41.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.42.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.41.0';
+var APP_VERSION = '2.42.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
