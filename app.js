@@ -1,7 +1,7 @@
-/* Budget Planner v2.42.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.43.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.42.0';
+var APP_VERSION = '2.43.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -447,6 +447,30 @@ function parseStatementCSV(text){
     var maxBalDate = balRows[0].date;
     balRows.forEach(function(b){ if(b.date > maxBalDate) maxBalDate = b.date; });
     var newestFirst = txns.length > 1 && txns[0].date > txns[txns.length - 1].date;
+    /* v2.43.0: when the first and last rows share a date the date test
+       can't tell newest-first from oldest-first, so a single-day file
+       fell back to the LAST row — for a newest-first export that is the
+       day's OLDEST balance, and it overwrote the saved balance on
+       import (a one-day KeyBank download ending at $900 reported $920).
+       A running balance moves by each row's amount, so the file order
+       is recoverable from the arithmetic: oldest-first satisfies
+       bal[i+1] − bal[i] = amt[i+1], newest-first satisfies
+       bal[i] − bal[i+1] = amt[i]. Score both directions over the rows
+       that carry a balance and use the winner; when neither scores
+       (no usable balances, or a tie) keep the old last-row fallback.
+       Only runs when the date test is inconclusive, so the v2.33.0
+       multi-day behavior is untouched. */
+    if(!newestFirst && txns.length > 1 && txns[0].date === txns[txns.length - 1].date){
+      var fwd = 0, rev = 0, pairs = 0;
+      for(var k = 0; k + 1 < txns.length; k++){
+        var r0 = txns[k], r1 = txns[k + 1];
+        if(r0.balance == null || r1.balance == null) continue;
+        pairs++;
+        if(Math.abs((r1.balance - r0.balance) - r1.amount) < 0.015) fwd++;
+        if(Math.abs((r0.balance - r1.balance) - r0.amount) < 0.015) rev++;
+      }
+      if(pairs > 0 && rev > fwd) newestFirst = true;
+    }
     for(var bi = 0; bi < balRows.length; bi++){
       if(balRows[bi].date === maxBalDate){
         balance = balRows[bi].bal;
@@ -1737,6 +1761,11 @@ function planGoalLine(hours){
   if(proj.status === 'reached') return 'Goal already reached 🎉';
   if(proj.status === 'date') return 'Hits ' + money0(S.goal) + ' in ≈ ' + proj.months + ' mo · ' + proj.dateStr;
   if(proj.status === 'far') return 'Goal would take 50+ yrs at this pace';
+  /* v2.43.0: a leftover of exactly $0 is not "$0.00/mo short" — nothing
+     is short by a dollar amount, there is simply nothing left to save
+     (the Goal tab already says this; the Plan line used to say
+     "short $0.00/mo"). */
+  if(proj.shortfall === 0) return 'Nothing left to save at this pace';
   return 'Not saving yet at this pace — short ' + money(proj.shortfall) + '/mo';
 }
 /* ---------- v2.6.0: Break Calendar ----------
