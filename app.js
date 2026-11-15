@@ -1,7 +1,7 @@
-/* Budget Planner v2.43.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.44.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.43.0';
+var APP_VERSION = '2.44.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -23,7 +23,11 @@ function toMinutes(timeStr){
 }
 function calcShiftHours(startStr, endStr){
   var s = toMinutes(startStr), e = toMinutes(endStr);
-  if(e <= s) e += 1440;
+  /* v2.44.0: equal times are a zero-length shift, not a 24-hour one —
+     end BEFORE start still rolls past midnight (overnight), but end
+     EQUAL to start used to read as 24 hrs, so a shift typed with the
+     same start and end paid 23.5 hrs and inflated the paycheck. */
+  if(e < s) e += 1440;
   return (e - s) / 60;
 }
 /* paid hours for one shift: shift length minus unpaid meal break, never below 0 */
@@ -47,7 +51,10 @@ function fmtHrs(h){
    (overnight rolls past midnight, same rule as calcShiftHours) */
 function exactMinutes(startStr, endStr){
   var s = toMinutes(startStr), e = toMinutes(endStr);
-  if(e <= s) e += 1440;
+  /* v2.44.0: same zero-length rule as calcShiftHours — equal times are
+     0 minutes, not a full day (a class typed 08:00–08:00 used to count
+     1,440 scheduled minutes and block the whole day in Suggest). */
+  if(e < s) e += 1440;
   return e - s;
 }
 /* "50 min" / "1 hr" / "1 hr 20 min" / "2 hrs" */
@@ -160,7 +167,7 @@ function suggestWorkWeek(classes, schoolTags, targetHours, busyThresholdHrs){
     list.forEach(function(c){
       if(!c || !Array.isArray(c.days) || c.days.indexOf(d) === -1) return;
       var s = toMinutes(c.s), e = toMinutes(c.e);
-      if(e <= s) e += 1440;
+      if(e < s) e += 1440; /* v2.44.0: equal times are 0 min, not 1440 */
       if(s < e) blocks.push([s, e]);
     });
     blocks.sort(function(a, b){ return a[0] - b[0] || a[1] - b[1]; });
@@ -314,7 +321,7 @@ function suggestShiftOverlaps(s, e, entries){
   (entries || []).forEach(function(c){
     if(!c) return;
     var c1 = toMinutes(c.s), c2 = toMinutes(c.e);
-    if(c2 <= c1) c2 += 1440;
+    if(c2 < c1) c2 += 1440; /* v2.44.0: equal times are 0 min, not 1440 */
     if(a < c2 && c1 < b) hits.push(c);
   });
   return hits;
@@ -3016,10 +3023,12 @@ function classById(id){
   for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i];
   return null;
 }
-/* minute-based overlap between two 'HH:MM' ranges (overnight rolls) */
+/* minute-based overlap between two 'HH:MM' ranges (overnight rolls;
+   v2.44.0: equal start/end is a zero-length range that overlaps
+   nothing — it used to roll into a 24-hour range). */
 function timesOverlap(s1, e1, s2, e2){
-  var a1 = toMinutes(s1), b1 = toMinutes(e1); if(b1 <= a1) b1 += 1440;
-  var a2 = toMinutes(s2), b2 = toMinutes(e2); if(b2 <= a2) b2 += 1440;
+  var a1 = toMinutes(s1), b1 = toMinutes(e1); if(b1 < a1) b1 += 1440;
+  var a2 = toMinutes(s2), b2 = toMinutes(e2); if(b2 < a2) b2 += 1440;
   return a1 < b2 && a2 < b1;
 }
 function classPreviewText(){

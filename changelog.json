@@ -1,12 +1,21 @@
 {
   "versions": [
     {
+      "v": "2.44.0",
+      "version": "2.44.0",
+      "date": "Nov 15, 2026",
+      "notify": true,
+      "notes": [
+        "Fixed a shift or class typed with the same start and end time counting as a full 24-hour day: a shift entered as 9:00 AM \u2013 9:00 AM used to pay 23.5 hours and inflate the paycheck estimate, and a class entered that way used to block the whole day in Suggest and flag overlaps with everything. Equal start and end times now count as zero \u2014 a shift that ends before it starts still counts as overnight, as before."
+      ]
+    },
+    {
       "v": "2.43.0",
       "version": "2.43.0",
       "date": "Nov 14, 2026",
       "notify": true,
       "notes": [
-        "Fixed the balance from an imported bank statement when every transaction shares one date: a single-day download used to report the day's oldest balance instead of the latest one (a newest-first file ending at $900 reported $920), and that wrong number then overwrote your saved balance. The importer now works out the file's order from the running-balance math when the dates can't tell it — multi-day files are unchanged. Also fixed the Plan tab's goal line, which used to say you were \"$0.00/month short\" when there was simply nothing left to save."
+        "Fixed the balance from an imported bank statement when every transaction shares one date: a single-day download used to report the day's oldest balance instead of the latest one (a newest-first file ending at $900 reported $920), and that wrong number then overwrote your saved balance. The importer now works out the file's order from the running-balance math when the dates can't tell it \u2014 multi-day files are unchanged. Also fixed the Plan tab's goal line, which used to say you were \"$0.00/month short\" when there was simply nothing left to save."
       ]
     },
     {
@@ -15,7 +24,7 @@
       "date": "Nov 13, 2026",
       "notify": true,
       "notes": [
-        "Fixed Spending insights missing purchases paid through a payment app: a subscription paid with PayPal (\"PAYPAL *NETFLIX\") used to count as a transfer between your own accounts, so it vanished from your spending total and from the subscriptions list — it now shows as Netflix, with its yearly cost. Purchases through Square, Toast, Clover, DoorDash and PayPal (\"SQ *STARBUCKS\", \"TST*CHIPOTLE\") also used to invent fake stores (\"Sq\", \"Tst\") and split one real store across two entries in Top places — the real store name is used now. Plain transfers (Transfer to savings, Venmo to a person, PayPal transfer to bank) are still left out of spending, and reference codes like AMZN Mktp US*2H3K4 are still cleaned up the same way."
+        "Fixed Spending insights missing purchases paid through a payment app: a subscription paid with PayPal (\"PAYPAL *NETFLIX\") used to count as a transfer between your own accounts, so it vanished from your spending total and from the subscriptions list \u2014 it now shows as Netflix, with its yearly cost. Purchases through Square, Toast, Clover, DoorDash and PayPal (\"SQ *STARBUCKS\", \"TST*CHIPOTLE\") also used to invent fake stores (\"Sq\", \"Tst\") and split one real store across two entries in Top places \u2014 the real store name is used now. Plain transfers (Transfer to savings, Venmo to a person, PayPal transfer to bank) are still left out of spending, and reference codes like AMZN Mktp US*2H3K4 are still cleaned up the same way."
       ]
     },
     {
@@ -24,7 +33,7 @@
       "date": "Nov 12, 2026",
       "notify": true,
       "notes": [
-        "Fixed Utah's 2026 taxpayer tax credit phase-out: it now starts from the Tax Commission's published 2026 base of $18,696 for a single filer (Utah Legislature, Revenue and Taxation Interim Committee, 2026 Tax Credit Review, Sep 16, 2026 — Utah Code § 59-10-1018; the final 2026 TC-40 instructions are not published yet) instead of the retained 2025 base of $18,213. The credit is $966 minus 1.3% of Utah taxable income above that base, so the fix is worth at most $6.28/year and only for Utah filers with taxable income between $18,213 and about $93,000. Everyone else's estimate is unchanged, and with a pay stub saved, nothing changes."
+        "Fixed Utah's 2026 taxpayer tax credit phase-out: it now starts from the Tax Commission's published 2026 base of $18,696 for a single filer (Utah Legislature, Revenue and Taxation Interim Committee, 2026 Tax Credit Review, Sep 16, 2026 \u2014 Utah Code \u00a7 59-10-1018; the final 2026 TC-40 instructions are not published yet) instead of the retained 2025 base of $18,213. The credit is $966 minus 1.3% of Utah taxable income above that base, so the fix is worth at most $6.28/year and only for Utah filers with taxable income between $18,213 and about $93,000. Everyone else's estimate is unchanged, and with a pay stub saved, nothing changes."
       ]
     },
     {

@@ -1,8 +1,8 @@
 {
   "notes": [
-    "Fixed the balance from an imported bank statement when every transaction shares one date: a single-day download used to report the day's oldest balance instead of the latest one (a newest-first file ending at $900 reported $920), and that wrong number then overwrote your saved balance. The importer now works out the file's order from the running-balance math when the dates can't tell it. Also fixed the Plan tab's goal line, which used to say you were \"$0.00/month short\" when there was simply nothing left to save."
+    "Fixed a shift or class typed with the same start and end time counting as a full 24-hour day: a shift entered as 9:00 AM \u2013 9:00 AM used to pay 23.5 hours and inflate the paycheck estimate, and a class entered that way used to block the whole day in Suggest and flag overlaps with everything. Equal start and end times now count as zero \u2014 a shift that ends before it starts still counts as overnight, as before."
   ],
   "notify": true,
-  "updated": "2026-11-14",
-  "version": "2.43.0"
+  "updated": "2026-11-15",
+  "version": "2.44.0"
 }
