@@ -1,7 +1,7 @@
-/* Budget Planner v2.44.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.45.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.44.0';
+var APP_VERSION = '2.45.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -322,6 +322,7 @@ function suggestShiftOverlaps(s, e, entries){
     if(!c) return;
     var c1 = toMinutes(c.s), c2 = toMinutes(c.e);
     if(c2 < c1) c2 += 1440; /* v2.44.0: equal times are 0 min, not 1440 */
+    if(c2 <= c1) return; /* v2.45.0: a zero-length entry overlaps nothing — same containment gap as timesOverlap */
     if(a < c2 && c1 < b) hits.push(c);
   });
   return hits;
@@ -579,6 +580,24 @@ function paycheckFlags(hours, rate, net, stateCode){
   }
   if(net < 0 && (hours > 0 || rate > 0)) flags.push('Deductions are higher than gross pay \u2014 check your deduction entries.');
   return flags;
+}
+/* v2.45.0: one warning per zero-length shift — a shift typed with the
+   same start and end time pays 0 hrs since v2.44.0, but nothing said
+   so: the paycheck just came in low with no explanation. The caller
+   shows these in the Paycheck tab's detections box (shifts mode only —
+   in total-hours mode the shift list is ignored, so its entries can't
+   drag the paycheck). Shifts with a missing time are not warned: a
+   half-typed row is not a typo, it is unfinished. Pure (calcShiftHours
+   + fmtTime12 only) so tests can call it directly. */
+function zeroShiftWarnings(shifts){
+  var out = [];
+  (shifts || []).forEach(function(sh){
+    if(!sh || !sh.start || !sh.end) return;
+    if(calcShiftHours(sh.start, sh.end) !== 0) return;
+    out.push((sh.day ? sh.day + ' shift ' : 'Shift ') + fmtTime12(sh.start) + ' \u2013 ' + fmtTime12(sh.end) +
+      ' is 0 hrs \u2014 check the times.');
+  });
+  return out;
 }
 /* v2.37.0: a biweekly last-payday date that falls on a different weekday
    than the picked payday weekday means one of the two is wrong — and the
@@ -1209,6 +1228,7 @@ if (typeof module !== 'undefined' && module.exports){
     flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, planPerPaycheck: planPerPaycheck, marginalRate: marginalRate,
     extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
+    zeroShiftWarnings: zeroShiftWarnings,
     paydayAnchorMismatch: paydayAnchorMismatch,
     fmtTime12: fmtTime12, workLineText: workLineText, applySuggestEdits: applySuggestEdits,
     STATE_TAX_2026: STATE_TAX_2026, FEDERAL_BRACKETS_2026: FEDERAL_BRACKETS_2026,
@@ -3029,6 +3049,14 @@ function classById(id){
 function timesOverlap(s1, e1, s2, e2){
   var a1 = toMinutes(s1), b1 = toMinutes(e1); if(b1 < a1) b1 += 1440;
   var a2 = toMinutes(s2), b2 = toMinutes(e2); if(b2 < a2) b2 += 1440;
+  /* v2.45.0: a zero-length interval overlaps nothing — end EQUAL to
+     start is an empty span, so a class typed 09:00–09:00 no longer
+     flags as overlapping a real class that contains 09:00 (the
+     v2.44.0 fix only covered the case where the zero-length entry sat
+     outside the other interval). Overnight intervals still roll past
+     midnight first, so 22:00–06:00 keeps its 8 hrs and still overlaps
+     23:00–23:30. */
+  if(a1 >= b1 || a2 >= b2) return false;
   return a1 < b2 && a2 < b1;
 }
 function classPreviewText(){
@@ -3090,8 +3118,20 @@ function weekViewData(){
     var pair = planDayTime('school', i);
     var items = [];
     dayClasses.forEach(function(c){
-      items.push({ text: entryMarker(c) + ' ' + c.name + ' · ' + fmtTime(c.s) + ' – ' + fmtTime(c.e) +
-        ' · ' + fmtMinutes(exactMinutes(c.s, c.e)), id: c.id, work: false, conflict: false });
+      /* v2.45.0: a class typed with equal start/end times is 0 min —
+         almost always a typo — so flag it in the week view, the
+         verdict lines and both exports instead of showing a quiet
+         "0 min" line. The work-shift overlap check below uses
+         timesOverlap, which no longer counts a zero-length entry as
+         overlapping anything, so this is the only warning it gets. */
+      var cMins = exactMinutes(c.s, c.e);
+      var isZero = cMins === 0;
+      if(isZero){
+        conflicts.push(PLAN_DAYS[i] + ': ' + c.name + ' ' + fmtTime(c.s) + ' – ' + fmtTime(c.e) +
+          ' is 0 min — check the times.');
+      }
+      items.push({ text: (isZero ? '⚠️ ' : '') + entryMarker(c) + ' ' + c.name + ' · ' + fmtTime(c.s) + ' – ' + fmtTime(c.e) +
+        ' · ' + fmtMinutes(cMins), id: c.id, work: false, conflict: isZero });
     });
     /* v2.17.0 fix: a timed shift only counts as work when the day
        actually has planned hours — zeroing a day's hours (typing
@@ -4203,7 +4243,12 @@ function renderPaycheck(){
       '<label class="field small">Meal (min) <input type="number" min="0" step="5" value="' + meal + '" data-shift-meal="' + i + '" aria-label="Meal break in minutes"></label>' +
       '<label class="field small">Break (min) <input type="number" min="0" step="5" value="' + brk + '" data-shift-break="' + i + '" aria-label="Paid break in minutes"></label>' +
       '<button class="btn-mini danger" data-shift-del="' + i + '" type="button">Delete</button>' +
-      '<span class="shift-math">' + fmtHrs(len) + ' hrs, meal ' + fmtHrs(meal) + ' min (unpaid) → paid ' + fmtHrs(paid) + ' hrs · break ' + fmtHrs(brk) + ' min (paid)</span>';
+      '<span class="shift-math">' + fmtHrs(len) + ' hrs, meal ' + fmtHrs(meal) + ' min (unpaid) → paid ' + fmtHrs(paid) + ' hrs · break ' + fmtHrs(brk) + ' min (paid)</span>' +
+      /* v2.45.0: a 0-hr shift is almost always a typo (same start and
+         end) — flag it on the row itself, not just in the detections
+         box below. The meal/break input listener only rewrites
+         .shift-math, so this span is never clobbered while typing. */
+      (len === 0 ? '<span class="shift-warn">⚠️ 0-hr shift — check the times</span>' : '');
     shiftList.appendChild(row);
   });
   if(!S.shifts.length) shiftList.innerHTML = '<p class="hint">No shifts yet — add one below.</p>';
@@ -4303,6 +4348,14 @@ function renderPaycheckOutputs(){
     paycheckFlags(hrs, S.rate, p.net, S.stateCode || 'NY').forEach(function(f){
       lines.push('<p class="flag">\u26a0\ufe0f ' + esc(f) + '</p>');
     });
+    /* v2.45.0: zero-length shifts pay 0 hrs — say so here instead of
+       letting the paycheck silently come in low. Shifts mode only:
+       in total-hours mode the shift list is ignored. */
+    if(S.hoursMode === 'shifts'){
+      zeroShiftWarnings(S.shifts).forEach(function(f){
+        lines.push('<p class="flag">\u26a0\ufe0f ' + esc(f) + '</p>');
+      });
+    }
     box.innerHTML = lines.length ? lines.join('') : '<p class="explain">No detections \u2014 everything looks normal.</p>';
     var lpw = document.getElementById('lastPaydayWrap');
     if(lpw) lpw.hidden = (S.freq !== 'biweekly' && S.freq !== 'monthly');

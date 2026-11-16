@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "v": "2.45.0",
+      "version": "2.45.0",
+      "date": "Nov 16, 2026",
+      "notify": true,
+      "notes": [
+        "Zero-length shifts and classes now warn you instead of failing silently: a shift typed 9:00 AM \u2013 9:00 AM shows a warning on the shift row and in the Paycheck tab\u2019s detections box, and a class typed that way is flagged in the week view and both exports. It still pays 0 hrs (fixed in 2.44.0) \u2014 now you\u2019ll see the typo. A zero-length entry also no longer flags as overlapping a real class or shift that contains it."
+      ]
+    },
+    {
       "v": "2.44.0",
       "version": "2.44.0",
       "date": "Nov 15, 2026",
