@@ -122,10 +122,14 @@
         <label class="field">Saved so far
           <input id="savedAmount" type="number" min="0" step="0.01">
         </label>
+        <label class="field">Want it by a date? <span class="hint-inline">(optional)</span>
+          <input id="goalByDate" type="month">
+        </label>
         <p class="hint">Type your current saved balance — it stays on this device.</p>
         <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="goalFill"></div></div>
         <p class="goal-line"><span id="goalPct">0%</span> of your goal &nbsp;·&nbsp; <strong id="goalToGo">$0 to go</strong></p>
         <p class="pace" id="paceLine"></p>
+        <p class="pace" id="goalByLine"></p>
       </div>
     </section>
 

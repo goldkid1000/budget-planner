@@ -153,6 +153,7 @@ select{appearance:none;-webkit-appearance:none;
   transform:scaleX(0);transform-origin:left center;transition:transform .45s ease}
 .goal-line{margin:6px 0}
 .pace{font-size:1.02rem}
+.pace:empty{display:none} /* v2.46.0: the optional "save by date" line takes no space until it has text */
 .bill-add input{flex:1}
 .check{display:flex;align-items:center;gap:8px;font-weight:650}
 .check input{width:auto}

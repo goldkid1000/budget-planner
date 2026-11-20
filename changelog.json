@@ -1,6 +1,42 @@
 {
   "versions": [
     {
+      "v": "2.49.0",
+      "version": "2.49.0",
+      "date": "Nov 20, 2026",
+      "notify": true,
+      "notes": [
+        "The Unit Price calculator no longer crowns a typo: a negative price or size typed in is now capped at $0 \u2014 with a note saying a value was capped \u2014 instead of showing a negative \u201cper unit\u201d price that then \u201cwon\u201d the cheaper-per-unit verdict."
+      ]
+    },
+    {
+      "v": "2.48.0",
+      "version": "2.48.0",
+      "date": "Nov 19, 2026",
+      "notify": true,
+      "notes": [
+        "The Discount Calculator no longer pays you for a typo: a discount or cashback typed over 100% is now capped at 100%, and a negative price at $0 \u2014 with a note saying a value was capped, instead of showing a negative \u201cyou pay\u201d amount."
+      ]
+    },
+    {
+      "v": "2.47.0",
+      "version": "2.47.0",
+      "date": "Nov 18, 2026",
+      "notify": true,
+      "notes": [
+        "When the savings goal\u2019s target date needs more than your current pace, the goal card now also shows about how many extra hours a week would close the gap \u2014 at your rate, with overtime past 40 hours counted at time-and-a-half. Also fixed the pay-stub import: a stub with a flat deduction line left blank no longer turns that line into a bad number."
+      ]
+    },
+    {
+      "v": "2.46.0",
+      "version": "2.46.0",
+      "date": "Nov 17, 2026",
+      "notify": true,
+      "notes": [
+        "The savings goal can now have a target date: pick a month under \u201cWant it by a date?\u201d and it tells you how much to save each month (and week) to hit the goal by then, and whether your current pace already covers it. A date in the past says so instead of inventing a pace."
+      ]
+    },
+    {
       "v": "2.45.0",
       "version": "2.45.0",
       "date": "Nov 16, 2026",

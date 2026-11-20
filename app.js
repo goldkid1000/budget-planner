@@ -1,7 +1,7 @@
-/* Budget Planner v2.45.0 — all data stays in localStorage on this device. */
+/* Budget Planner v2.49.0 — all data stays in localStorage on this device. */
 'use strict';
 
-var APP_VERSION = '2.45.0';
+var APP_VERSION = '2.49.0';
 
 /* ---------- pure math helpers (also used by node tests) ---------- */
 function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
@@ -551,13 +551,16 @@ function calcPaycheck(hours, rate, ded, freq, estimate){
 }
 /* derive a ded profile from one real pay stub: % lines from (line / gross),
    flat lines kept as $ per check. Rates rounded to 4 decimals — the
-   per-line cent rounding in calcPaycheck then reproduces the stub exactly. */
+   per-line cent rounding in calcPaycheck then reproduces the stub exactly.
+   v2.47.0: the flat lines tolerate a missing value (num0, like the % lines
+   already did) — a stub with a flat line left blank used to derive NaN
+   for it, which then poisoned the whole paycheck (NaN net). */
 function deriveDedFromStub(gross, lines){
   function pct(amt){ return gross > 0 ? Math.round((num0(amt) / gross * 100) * 10000) / 10000 : 0; }
   return { ss: pct(lines.ss), medicare: pct(lines.medicare), federal: pct(lines.federal),
            ny: pct(lines.ny), fli: pct(lines.fli), k401: pct(lines.k401),
-           membership: round2(lines.membership), stockContrib: round2(lines.stockContrib),
-           stockPurch: round2(lines.stockPurch) };
+           membership: round2(num0(lines.membership)), stockContrib: round2(num0(lines.stockContrib)),
+           stockPurch: round2(num0(lines.stockPurch)) };
 }
 /* v2.0.2 auto-detect: sanity flags on odd paycheck inputs. Returns string[].
    v2.23.0: the wage-floor flag now uses the picked state when one is
@@ -693,6 +696,33 @@ function calcGoalProjection(goal, saved, monthlyLeftover, rate, margRate, curren
   var extraHours = extraHoursForNet(shortfall * 12 / 52, currentHrs, rate, margRate);
   return { status: 'short', toGo: toGo, months: 0, dateStr: '', shortfall: shortfall, extraHours: extraHours };
 }
+/* v2.46.0: the inverse of the goal projection — how much to save each
+   month to hit the goal BY a chosen month (targetYM is 'YYYY-MM').
+   monthsLeft counts the whole months between now and the target month
+   (Nov → Mar = 4: Dec, Jan, Feb and Mar are the saving months; the
+   target month is the deadline). A target in the current month means
+   "all of it this month" (monthsLeft 0 still divides by 1); a past
+   target says so instead of inventing a negative pace. perWeek is the
+   monthly figure spread over 52 weeks, same as the rest of the app.
+   Returns { status: 'reached' | 'noset' | 'nodate' | 'past' | 'ok',
+   toGo, monthsLeft, perMonth, perWeek }. */
+function calcSavingsByDate(goal, saved, targetYM, nowOpt){
+  var toGo = Math.max(num0(goal) - num0(saved), 0);
+  if(toGo <= 0) return num0(goal) > 0
+    ? { status: 'reached', toGo: 0, monthsLeft: 0, perMonth: 0, perWeek: 0 }
+    : { status: 'noset', toGo: 0, monthsLeft: 0, perMonth: 0, perWeek: 0 };
+  var m = /^(\d{4})-(\d{2})$/.exec(String(targetYM || ''));
+  if(!m || +m[2] < 1 || +m[2] > 12)
+    return { status: 'nodate', toGo: toGo, monthsLeft: 0, perMonth: 0, perWeek: 0 };
+  var now = nowOpt ? new Date(nowOpt) : new Date();
+  var monthsLeft = (+m[1] - now.getFullYear()) * 12 + (+m[2] - 1 - now.getMonth());
+  if(monthsLeft < 0)
+    return { status: 'past', toGo: toGo, monthsLeft: monthsLeft, perMonth: 0, perWeek: 0 };
+  var months = Math.max(monthsLeft, 1);
+  var perMonth = round2(toGo / months);
+  return { status: 'ok', toGo: toGo, monthsLeft: monthsLeft,
+    perMonth: perMonth, perWeek: round2(perMonth * 12 / 52) };
+}
 /* v2.24.0: money actually free for the savings goal = budget leftover
    minus the extra loan payment already committed on the Loans tab.
    The Loans tab fills that extra FROM this same leftover ("use half/all
@@ -768,6 +798,19 @@ function extraHoursForNet(weeklyNet, currentHrs, rate, margRate){
   if(num0(weeklyNet) <= straightNet) return num0(weeklyNet) / perHour;
   return straight + (num0(weeklyNet) - straightNet) / (perHour * 1.5);
 }
+/* v2.47.0: extra hrs/week to close a MONTHLY savings shortfall, as one
+   display-ready clause for the goal card's "save by date" line — the
+   same OT-aware inverse the goal projection's shortfall advice uses
+   (extraHoursForNet on the shortfall spread over 52/12 weeks), rounded
+   to 1 decimal like that line. Empty when the rate can't price it
+   (rate 0, a 100% marginal rate) or the shortfall rounds to nothing,
+   so the goal line never reads "about 0 extra hrs/week". Pure. */
+function byDateHoursClause(monthlyShortfall, currentHrs, rate, margRate){
+  var h = extraHoursForNet(num0(monthlyShortfall) * 12 / 52, currentHrs, rate, margRate);
+  var r = Math.round(h * 10) / 10;
+  if(!(r > 0)) return '';
+  return ' About ' + r + ' extra hrs/week at your rate would cover it.';
+}
 /* v2.29.0 (merged into 2.31.0): one paycheck's take-home for a planned week, on the user's
    real pay schedule. The Plan tab's "Per payday" cell used to repeat
    the weekly net for everyone — a biweekly user saw one week's net
@@ -800,12 +843,22 @@ function watchlistStatus(item){
   if(seen <= target) return { kind: 'deal', text: 'Deal! ' + money(target - seen) + ' below your target.' };
   return { kind: 'notyet', text: 'Not yet — ' + money(seen - target) + ' above your target.' };
 }
+/* v2.48.0: inputs are clamped — a typed discount or cashback over 100%
+   used to pay the user (150% off $100 read as "You pay -$50.00"), and a
+   negative price did the same. HTML min/max don't stop typed values, so
+   the math clamps here: price >= 0, each % in 0..100. clamped: true when
+   any input was out of range, so the UI can say so. */
 function calcDiscount(price, d1, d2, cashbackPct){
-  var after1 = price * (1 - d1 / 100);
-  var after2 = after1 * (1 - d2 / 100);
-  var cashback = after2 * (cashbackPct / 100);
+  var p = Math.max(0, num0(price));
+  var a = Math.min(100, Math.max(0, num0(d1)));
+  var b = Math.min(100, Math.max(0, num0(d2)));
+  var cb = Math.min(100, Math.max(0, num0(cashbackPct)));
+  var clamped = p !== num0(price) || a !== num0(d1) || b !== num0(d2) || cb !== num0(cashbackPct);
+  var after1 = p * (1 - a / 100);
+  var after2 = after1 * (1 - b / 100);
+  var cashback = after2 * (cb / 100);
   var finalPay = after2 - cashback;
-  return { after1: after1, after2: after2, cashback: cashback, finalPay: finalPay, saved: price - finalPay };
+  return { after1: after1, after2: after2, cashback: cashback, finalPay: finalPay, saved: p - finalPay, clamped: clamped };
 }
 
 /* ---------- v2.22.0: loan payoff math — pure amortization, no state -----
@@ -925,7 +978,16 @@ function dueSoonBills(bills, nowMs){
   });
   return out;
 }
-function calcUnit(price, size){ return size > 0 ? price / size : 0; }
+/* v2.49.0: a negative price or size typed in used to flow straight
+   through — "-$5 for 10 oz" read as "-$0.50 per unit", and that negative
+   unit price then "won" the cheaper-per-unit verdict. Same hole the
+   Discount Calculator had (fixed in 2.48.0): HTML min="0" doesn't stop
+   typed values. Clamp here: price and size at 0, clamped: true when
+   either input was out of range, so the UI can say so. */
+function calcUnit(price, size){
+  var p = Math.max(0, num0(price)), s = Math.max(0, num0(size));
+  return { unit: s > 0 ? p / s : 0, clamped: p !== num0(price) || s !== num0(size) };
+}
 
 /* ---------- 2026 income-tax estimate tables (single filer) ----------
    Source: Tax Foundation, "State Individual Income Tax Rates and Brackets,
@@ -1224,9 +1286,9 @@ if (typeof module !== 'undefined' && module.exports){
     calcDiscount: calcDiscount, calcUnit: calcUnit,
     calcBracketTax: calcBracketTax, calcEstimateTaxes: calcEstimateTaxes,
     sciadDeduction: sciadDeduction, utahCredit: utahCredit, arkansasTax: arkansasTax, newYorkTax: newYorkTax,
-    calcGoalProjection: calcGoalProjection, goalAvailableLeftover: goalAvailableLeftover, ficaAnnual: ficaAnnual, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
+    calcGoalProjection: calcGoalProjection, calcSavingsByDate: calcSavingsByDate, goalAvailableLeftover: goalAvailableLeftover, ficaAnnual: ficaAnnual, addMonthsClamped: addMonthsClamped, watchlistStatus: watchlistStatus, employerForKey: employerForKey, syncEncode: syncEncode, syncDecode: syncDecode, dueSoonBills: dueSoonBills,
     flatPerCheck: flatPerCheck, checksPerYear: checksPerYear, planMonthlyNet: planMonthlyNet, planPerPaycheck: planPerPaycheck, marginalRate: marginalRate,
-    extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet,
+    extraHoursNet: extraHoursNet, extraHoursForNet: extraHoursForNet, byDateHoursClause: byDateHoursClause,
     simulateLoan: simulateLoan, simulateLoanPlan: simulateLoanPlan, paycheckFlags: paycheckFlags,
     zeroShiftWarnings: zeroShiftWarnings,
     paydayAnchorMismatch: paydayAnchorMismatch,
@@ -1261,7 +1323,7 @@ var DEFAULTS = {
     { name: 'Clothes', amount: 0 },
     { name: 'Other', amount: 0 }
   ],
-  goal: 0, saved: 0,
+  goal: 0, saved: 0, goalBy: '',
   bills: [],
   /* v2.22.0: Loans tab — blank repo defaults, like every other number:
      the user types their own loans on their device; nothing real ships */
@@ -4129,8 +4191,11 @@ function renderGoal(){
   /* savings goal — don't clobber the field the user is currently typing in */
   var goalEl = document.getElementById('goalAmount');
   var savedEl = document.getElementById('savedAmount');
+  var goalByEl = document.getElementById('goalByDate');
   if(document.activeElement !== goalEl) goalEl.value = S.goal;
   if(document.activeElement !== savedEl) savedEl.value = S.saved;
+  /* v2.46.0: old saves predate the target date — blank, not a crash */
+  if(goalByEl && document.activeElement !== goalByEl) goalByEl.value = S.goalBy || '';
   var toGo = Math.max(S.goal - S.saved, 0);
   var pct = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
   /* progress bar fills via transform (scaleX) so it animates cheaply */
@@ -4176,6 +4241,33 @@ function renderGoal(){
     if(loanExtra > 0) msg += ', or lower the extra loan payment';
     msg += ', to start saving.';
     pace.textContent = msg;
+  }
+  /* v2.46.0: "save by date" — the inverse of the projection above: how
+     much a month to hit the goal by the month picked, and whether the
+     current pace covers it. Blank when no date is picked, no goal is
+     set, or the goal is already reached (the pace line says that). */
+  var byLine = document.getElementById('goalByLine');
+  if(byLine){
+    var by = calcSavingsByDate(S.goal, S.saved, S.goalBy || '');
+    if(by.status === 'past'){
+      byLine.textContent = 'That date has already passed — pick a month from now on.';
+    } else if(by.status === 'ok'){
+      var parts = String(S.goalBy).split('-');
+      var monthStr = new Date(+parts[0], +parts[1] - 1, 1)
+        .toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      var span = by.monthsLeft === 0 ? 'this month' : 'over the next ' + by.monthsLeft + ' month' + (by.monthsLeft === 1 ? '' : 's');
+      var txt = 'To hit ' + money0(S.goal) + ' by ' + monthStr + ': save ≈ ' + money(by.perMonth) + '/mo ' + span +
+        ' (≈ ' + money(by.perWeek) + '/wk).';
+      if(goalLeftover >= by.perMonth) txt += ' Your current pace (' + money(goalLeftover) + '/mo) covers it.';
+      /* v2.47.0: when the pace falls short, name the extra hours too —
+         the same OT-aware math as the projection's shortfall advice, so
+         a date the pace misses comes with the shifts to pick up. */
+      else if(goalLeftover > 0) txt += ' That\u2019s ' + money(by.perMonth - goalLeftover) + '/mo more than your current ' + money(goalLeftover) + '/mo pace.' + byDateHoursClause(by.perMonth - goalLeftover, effectiveHours(), S.rate, marginalRate(p));
+      else txt += ' Your current pace leaves nothing to save — add hours or cut spending to start.' + byDateHoursClause(by.perMonth, effectiveHours(), S.rate, marginalRate(p));
+      byLine.textContent = txt;
+    } else {
+      byLine.textContent = '';
+    }
   }
 }
 
@@ -4807,6 +4899,7 @@ function renderDiscountCalc(){
     num(document.getElementById('discTwo').value), num(document.getElementById('discCashback').value));
   var steps = 'After first discount: ' + money(r.after1) + ' · After extra discount: ' + money(r.after2);
   if(num(document.getElementById('discCashback').value) > 0) steps += ' · Cashback back: ' + money(r.cashback);
+  if(r.clamped) steps += ' · Note: a value you typed was out of range, so it was capped (price at $0 or more, discounts and cashback at 100%).';
   document.getElementById('discSteps').textContent = steps;
   document.getElementById('discFinal').textContent = money(r.finalPay);
   document.getElementById('discSaved').textContent = money(r.saved);
@@ -4858,14 +4951,20 @@ function renderWatchlist(){
   if(hint) hint.textContent = 'Prices are ones you type in — the app never checks a store\'s price by itself.';
 }
 function renderCalculators(){
-  var ua = calcUnit(num(document.getElementById('unitPriceA').value), num(document.getElementById('unitSizeA').value));
-  var ub = calcUnit(num(document.getElementById('unitPriceB').value), num(document.getElementById('unitSizeB').value));
+  var ra = calcUnit(num(document.getElementById('unitPriceA').value), num(document.getElementById('unitSizeA').value));
+  var rb = calcUnit(num(document.getElementById('unitPriceB').value), num(document.getElementById('unitSizeB').value));
+  var ua = ra.unit, ub = rb.unit;
   document.getElementById('unitOutA').textContent = money(ua);
   document.getElementById('unitOutB').textContent = money(ub);
   var v = document.getElementById('unitVerdict');
+  var text = '';
   if(ua > 0 && ub > 0){
-    v.textContent = ua < ub ? '✅ Size A is cheaper per unit.' : (ub < ua ? '✅ Size B is cheaper per unit.' : 'Same price per unit.');
-  } else { v.textContent = ''; }
+    text = ua < ub ? '✅ Size A is cheaper per unit.' : (ub < ua ? '✅ Size B is cheaper per unit.' : 'Same price per unit.');
+  }
+  if(ra.clamped || rb.clamped){
+    text += (text ? ' ' : '') + 'Note: a negative price or size you typed was capped at $0.';
+  }
+  v.textContent = text;
 }
 
 function esc(s){
@@ -4926,6 +5025,8 @@ function bind(){
      as "Savings balance" in My Money) — so it must refresh the budget
      summary too, or "You'll have left" stays stale after typing here. */
   document.getElementById('savedAmount').addEventListener('input', function(e){ S.saved = num(e.target.value); save(); renderGoal(); renderMyMoney(); renderBudgetSummary(); });
+  /* v2.46.0: optional target month for the savings goal ("save by date") */
+  document.getElementById('goalByDate').addEventListener('input', function(e){ S.goalBy = e.target.value || ''; save(); renderGoal(); });
 
   /* paycheck inputs */
   function setHours(v){ S.hours = num(v); save(); renderAll(); }
